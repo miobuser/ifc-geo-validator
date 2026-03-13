@@ -1,5 +1,7 @@
 # ifc-geo-validator
 
+[![Tests](https://github.com/miobuser/ifc-geo-validator/actions/workflows/test.yml/badge.svg)](https://github.com/miobuser/ifc-geo-validator/actions/workflows/test.yml)
+
 Geometric validation of IFC infrastructure models against configurable requirements.
 
 ## Overview
