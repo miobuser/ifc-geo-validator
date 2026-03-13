@@ -28,6 +28,8 @@ EXPECTED = {
     "T3_crown_slope.ifc": {"volume": 7.211, "crown_width_mm": 300.0},
     "T4_l_shaped.ifc": {"volume": 10.5},
     "T5_t_shaped.ifc": {"volume": 10.725},
+    "T6_non_compliant.ifc": {"volume": 2.0, "crown_width_mm": 200.0},
+    "T7_compliant.ifc": {"volume": 10.811, "crown_width_mm": 300.0, "inclination": 10.0},
 }
 
 

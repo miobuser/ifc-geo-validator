@@ -222,3 +222,59 @@ class TestT3FullPipeline:
         assert checks["ASTRA-SM-L3-001"]["status"] == "PASS"   # crown ≥ 300mm
         assert checks["ASTRA-SM-L3-002"]["status"] == "PASS"   # 3% slope
         assert checks["ASTRA-SM-L4-001"]["status"] == "PASS"   # crown composite
+
+
+T6_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T6_non_compliant.ifc")
+T7_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T7_compliant.ifc")
+
+
+@pytest.mark.skipif(
+    not os.path.exists(T6_PATH) or not os.path.exists(RULESET_PATH),
+    reason="T6 model or ruleset not found",
+)
+class TestT6NonCompliant:
+    """T6 (thin, no slope, vertical) — all L3 rules should FAIL."""
+
+    def test_all_l3_fail(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T6_PATH)
+        walls = get_elements(model, "IfcWall")
+        mesh = extract_mesh(walls[0])
+        l1 = validate_level1(mesh)
+        l2 = validate_level2(mesh)
+        l3 = validate_level3(mesh, l2)
+        ruleset = load_ruleset(RULESET_PATH)
+        result = validate_level4(l1, l3, ruleset)
+        checks = {c["rule_id"]: c for c in result["checks"]}
+
+        assert checks["ASTRA-SM-L3-001"]["status"] == "FAIL"   # 200mm < 300mm
+        assert checks["ASTRA-SM-L3-002"]["status"] == "FAIL"   # 0% slope
+        assert checks["ASTRA-SM-L3-003"]["status"] == "FAIL"   # 200mm < 300mm
+        assert checks["ASTRA-SM-L3-004"]["status"] == "FAIL"   # vertical
+        assert result["summary"]["passed"] == 2   # only L1 rules pass
+
+
+@pytest.mark.skipif(
+    not os.path.exists(T7_PATH) or not os.path.exists(RULESET_PATH),
+    reason="T7 model or ruleset not found",
+)
+class TestT7FullyCompliant:
+    """T7 (10:1 incl, 3% slope, 300mm crown) — ALL rules should PASS."""
+
+    def test_all_pass(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T7_PATH)
+        walls = get_elements(model, "IfcWall")
+        mesh = extract_mesh(walls[0])
+        l1 = validate_level1(mesh)
+        l2 = validate_level2(mesh)
+        l3 = validate_level3(mesh, l2)
+        ruleset = load_ruleset(RULESET_PATH)
+        result = validate_level4(l1, l3, ruleset)
+
+        assert result["summary"]["passed"] == 8
+        assert result["summary"]["failed"] == 0
