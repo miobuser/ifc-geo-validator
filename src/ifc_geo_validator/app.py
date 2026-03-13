@@ -305,10 +305,61 @@ if run_button or uploaded_file:
         raise TypeError(f"Not JSON serializable: {type(obj)}")
 
     report_json = json.dumps(report, indent=2, ensure_ascii=False, default=_json_default)
-    st.download_button(
+
+    dl1, dl2, dl3 = st.columns(3)
+
+    dl1.download_button(
         "Download JSON Report",
         data=report_json,
         file_name=f"{Path(uploaded_file.name).stem}_report.json",
         mime="application/json",
         use_container_width=True,
     )
+
+    # Enriched IFC download
+    try:
+        from ifc_geo_validator.report.ifc_property_writer import inject_all
+
+        with tempfile.NamedTemporaryFile(suffix=".ifc", delete=False) as tmp:
+            tmp.write(file_bytes)
+            enrich_tmp = tmp.name
+
+        enrich_model = load_model(enrich_tmp)
+        enrich_elems = get_elements(enrich_model, entity_type,
+                                    predefined_type.strip() or None)
+        inject_all(enrich_model, enrich_elems, results, enrich_tmp)
+
+        with open(enrich_tmp, "rb") as f:
+            enriched_bytes = f.read()
+
+        dl2.download_button(
+            "Download Enriched IFC",
+            data=enriched_bytes,
+            file_name=f"{Path(uploaded_file.name).stem}_validated.ifc",
+            mime="application/octet-stream",
+            use_container_width=True,
+        )
+    except Exception:
+        dl2.button("Enriched IFC (unavailable)", disabled=True,
+                   use_container_width=True)
+
+    # BCF download
+    try:
+        from ifc_geo_validator.report.bcf_export import export_bcf
+
+        bcf_tmp = tempfile.mktemp(suffix=".bcf")
+        export_bcf(results, bcf_tmp, ifc_name=uploaded_file.name)
+
+        with open(bcf_tmp, "rb") as f:
+            bcf_bytes = f.read()
+
+        dl3.download_button(
+            "Download BCF Issues",
+            data=bcf_bytes,
+            file_name=f"{Path(uploaded_file.name).stem}_issues.bcf",
+            mime="application/octet-stream",
+            use_container_width=True,
+        )
+    except Exception:
+        dl3.button("BCF Issues (unavailable)", disabled=True,
+                   use_container_width=True)
