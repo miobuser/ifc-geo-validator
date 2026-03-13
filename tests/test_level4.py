@@ -164,3 +164,61 @@ class TestCompliantWall:
         assert checks["ASTRA-SM-L1-001"]["status"] == "PASS"
         assert checks["ASTRA-SM-L3-001"]["status"] == "PASS"  # crown ≥ 300mm
         assert checks["ASTRA-SM-L3-003"]["status"] == "PASS"  # thickness ≥ 300mm
+
+
+# ── IFC integration tests ─────────────────────────────────────────────
+
+T2_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T2_inclined_wall.ifc")
+T3_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T3_crown_slope.ifc")
+
+
+@pytest.mark.skipif(
+    not os.path.exists(T2_PATH) or not os.path.exists(RULESET_PATH),
+    reason="T2 model or ruleset not found",
+)
+class TestT2FullPipeline:
+    """T2 (10:1 inclined, no slope) against ASTRA ruleset."""
+
+    def test_inclination_pass(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T2_PATH)
+        walls = get_elements(model, "IfcWall")
+        mesh = extract_mesh(walls[0])
+        l1 = validate_level1(mesh)
+        l2 = validate_level2(mesh)
+        l3 = validate_level3(mesh, l2)
+        ruleset = load_ruleset(RULESET_PATH)
+        result = validate_level4(l1, l3, ruleset)
+        checks = {c["rule_id"]: c for c in result["checks"]}
+
+        assert checks["ASTRA-SM-L3-004"]["status"] == "PASS"   # 10:1 inclination
+        assert checks["ASTRA-SM-L3-001"]["status"] == "PASS"   # crown ≥ 300mm (350mm)
+        assert checks["ASTRA-SM-L3-002"]["status"] == "FAIL"   # no crown slope
+
+
+@pytest.mark.skipif(
+    not os.path.exists(T3_PATH) or not os.path.exists(RULESET_PATH),
+    reason="T3 model or ruleset not found",
+)
+class TestT3FullPipeline:
+    """T3 (3% crown slope, vertical) — crown slope should PASS."""
+
+    def test_crown_slope_pass(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T3_PATH)
+        walls = get_elements(model, "IfcWall")
+        mesh = extract_mesh(walls[0])
+        l1 = validate_level1(mesh)
+        l2 = validate_level2(mesh)
+        l3 = validate_level3(mesh, l2)
+        ruleset = load_ruleset(RULESET_PATH)
+        result = validate_level4(l1, l3, ruleset)
+        checks = {c["rule_id"]: c for c in result["checks"]}
+
+        assert checks["ASTRA-SM-L3-001"]["status"] == "PASS"   # crown ≥ 300mm
+        assert checks["ASTRA-SM-L3-002"]["status"] == "PASS"   # 3% slope
+        assert checks["ASTRA-SM-L4-001"]["status"] == "PASS"   # crown composite

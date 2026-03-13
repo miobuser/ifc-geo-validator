@@ -348,3 +348,46 @@ class TestT3FaceClassification:
         assert result["has_crown"]
         crown_groups = [g for g in result["face_groups"] if g["category"] == CROWN]
         assert len(crown_groups) >= 1
+
+
+T4_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T4_l_shaped.ifc")
+T5_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T5_t_shaped.ifc")
+
+
+@pytest.mark.skipif(not os.path.exists(T4_PATH), reason="T4 model not found")
+class TestT4FaceClassification:
+    """Level 2 on T4 IFC file (L-shaped retaining wall)."""
+
+    def test_l_shaped_groups(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T4_PATH)
+        walls = get_elements(model, "IfcWall")
+        mesh_data = extract_mesh(walls[0])
+        result = validate_level2(mesh_data)
+
+        assert result["has_crown"]
+        assert result["has_foundation"]
+        # L-shape has 8 groups: 2 end caps (L-shaped) + 6 lateral faces
+        assert result["num_groups"] == 8
+
+
+@pytest.mark.skipif(not os.path.exists(T5_PATH), reason="T5 model not found")
+class TestT5FaceClassification:
+    """Level 2 on T5 IFC file (T-shaped wall with spur)."""
+
+    def test_t_shaped_groups(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T5_PATH)
+        walls = get_elements(model, "IfcWall")
+        mesh_data = extract_mesh(walls[0])
+        result = validate_level2(mesh_data)
+
+        assert result["has_crown"]
+        assert result["has_foundation"]
+        assert result["has_front"]
+        # T-shape has 10 groups (wall + spur faces)
+        assert result["num_groups"] == 10

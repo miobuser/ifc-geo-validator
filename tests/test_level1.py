@@ -229,3 +229,49 @@ class TestT1FromIFC:
         bbox_size = result["bbox"]["size"]
         for actual, expected in zip(sorted(bbox_size), sorted(self.EXPECTED_BBOX)):
             assert abs(actual - expected) < self.TOLERANCE
+
+
+T4_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T4_l_shaped.ifc")
+T5_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T5_t_shaped.ifc")
+
+
+@pytest.mark.skipif(not os.path.exists(T4_PATH), reason="T4 model not found")
+class TestT4FromIFC:
+    """Test Level 1 against T4 IFC file (L-shaped)."""
+
+    def test_volume_and_watertight(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T4_PATH)
+        walls = get_elements(model, "IfcWall")
+        mesh_data = extract_mesh(walls[0])
+        result = validate_level1(mesh_data)
+
+        assert abs(result["volume"] - 10.5) < 0.01
+        assert result["is_watertight"] is True
+        bbox_size = sorted(result["bbox"]["size"])
+        assert abs(bbox_size[0] - 2.0) < 0.01
+        assert abs(bbox_size[1] - 3.0) < 0.01
+        assert abs(bbox_size[2] - 6.0) < 0.01
+
+
+@pytest.mark.skipif(not os.path.exists(T5_PATH), reason="T5 model not found")
+class TestT5FromIFC:
+    """Test Level 1 against T5 IFC file (T-shaped with spur)."""
+
+    def test_volume_and_watertight(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T5_PATH)
+        walls = get_elements(model, "IfcWall")
+        mesh_data = extract_mesh(walls[0])
+        result = validate_level1(mesh_data)
+
+        assert abs(result["volume"] - 10.725) < 0.01
+        assert result["is_watertight"] is True
+        bbox_size = sorted(result["bbox"]["size"])
+        assert abs(bbox_size[0] - 1.9) < 0.01
+        assert abs(bbox_size[1] - 3.0) < 0.01
+        assert abs(bbox_size[2] - 8.0) < 0.01

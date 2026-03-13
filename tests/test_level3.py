@@ -236,3 +236,71 @@ class TestT1FromIFC:
         l3 = validate_level3(mesh_data, l2)
 
         assert abs(l3["crown_width_mm"] - 400.0) < 5.0
+
+
+T3_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T3_crown_slope.ifc")
+T4_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T4_l_shaped.ifc")
+T5_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T5_t_shaped.ifc")
+
+
+@pytest.mark.skipif(not os.path.exists(T3_PATH), reason="T3 model not found")
+class TestT3FromIFC:
+    """Level 3 on T3 IFC file (3% crown slope)."""
+
+    def test_crown_slope_3pct(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T3_PATH)
+        walls = get_elements(model, "IfcWall")
+        mesh_data = extract_mesh(walls[0])
+        l2 = validate_level2(mesh_data)
+        l3 = validate_level3(mesh_data, l2)
+
+        assert abs(l3["crown_width_mm"] - 300.0) < 5.0
+        assert abs(l3["crown_slope_percent"] - 3.0) < 0.5
+        assert abs(l3["min_wall_thickness_mm"] - 300.0) < 5.0
+
+
+@pytest.mark.skipif(not os.path.exists(T4_PATH), reason="T4 model not found")
+class TestT4FromIFC:
+    """Level 3 on T4 IFC file (L-shaped retaining wall)."""
+
+    def test_l_shaped_measurements(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T4_PATH)
+        walls = get_elements(model, "IfcWall")
+        mesh_data = extract_mesh(walls[0])
+        l2 = validate_level2(mesh_data)
+        l3 = validate_level3(mesh_data, l2)
+
+        # L-shaped: crown width spans stem top + foundation top = 2000mm
+        assert l3["crown_width_mm"] > 1000  # definitely wider than stem alone
+        # Wall thickness = stem width = 300mm
+        assert abs(l3["min_wall_thickness_mm"] - 300.0) < 5.0
+        # Vertical front
+        assert abs(l3["front_inclination_deg"]) < 0.5
+
+
+@pytest.mark.skipif(not os.path.exists(T5_PATH), reason="T5 model not found")
+class TestT5FromIFC:
+    """Level 3 on T5 IFC file (T-shaped wall with spur)."""
+
+    def test_t_shaped_measurements(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T5_PATH)
+        walls = get_elements(model, "IfcWall")
+        mesh_data = extract_mesh(walls[0])
+        l2 = validate_level2(mesh_data)
+        l3 = validate_level3(mesh_data, l2)
+
+        # T-shaped: spur extends crown measurement beyond main wall width
+        assert l3["crown_width_mm"] > 400
+        # Wall thickness = main wall thickness = 400mm
+        assert abs(l3["min_wall_thickness_mm"] - 400.0) < 5.0
+        # Vertical front
+        assert abs(l3["front_inclination_deg"]) < 0.5
