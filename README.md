@@ -47,6 +47,12 @@ ifc-geo-validator model.ifc --filter-type IfcWall --filter-predefined RETAININGW
 
 # Run specific levels
 ifc-geo-validator model.ifc --levels 1,2,3
+
+# Write validation results back into IFC as Pset_GeoValidation
+ifc-geo-validator model.ifc --enrich model_validated.ifc
+
+# Export failed checks as BCF 2.1 issues
+ifc-geo-validator model.ifc --bcf issues.bcf
 ```
 
 ### Web App
@@ -56,7 +62,7 @@ pip install -e ".[web]"
 streamlit run src/ifc_geo_validator/app.py
 ```
 
-Upload an IFC file in the browser, configure filters, and view interactive validation results with downloadable JSON reports.
+Upload an IFC file in the browser, configure filters, and view interactive validation results. Download options: JSON report, enriched IFC (with Pset_GeoValidation), and BCF 2.1 issue file.
 
 ## Rulesets
 
