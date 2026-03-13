@@ -1,0 +1,163 @@
+# =============================================================================
+# ASTRA FHB T/G — Prüfregeln für Stützmauern
+# Basierend auf: ASTRA 24 001-15101 "Stützbauwerke, Allgemeines" V3.02
+# =============================================================================
+#
+# Dieses Ruleset definiert geometrische Validierungsregeln für Stützmauern
+# gemäss ASTRA Fachhandbuch Tunnel/Geotechnik (FHB T/G), Januar 2026.
+#
+# Severity-Stufen:
+#   ERROR   — Normverstoss, muss korrigiert werden
+#   WARNING — Empfehlung, sollte geprüft werden
+#   INFO    — Hinweis, optional
+#
+# Jede Regel verweist auf die Quelle im FHB T/G.
+# =============================================================================
+
+metadata:
+  name: "ASTRA FHB T/G — Stützmauern"
+  version: "1.1.0"
+  source: "ASTRA 24 001-15101 V3.02, 01.01.2025"
+  scope: "Geometrische Validierung von Stützmauern an Nationalstrassen"
+  ifc_filter:
+    entity: "IfcWall"
+    predefined_type: "RETAININGWALL"
+
+# Klassifikations-Schwellwerte (konfigurierbar pro Ruleset)
+classification_thresholds:
+  horizontal_deg: 30.0       # Winkel für horizontal/vertikal-Trennung
+  coplanar_deg: 5.0          # Winkel für Koplanar-Clustering benachbarter Dreiecke
+  lateral_deg: 45.0          # Winkel für Front/Back vs. Left/Right-Trennung
+
+# =============================================================================
+# Level 1 — Geometrische Kenngrössen (Plausibilität)
+# =============================================================================
+
+level_1:
+  - id: ASTRA-SM-L1-001
+    name: "Volumen Plausibilität"
+    description: "Volumen muss positiv und plausibel sein (> 0.1 m³)"
+    check: "volume > 0.1"
+    severity: ERROR
+    reference: "Allgemeine Plausibilitätsprüfung"
+
+  - id: ASTRA-SM-L1-002
+    name: "Mesh-Validität"
+    description: "Mesh muss geschlossen (watertight) sein für korrekte Volumenberechnung"
+    check: "mesh_is_watertight == true"
+    severity: WARNING
+    reference: "Voraussetzung für zuverlässige Geometrieanalyse"
+
+# =============================================================================
+# Level 3 — Flächenspezifische Anforderungen
+# =============================================================================
+
+level_3:
+  - id: ASTRA-SM-L3-001
+    name: "Kronenbreite Minimum"
+    description: "Mauerkrone mindestens 300 mm breit"
+    check: "crown_width_mm >= 300"
+    severity: ERROR
+    reference: "FHB T/G 24 001-15101, Kap. 3, Absatz 'Generell'"
+    quote: "Die Mauerkrone ist [...] mindestens 300 mm breit auszubilden."
+
+  - id: ASTRA-SM-L3-002
+    name: "Kronenneigung"
+    description: "Mauerkrone 3% geneigt, in der Regel gegen den Hang"
+    check: "crown_slope_percent >= 2.5 and crown_slope_percent <= 3.5"
+    tolerance: 0.5  # Prozentpunkte
+    severity: WARNING
+    reference: "FHB T/G 24 001-15101, Kap. 3, Absatz 'Generell'"
+    quote: "Die Mauerkrone ist 3 %, in der Regel gegen den Hang, geneigt [...]"
+
+  - id: ASTRA-SM-L3-003
+    name: "Mindestbauteilstärke"
+    description: "Konstruktive Mindestbauteilstärke (Wandstärke) von 300 mm"
+    check: "min_wall_thickness_mm >= 300"
+    severity: ERROR
+    reference: "FHB T/G 24 001-15101, Kap. 3, Absatz 'Generell'"
+    quote: "Eine konstruktive Mindestbauteilstärke (Wandstärke) von 300 mm ist stets einzuhalten."
+
+  - id: ASTRA-SM-L3-004
+    name: "Empfohlene Neigung 10:1"
+    description: "Neigung der Stützmauer von 10:1 wird empfohlen"
+    check: "front_inclination_ratio >= 9.0 and front_inclination_ratio <= 11.0"
+    tolerance: 1.0
+    severity: INFO
+    reference: "FHB T/G 24 001-15101, Kap. 3, Absatz 'Generell'"
+    quote: "Eine Neigung der Stützmauer von 10:1 wird empfohlen."
+
+# =============================================================================
+# Level 4 — Anforderungsabgleich (zusammengesetzte Prüfungen)
+# =============================================================================
+
+level_4:
+  - id: ASTRA-SM-L4-001
+    name: "Gesamtbewertung Mauerkrone"
+    description: "Mauerkrone erfüllt alle Anforderungen (Breite, Neigung)"
+    depends_on:
+      - ASTRA-SM-L3-001  # Kronenbreite
+      - ASTRA-SM-L3-002  # Kronenneigung
+    severity: ERROR
+    reference: "FHB T/G 24 001-15101, Kap. 3"
+
+  - id: ASTRA-SM-L4-002
+    name: "Gesamtbewertung Wandgeometrie"
+    description: "Wandgeometrie erfüllt Mindestanforderungen"
+    depends_on:
+      - ASTRA-SM-L3-003  # Mindestbauteilstärke
+      - ASTRA-SM-L3-004  # Neigung
+    severity: WARNING
+    reference: "FHB T/G 24 001-15101, Kap. 3"
+
+# =============================================================================
+# Level 5 — Geometrischer Kontext (Bauwerk-intern)
+# =============================================================================
+
+level_5:
+  - id: ASTRA-SM-L5-001
+    name: "Fundament-Überstand"
+    description: "Fundament ragt über Mauerkörper hinaus (typisch bei Winkelstützmauern)"
+    check: "foundation_extends_beyond_wall == true"
+    severity: INFO
+    reference: "Allgemeine konstruktive Anforderung"
+
+  - id: ASTRA-SM-L5-002
+    name: "Mauerkörper-Fundament-Anschluss"
+    description: "Mauerkörper und Fundament sind geometrisch verbunden (kein Spalt)"
+    check: "wall_foundation_gap_mm <= 10"
+    severity: ERROR
+    reference: "Konstruktive Anforderung"
+
+# =============================================================================
+# Level 6 — Geometrischer Kontext (Bauwerk-extern)
+# =============================================================================
+
+level_6:
+  - id: ASTRA-SM-L6-001
+    name: "Erd-/Luftseite-Bestimmung"
+    description: "Automatische Bestimmung der Erd- und Luftseite via Terrain"
+    check: "earth_side_determined == true"
+    severity: INFO
+    reference: "Erforderlich für korrekte Flächenklassifikation"
+
+  - id: ASTRA-SM-L6-002
+    name: "Kronenneigung gegen Hang"
+    description: "Kronenneigung muss gegen den Hang zeigen (Richtungsprüfung)"
+    check: "crown_slope_towards_earth_side == true"
+    severity: WARNING
+    reference: "FHB T/G 24 001-15101, Kap. 3"
+    quote: "Die Mauerkrone ist 3 %, in der Regel gegen den Hang, geneigt [...]"
+
+# =============================================================================
+# Level 7 — Distanzberechnungen
+# =============================================================================
+
+level_7:
+  - id: ASTRA-SM-L7-001
+    name: "Rampengefälle bei Notausgängen"
+    description: "Rampen bei Notausgängen max. 6% Gefälle"
+    check: "ramp_slope_percent <= 6.0"
+    severity: ERROR
+    reference: "FHB T/G, Sicherheitsanforderungen"
+    note: "Nur relevant wenn Stützmauer Teil eines Tunnelportals"

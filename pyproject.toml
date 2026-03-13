@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ifc-geo-validator"
+version = "0.1.0"
+description = "Geometric validation of IFC infrastructure models against configurable requirements"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "Mio Buser" },
+]
+keywords = ["IFC", "BIM", "geometry", "validation", "infrastructure", "ASTRA"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: GIS",
+]
+
+dependencies = [
+    "ifcopenshell>=0.8.0",
+    "numpy>=1.24",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+]
+viz = [
+    "pyvista>=0.40",
+    "trimesh>=3.20",
+]
+bcf = [
+    # BCF export via IfcOpenShell's bcfxml module (included in ifcopenshell)
+]
+
+[project.scripts]
+ifc-geo-validator = "ifc_geo_validator.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
