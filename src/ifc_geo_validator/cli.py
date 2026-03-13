@@ -41,6 +41,11 @@ def main():
         default=None,
     )
     parser.add_argument(
+        "--enrich",
+        help="Write enriched IFC with validation properties to this path",
+        default=None,
+    )
+    parser.add_argument(
         "-v", "--verbose",
         action="store_true",
         help="Verbose output",
@@ -185,6 +190,12 @@ def main():
                 "element_name": name,
                 "error": str(e),
             })
+
+    # Write enriched IFC with validation properties
+    if args.enrich:
+        from ifc_geo_validator.report.ifc_property_writer import inject_all
+        inject_all(model, elements, all_results, args.enrich)
+        print(f"\nEnriched IFC written to: {args.enrich}")
 
     # Write JSON report if requested
     if args.output:
