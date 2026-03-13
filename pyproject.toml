@@ -40,7 +40,7 @@ web = [
     "streamlit>=1.30",
 ]
 bcf = [
-    # BCF export via IfcOpenShell's bcfxml module (included in ifcopenshell)
+    "bcf-client>=0.8",
 ]
 
 [project.scripts]

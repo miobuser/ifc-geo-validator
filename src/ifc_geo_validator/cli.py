@@ -46,6 +46,11 @@ def main():
         default=None,
     )
     parser.add_argument(
+        "--bcf",
+        help="Export failed checks as BCF issues to this path",
+        default=None,
+    )
+    parser.add_argument(
         "-v", "--verbose",
         action="store_true",
         help="Verbose output",
@@ -190,6 +195,13 @@ def main():
                 "element_name": name,
                 "error": str(e),
             })
+
+    # Export BCF issues for failed checks
+    if args.bcf:
+        from ifc_geo_validator.report.bcf_export import export_bcf
+        ifc_name = Path(args.ifc_file).name
+        export_bcf(all_results, args.bcf, ifc_name=ifc_name)
+        print(f"\nBCF issues written to: {args.bcf}")
 
     # Write enriched IFC with validation properties
     if args.enrich:
