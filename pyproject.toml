@@ -36,12 +36,16 @@ viz = [
     "pyvista>=0.40",
     "trimesh>=3.20",
 ]
+web = [
+    "streamlit>=1.30",
+]
 bcf = [
     # BCF export via IfcOpenShell's bcfxml module (included in ifcopenshell)
 ]
 
 [project.scripts]
 ifc-geo-validator = "ifc_geo_validator.cli:main"
+
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

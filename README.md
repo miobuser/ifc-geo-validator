@@ -34,6 +34,8 @@ pip install -e ".[dev,viz]"
 
 ## Usage
 
+### CLI
+
 ```bash
 # Validate an IFC file against ASTRA rules
 ifc-geo-validator model.ifc --ruleset rulesets/astra_fhb_stuetzmauer.yaml
@@ -44,6 +46,15 @@ ifc-geo-validator model.ifc --filter-type IfcWall --filter-predefined RETAININGW
 # Run specific levels
 ifc-geo-validator model.ifc --levels 1,2,3
 ```
+
+### Web App
+
+```bash
+pip install -e ".[web]"
+streamlit run src/ifc_geo_validator/app.py
+```
+
+Upload an IFC file in the browser, configure filters, and view interactive validation results with downloadable JSON reports.
 
 ## Rulesets
 
