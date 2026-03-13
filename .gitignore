@@ -12,3 +12,4 @@ venv/
 !tests/test_models/*.ifc
 .env
 validation_report.json
+viz_output/
