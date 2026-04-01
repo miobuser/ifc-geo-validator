@@ -305,7 +305,11 @@ def main():
 
                 n_bodies = l2.get("n_bodies", 1)
                 confidence = l2.get("confidence", 0)
-                print(f"\n  Face Classification ({l2['num_groups']} groups, confidence={confidence:.0%}):")
+                role = l2.get("element_role", "unknown")
+                role_labels = {"wall_stem": "Mauerstiel", "foundation": "Fundament",
+                               "parapet": "Brüstung", "column": "Stütze",
+                               "slab": "Platte", "unknown": "unbekannt"}
+                print(f"\n  Face Classification ({l2['num_groups']} groups, confidence={confidence:.0%}, role={role_labels.get(role, role)}):")
                 if n_bodies > 1:
                     print(f"  WARNING: {n_bodies} disconnected bodies — using largest")
                 geo = l2.get("geometry_check", {})

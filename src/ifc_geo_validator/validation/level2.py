@@ -103,6 +103,9 @@ def validate_level2(mesh_data: dict, thresholds: dict = None) -> dict:
                          "reason": "classified as wall (overrides bbox shape)"}
             diagnostics = []  # Clear the non-wall-like warning
 
+    # ── Element role detection ─────────────────────────────────────
+    element_role = _detect_element_role(geo_check, summary, has_crown, has_foundation)
+
     # ── Classification confidence ─────────────────────────────────
     confidence, conf_diagnostics = _compute_confidence(
         summary, has_crown, has_foundation, has_front, has_back,
@@ -130,6 +133,7 @@ def validate_level2(mesh_data: dict, thresholds: dict = None) -> dict:
         "n_bodies": result.get("n_bodies", 1),
         "geometry_check": geo_check,
         "confidence": confidence,
+        "element_role": element_role,
         "diagnostics": diagnostics,
     }
 
@@ -186,6 +190,65 @@ def _check_wall_geometry(vertices: np.ndarray, areas: np.ndarray) -> dict:
         "vert_ratio": round(vert_ratio, 2),
         "bbox_dims_m": [round(dx, 3), round(dy, 3), round(dz, 3)],
     }
+
+
+# ── Element role detection ─────────────────────────────────────────
+
+def _detect_element_role(geo_check: dict, summary: dict,
+                         has_crown: bool, has_foundation: bool) -> str:
+    """Detect the structural role of an element from its geometry.
+
+    Uses bounding box aspect ratios and face area distribution:
+      - wall_stem:   tall and thin (height > width, plan elongated)
+      - foundation:  short and wide (height < width/3)
+      - parapet:     short and thin (height < 1.5m, thin)
+      - column:      tall, square plan (plan_aspect < 2)
+      - slab:        very flat (height < 5% of max horizontal)
+      - unknown:     doesn't match any pattern
+
+    Returns one of: "wall_stem", "foundation", "parapet", "column", "slab", "unknown".
+    """
+    dims = geo_check.get("bbox_dims_m", [0, 0, 0])
+    if len(dims) < 3:
+        return "unknown"
+
+    dx, dy, dz = dims
+    h_dims = sorted([dx, dy], reverse=True)
+    h_max, h_min = h_dims[0], h_dims[1]
+    plan_aspect = geo_check.get("plan_aspect", 1.0)
+    vert_ratio = geo_check.get("vert_ratio", 1.0)
+
+    # Vertical face area vs horizontal face area
+    vert_area = summary.get(FRONT, {}).get("total_area", 0) + summary.get(BACK, {}).get("total_area", 0)
+    horiz_area = summary.get(CROWN, {}).get("total_area", 0) + summary.get(FOUNDATION, {}).get("total_area", 0)
+
+    eps = max(h_max * 1e-6, 1e-6)
+
+    # Slab: very flat
+    if dz < h_max * 0.05 and dz < h_min * 0.5:
+        return "slab"
+
+    # Foundation: short and wide (height < width/3, horiz > vert)
+    if dz < h_min / 2 and horiz_area > vert_area * 2:
+        return "foundation"
+
+    # Column: tall, nearly square plan
+    if plan_aspect < 2.0 and dz > h_max * 0.8:
+        return "column"
+
+    # Parapet: short and thin (height < 1.5m, narrow)
+    if dz < 1.5 and h_min < 0.5 and plan_aspect > 3:
+        return "parapet"
+
+    # Wall stem: elongated plan, significant height, vertical faces dominate
+    if plan_aspect > 2.0 and vert_area > horiz_area * 0.3:
+        return "wall_stem"
+
+    # Default: if wall-like geometry detected, assume stem
+    if geo_check.get("is_wall_like", False):
+        return "wall_stem"
+
+    return "unknown"
 
 
 # ── Classification confidence ─────────────────────────────────────
