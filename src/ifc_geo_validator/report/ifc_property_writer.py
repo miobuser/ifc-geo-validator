@@ -81,10 +81,22 @@ def _collect_properties(elem_result: dict) -> dict:
         props["BboxLength_m"] = round(max(size), 4)
         props["BboxHeight_m"] = round(size[2] if len(size) > 2 else 0, 4)
 
+        # Mesh quality diagnostics
+        n_degen = l1.get("n_degenerate_filtered", 0)
+        if n_degen > 0:
+            props["DegenerateTrianglesFiltered"] = n_degen
+        q = l1.get("mesh_quality", {})
+        nm = q.get("non_manifold_edges", 0)
+        if nm > 0:
+            props["NonManifoldEdges"] = nm
+
     # Level 2: classification summary
     l2 = elem_result.get("level2")
     if l2:
         props["NumFaceGroups"] = l2["num_groups"]
+        n_bodies = l2.get("n_bodies", 1)
+        if n_bodies > 1:
+            props["NumBodies"] = n_bodies
         props["HasCrown"] = l2.get("has_crown", False)
         props["HasFoundation"] = l2.get("has_foundation", False)
         props["HasFront"] = l2.get("has_front", False)

@@ -20,7 +20,13 @@ from ifc_geo_validator.report.json_report import generate_report
 
 # ── Defaults ─────────────────────────────────────────────────────────
 
-DEFAULT_RULESET = Path(__file__).parent / "rules" / "rulesets" / "astra_fhb_stuetzmauer.yaml"
+RULESETS_DIR = Path(__file__).parent / "rules" / "rulesets"
+BUILTIN_RULESETS = {
+    "ASTRA FHB T/G — Stützmauern": RULESETS_DIR / "astra_fhb_stuetzmauer.yaml",
+    "SIA 262 — Stützmauern": RULESETS_DIR / "sia_262_stuetzmauer.yaml",
+    "ASTRA FHB T/G — Tunnel": RULESETS_DIR / "astra_fhb_tunnel.yaml",
+}
+DEFAULT_RULESET = RULESETS_DIR / "astra_fhb_stuetzmauer.yaml"
 
 
 # ── Page config ──────────────────────────────────────────────────────
@@ -48,13 +54,15 @@ st.sidebar.caption(f"v{_get_version()} — BSc Thesis BFH")
 uploaded_file = st.sidebar.file_uploader(
     "Upload IFC file",
     type=["ifc"],
-    help="IFC 4x3 model with IfcWall elements",
+    help="IFC 4x3 model with geometric elements",
 )
 
-entity_type = st.sidebar.selectbox(
-    "Entity type",
-    ["IfcWall", "IfcSlab", "IfcColumn", "IfcBeam"],
-    index=0,
+entity_types = st.sidebar.multiselect(
+    "Entity types",
+    ["IfcWall", "IfcSlab", "IfcColumn", "IfcBeam", "IfcMember",
+     "IfcFooting", "IfcBuildingElementProxy", "IfcPlate", "IfcRailing"],
+    default=["IfcWall"],
+    help="Select one or more IFC entity types to validate",
 )
 
 predefined_type = st.sidebar.text_input(
@@ -63,11 +71,18 @@ predefined_type = st.sidebar.text_input(
     help="e.g. RETAININGWALL",
 )
 
-ruleset_file = st.sidebar.file_uploader(
-    "Custom ruleset (YAML)",
-    type=["yaml", "yml"],
-    help="Leave empty to use built-in ASTRA FHB T/G ruleset",
+# Ruleset selector: built-in or custom
+ruleset_choice = st.sidebar.selectbox(
+    "Ruleset",
+    list(BUILTIN_RULESETS.keys()) + ["Custom (upload)"],
+    index=0,
 )
+ruleset_file = None
+if ruleset_choice == "Custom (upload)":
+    ruleset_file = st.sidebar.file_uploader(
+        "Custom ruleset (YAML)",
+        type=["yaml", "yml"],
+    )
 
 run_button = st.sidebar.button("Validate", type="primary", use_container_width=True)
 
@@ -105,7 +120,7 @@ if not uploaded_file:
 # ── Run validation ───────────────────────────────────────────────────
 
 @st.cache_data(show_spinner="Loading IFC model...")
-def run_validation(_file_bytes, file_name, entity_type, predefined_type, _ruleset_bytes):
+def run_validation(_file_bytes, file_name, entity_types_str, predefined_type, _ruleset_bytes, ruleset_choice):
     """Run the full validation pipeline and return structured results."""
     # Write uploaded file to temp location
     with tempfile.NamedTemporaryFile(suffix=".ifc", delete=False) as tmp:
@@ -114,14 +129,21 @@ def run_validation(_file_bytes, file_name, entity_type, predefined_type, _rulese
 
     model = load_model(tmp_path)
     pred_filter = predefined_type if predefined_type else None
-    elements = get_elements(model, entity_type, pred_filter)
 
-    # Load ruleset
+    # Collect elements from all selected entity types
+    e_types = entity_types_str.split(",") if entity_types_str else ["IfcWall"]
+    elements = []
+    for etype in e_types:
+        elements.extend(get_elements(model, etype.strip(), pred_filter))
+
+    # Load ruleset (built-in or custom upload)
     if _ruleset_bytes:
         with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False, mode="wb") as rs_tmp:
             rs_tmp.write(_ruleset_bytes)
             rs_path = rs_tmp.name
         ruleset = load_ruleset(rs_path)
+    elif ruleset_choice in BUILTIN_RULESETS and BUILTIN_RULESETS[ruleset_choice].exists():
+        ruleset = load_ruleset(str(BUILTIN_RULESETS[ruleset_choice]))
     elif DEFAULT_RULESET.exists():
         ruleset = load_ruleset(str(DEFAULT_RULESET))
     else:
@@ -210,14 +232,15 @@ if run_button or uploaded_file:
     file_bytes = uploaded_file.getvalue()
     rs_bytes = ruleset_file.getvalue() if ruleset_file else None
     pred = predefined_type.strip() or ""
+    etypes_str = ",".join(entity_types) if entity_types else "IfcWall"
 
     results, report, ruleset, l5_result, l6_result, has_terrain = run_validation(
-        file_bytes, uploaded_file.name, entity_type, pred, rs_bytes
+        file_bytes, uploaded_file.name, etypes_str, pred, rs_bytes, ruleset_choice
     )
 
     if not results:
-        st.error(f"No {entity_type} elements found in the model. "
-                 f"Try a different entity type in the sidebar.")
+        st.error(f"No elements found for types: {etypes_str}. "
+                 f"Try different entity types in the sidebar.")
         st.stop()
 
     st.title(f"Validation: {uploaded_file.name}")
@@ -337,6 +360,21 @@ if run_button or uploaded_file:
             c5.metric("Vertices", l1["num_vertices"])
             wt_label = "Yes" if l1["is_watertight"] else "No"
             c6.metric("Watertight", wt_label)
+
+            # Mesh quality warnings
+            n_degen = l1.get("n_degenerate_filtered", 0)
+            n_bodies = l2.get("n_bodies", 1)
+            q = l1.get("mesh_quality", {})
+            nm_edges = q.get("non_manifold_edges", 0)
+            warnings = []
+            if n_degen > 0:
+                warnings.append(f"{n_degen} degenerate triangles filtered")
+            if n_bodies > 1:
+                warnings.append(f"{n_bodies} disconnected bodies (largest used)")
+            if nm_edges > 0:
+                warnings.append(f"{nm_edges} non-manifold edges")
+            if warnings:
+                st.warning(" | ".join(warnings))
 
             # ── L2: Face classification ──────────────────────
             st.subheader("Face Classification (L2)")
@@ -547,8 +585,11 @@ if run_button or uploaded_file:
             enrich_tmp = tmp.name
 
         enrich_model = load_model(enrich_tmp)
-        enrich_elems = get_elements(enrich_model, entity_type,
-                                    predefined_type.strip() or None)
+        enrich_elems = []
+        for etype in (entity_types if entity_types else ["IfcWall"]):
+            enrich_elems.extend(get_elements(
+                enrich_model, etype, predefined_type.strip() or None
+            ))
         inject_all(enrich_model, enrich_elems, results, enrich_tmp)
 
         with open(enrich_tmp, "rb") as f:
