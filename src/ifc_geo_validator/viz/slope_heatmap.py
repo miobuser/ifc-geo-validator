@@ -81,8 +81,8 @@ def compute_triangle_slopes(mesh_data: dict, axis: np.ndarray = None,
         ax_2d = eigvecs[:, -1]
         axis = np.array([ax_2d[0], ax_2d[1], 0.0])
 
-    # Ensure unit vector in XY
-    axis = axis.copy()
+    # Ensure float unit vector in XY
+    axis = np.asarray(axis, dtype=float).copy()
     axis[2] = 0.0
     ax_mag = np.linalg.norm(axis)
     if ax_mag > 1e-10:
