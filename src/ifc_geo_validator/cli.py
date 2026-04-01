@@ -80,6 +80,13 @@ def main():
         help="Scan model for all entity types with geometry and exit",
     )
     parser.add_argument(
+        "--centerline",
+        choices=["auto", "geometry", "alignment"],
+        default="auto",
+        help="Centerline source: auto (alignment if available, else geometry), "
+             "geometry (from crown faces), alignment (from IfcAlignment)",
+    )
+    parser.add_argument(
         "--heatmap",
         choices=["cross", "long", "total"],
         default=None,
@@ -142,6 +149,22 @@ def main():
             elements.extend(found)
     if len(entity_types) > 1:
         print(f"Total: {len(elements)} elements")
+
+    # Alignment detection
+    alignment_centerline = None
+    if args.centerline in ("auto", "alignment"):
+        from ifc_geo_validator.core.ifc_parser import get_alignments
+        from ifc_geo_validator.core.face_classifier import WallCenterline
+        aligns = get_alignments(model)
+        if aligns:
+            al = aligns[0]  # Use first alignment
+            alignment_centerline = WallCenterline.from_polyline(
+                al["points_xy"], source="alignment"
+            )
+            print(f"Alignment: {al['name']} ({len(al['points_xy'])} points, "
+                  f"{alignment_centerline.length:.1f}m)")
+        elif args.centerline == "alignment":
+            print("WARNING: No IfcAlignment found — falling back to geometric centerline")
 
     # Terrain detection (print early so user knows)
     terrain = None
@@ -266,15 +289,18 @@ def main():
                     None if args.heatmap_categories == "all"
                     else [c.strip() for c in args.heatmap_categories.split(",")]
                 )
+                # Use alignment centerline if available, else geometric
+                hm_centerline = alignment_centerline or l2.get("centerline")
                 slopes = compute_surface_slopes(
                     mesh_data, l2["face_groups"],
                     categories=hm_cats,
                     axis=np.array(l2["wall_axis"]) if l2 else None,
-                    centerline=l2.get("centerline"),
+                    centerline=hm_centerline,
                 )
                 if slopes is not None:
                     n_sel = int(slopes["face_mask"].sum())
-                    print(f"\n  Slope Heatmap ({args.heatmap}, {n_sel} faces):")
+                    cl_src = "alignment" if alignment_centerline else ("local" if slopes.get("uses_local_frame") else "global")
+                    print(f"\n  Slope Heatmap ({args.heatmap}, {n_sel} faces, centerline={cl_src}):")
                     print(f"    Cross-slope:  avg={slopes['area_weighted_cross_pct']:.2f}%  "
                           f"min={slopes['min_cross_pct']:.2f}%  max={slopes['max_cross_pct']:.2f}%")
                     print(f"    Long. slope:  avg={slopes['area_weighted_long_pct']:.2f}%  "

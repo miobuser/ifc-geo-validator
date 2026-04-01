@@ -143,7 +143,92 @@ class WallCenterline:
             "length_m": round(self.length, 4),
             "n_slices": len(self.points_2d),
             "wall_axis": self.wall_axis.tolist(),
+            "source": getattr(self, "_source", "geometry"),
         }
+
+    @staticmethod
+    def from_polyline(points_xy: np.ndarray, source: str = "alignment") -> "WallCenterline":
+        """Create a WallCenterline from an XY polyline (e.g. IfcAlignment).
+
+        Computes tangents, normals, arc length, and curvature detection
+        from the given polyline. The result has the same interface as a
+        geometry-derived centerline.
+
+        Args:
+            points_xy: (N, 2) array of XY polyline points.
+            source: label for to_dict() — "alignment" or "manual".
+        """
+        pts = np.asarray(points_xy)
+        if pts.ndim != 2 or pts.shape[1] != 2:
+            raise ValueError("points_xy must be (N, 2)")
+        n = len(pts)
+        if n < 2:
+            raise ValueError("Need at least 2 points")
+
+        # Compute tangents (central differences, forward/backward at ends)
+        tangents = np.zeros((n, 3))
+        normals = np.zeros((n, 3))
+        for i in range(n):
+            if i == 0:
+                d = pts[1] - pts[0]
+            elif i == n - 1:
+                d = pts[-1] - pts[-2]
+            else:
+                d = pts[i + 1] - pts[i - 1]
+            d3 = np.array([d[0], d[1], 0.0])
+            mag = np.linalg.norm(d3)
+            if mag > 1e-12:
+                d3 /= mag
+            tangents[i] = d3
+            normals[i] = np.array([-d3[1], d3[0], 0.0])
+
+        # Arc length
+        diffs = np.diff(pts, axis=0)
+        total_length = float(np.linalg.norm(diffs, axis=1).sum())
+
+        # Curvature detection (same as _extract_centerline)
+        is_curved = False
+        if n >= 4:
+            seg_dirs = diffs / np.linalg.norm(diffs, axis=1, keepdims=True).clip(1e-12)
+            if len(seg_dirs) >= 2:
+                dots = np.sum(seg_dirs[:-1] * seg_dirs[1:], axis=1)
+                dots = np.clip(dots, -1.0, 1.0)
+                step_angles = np.degrees(np.arccos(dots))
+                total_rot = float(step_angles.sum())
+                is_curved = total_rot > 10.0  # >10° total rotation
+
+        # Global axis (chord direction)
+        chord = pts[-1] - pts[0]
+        chord_mag = np.linalg.norm(chord)
+        if chord_mag > 1e-10:
+            wall_axis = np.array([chord[0] / chord_mag, chord[1] / chord_mag, 0.0])
+        else:
+            wall_axis = tangents[0].copy()
+
+        # Widths: unknown from alignment alone, set to 0
+        widths = np.zeros(n)
+
+        # Max deviation from chord
+        if chord_mag > 1e-10:
+            chord_dir = chord / chord_mag
+            chord_perp = np.array([-chord_dir[1], chord_dir[0]])
+            devs = (pts - pts[0]) @ chord_perp
+            max_dev = float(np.abs(devs).max())
+        else:
+            max_dev = 0.0
+
+        cl = WallCenterline(
+            points_2d=pts,
+            tangents=tangents,
+            normals=normals,
+            widths=widths,
+            is_curved=is_curved,
+            length=total_length,
+            wall_axis=wall_axis,
+            max_deviation=max_dev,
+        )
+        cl._source = source
+        return cl
 
 
 # ── Public API ──────────────────────────────────────────────────────
