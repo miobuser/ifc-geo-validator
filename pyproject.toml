@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ifc-geo-validator"
-version = "0.1.0"
-description = "Geometric validation of IFC infrastructure models against configurable requirements"
+version = "1.0.0"
+description = "Geometric validation of IFC infrastructure models against configurable YAML rulesets (ASTRA FHB T/G)"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
@@ -14,7 +14,7 @@ authors = [
 ]
 keywords = ["IFC", "BIM", "geometry", "validation", "infrastructure", "ASTRA"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",

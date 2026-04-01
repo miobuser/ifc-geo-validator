@@ -58,8 +58,8 @@ def export_bcf(
         elem_id = elem.get("element_id", "?")
 
         for chk in l4.get("checks", []):
-            if chk["status"] == "PASS":
-                continue
+            if chk["status"] != "FAIL":
+                continue  # Only export FAIL, not PASS or SKIP
 
             title = f"[{chk['rule_id']}] {chk['name']}"
             severity = chk.get("severity", "INFO")
@@ -122,6 +122,8 @@ def _build_comment(chk: dict, elem_name: str) -> str:
         if isinstance(actual, dict):
             for k, v in actual.items():
                 parts.append(f"  {k}: {v}")
+        elif isinstance(actual, bool):
+            parts.append(f"Actual: {'Ja' if actual else 'Nein'}")
         elif isinstance(actual, float):
             parts.append(f"Actual: {actual:.2f}")
         else:

@@ -88,13 +88,16 @@ class TestBcfExport:
             assert len(guids) == 0, "T7 passes all rules → no BCF topics"
             bcf.close()
         finally:
-            os.unlink(tmp)
+            try:
+                os.unlink(tmp)
+            except PermissionError:
+                pass  # Windows may hold the file briefly
 
     def test_t6_topic_count_matches_failures(self):
         result = _run_pipeline("T6_non_compliant.ifc")
         n_failed = sum(
             1 for c in result["level4"]["checks"]
-            if c["status"] != "PASS"
+            if c["status"] == "FAIL"
         )
         with tempfile.NamedTemporaryFile(suffix=".bcf", delete=False) as f:
             tmp = f.name
@@ -106,3 +109,46 @@ class TestBcfExport:
             bcf.close()
         finally:
             os.unlink(tmp)
+
+
+class TestBCFWithL5L6Context:
+    """Test BCF export with L5/L6 context failures."""
+
+    def test_l5_failure_exported(self):
+        """A FAIL for ASTRA-SM-L5-002 (gap > 10mm) should produce a BCF topic."""
+        result = _run_pipeline("T7_compliant.ifc")
+
+        # Inject L5 context that causes ASTRA-SM-L5-002 to fail (gap > 10mm)
+        l5_ctx = {
+            "foundation_extends_beyond_wall": True,
+            "wall_foundation_gap_mm": 50.0,  # > 10mm threshold → FAIL
+        }
+        ruleset = load_ruleset(RULESET_PATH)
+        l4_with_l5 = validate_level4(
+            result["level1"], result["level3"], ruleset,
+            level5_context=l5_ctx,
+        )
+        result["level4"] = l4_with_l5
+
+        # Verify L5-002 actually failed
+        checks = {c["rule_id"]: c for c in l4_with_l5["checks"]}
+        assert checks["ASTRA-SM-L5-002"]["status"] == "FAIL"
+
+        with tempfile.NamedTemporaryFile(suffix=".bcf", delete=False) as f:
+            tmp = f.name
+        try:
+            export_bcf([result], tmp, ifc_name="T7_compliant.ifc")
+            bcf = bcfxml.BcfXml.load(tmp)
+            guids = list(bcf.topics)
+            # At least one topic should mention L5-002
+            l5_topics = [
+                g for g in guids
+                if "L5-002" in bcf.topics[g].topic.title
+            ]
+            assert len(l5_topics) >= 1, "BCF should contain a topic for ASTRA-SM-L5-002"
+            bcf.close()
+        finally:
+            try:
+                os.unlink(tmp)
+            except PermissionError:
+                pass

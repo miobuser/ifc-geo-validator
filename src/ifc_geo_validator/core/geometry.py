@@ -1,4 +1,13 @@
-"""Pure geometry computations on mesh data (no IFC dependency)."""
+"""Pure geometry computations on triangulated mesh data.
+
+All algorithms are mathematically exact for triangulated meshes:
+  - Volume: Divergence theorem (Gauss, 1813) on signed tetrahedra
+  - Area: Cross product magnitude, A = ||e₁ × e₂|| / 2
+  - BBox: Axis-aligned bounding box from vertex extrema
+  - Centroid: Area-weighted surface centroid
+
+No IFC dependency — operates on numpy arrays only.
+"""
 
 import numpy as np
 

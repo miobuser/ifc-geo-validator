@@ -369,8 +369,8 @@ class TestT4FaceClassification:
 
         assert result["has_crown"]
         assert result["has_foundation"]
-        # L-shape has 8 groups: 2 end caps (L-shaped) + 6 lateral faces
-        assert result["num_groups"] == 8
+        # Multi-element: walls[0] = Mauersteg (simple box) → 6 groups
+        assert result["num_groups"] == 6
 
 
 @pytest.mark.skipif(not os.path.exists(T5_PATH), reason="T5 model not found")
@@ -389,5 +389,721 @@ class TestT5FaceClassification:
         assert result["has_crown"]
         assert result["has_foundation"]
         assert result["has_front"]
-        # T-shape has 10 groups (wall + spur faces)
-        assert result["num_groups"] == 10
+        # Multi-element: walls[0] = Hauptwand (simple box) → 6 groups
+        assert result["num_groups"] == 6
+
+
+# ── T8: Curved wall (90° arc) ──────────────────────────────────────
+
+T8_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T8_curved_wall.ifc")
+
+
+@pytest.mark.skipif(not os.path.exists(T8_PATH), reason="T8 model not found")
+class TestT8FaceClassification:
+    """Level 2 on T8 IFC file (90° arc, R=10m, 0.4m thick)."""
+
+    def test_curved_wall_classification(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T8_PATH)
+        walls = get_elements(model, "IfcWall")
+        mesh_data = extract_mesh(walls[0])
+        result = validate_level2(mesh_data)
+
+        assert result["has_crown"]
+        assert result["has_foundation"]
+        assert result["has_front"]
+        assert result["has_back"]
+        # After post-classification merge: 6 groups
+        assert result["num_groups"] == 6
+
+    def test_centerline_is_curved(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T8_PATH)
+        walls = get_elements(model, "IfcWall")
+        mesh_data = extract_mesh(walls[0])
+        result = validate_level2(mesh_data)
+
+        centerline = result.get("centerline")
+        assert centerline is not None
+        assert centerline.is_curved is True
+        assert centerline.length > 5.0  # arc length > 5m
+
+
+# ── T9: Stepped wall ────────────────────────────────────────────────
+
+T9_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T9_stepped_wall.ifc")
+
+
+@pytest.mark.skipif(not os.path.exists(T9_PATH), reason="T9 model not found")
+class TestT9FaceClassification:
+    """Level 2 on T9 IFC file (stepped profile: 300mm crown, 600mm base)."""
+
+    def test_stepped_wall_groups(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T9_PATH)
+        walls = get_elements(model, "IfcWall")
+        mesh_data = extract_mesh(walls[0])
+        result = validate_level2(mesh_data)
+
+        assert result["has_crown"]
+        assert result["has_foundation"]
+        assert result["has_front"]
+        assert result["has_back"]
+        # Multi-element: walls[0] = Oberer Steg (simple box) → 6 groups
+        assert result["num_groups"] == 6
+
+    def test_not_curved(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T9_PATH)
+        walls = get_elements(model, "IfcWall")
+        mesh_data = extract_mesh(walls[0])
+        result = validate_level2(mesh_data)
+
+        centerline = result.get("centerline")
+        assert centerline is not None
+        assert centerline.is_curved == False
+
+
+# ── T10: Complex curved wall ────────────────────────────────────────
+
+T10_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T10_complex_curved.ifc")
+
+
+@pytest.mark.skipif(not os.path.exists(T10_PATH), reason="T10 model not found")
+class TestT10FaceClassification:
+    """Level 2 on T10 IFC file (60° arc, tapered, inclined, crown slope)."""
+
+    def test_complex_curved_classification(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T10_PATH)
+        walls = get_elements(model, "IfcWall")
+        mesh_data = extract_mesh(walls[0])
+        result = validate_level2(mesh_data)
+
+        assert result["has_crown"]
+        assert result["has_foundation"]
+        assert result["has_front"]
+        assert result["has_back"]
+        assert result["num_groups"] == 6
+
+        centerline = result.get("centerline")
+        assert centerline is not None
+        assert centerline.is_curved is True
+
+
+# ── T11-T14: Complex geometry models ────────────────────────────────
+
+T11_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T11_s_curved.ifc")
+T12_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T12_semicircle.ifc")
+T13_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T13_polygonal.ifc")
+T14_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T14_curved_l_profile.ifc")
+
+
+@pytest.mark.skipif(not os.path.exists(T11_PATH), reason="T11 model not found")
+class TestT11SCurved:
+    """Level 2 on T11 (S-curve with inflection point)."""
+
+    def test_s_curve_classified(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+        model = load_model(T11_PATH)
+        walls = get_elements(model, "IfcWall")
+        result = validate_level2(extract_mesh(walls[0]))
+        assert result["has_crown"]
+        assert result["has_front"]
+        assert result.get("centerline").is_curved is True
+        assert result["num_groups"] == 6
+
+
+@pytest.mark.skipif(not os.path.exists(T12_PATH), reason="T12 model not found")
+class TestT12Semicircle:
+    """Level 2 on T12 (180° semicircle)."""
+
+    def test_semicircle_classified(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+        model = load_model(T12_PATH)
+        walls = get_elements(model, "IfcWall")
+        result = validate_level2(extract_mesh(walls[0]))
+        assert result["has_crown"]
+        assert result["has_front"]
+        assert result.get("centerline").is_curved is True
+        assert result["num_groups"] == 6
+
+
+@pytest.mark.skipif(not os.path.exists(T13_PATH), reason="T13 model not found")
+class TestT13Polygonal:
+    """Level 2 on T13 (3 straight segments at angles)."""
+
+    def test_polygonal_not_curved(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+        model = load_model(T13_PATH)
+        walls = get_elements(model, "IfcWall")
+        result = validate_level2(extract_mesh(walls[0]))
+        assert result["has_crown"]
+        assert result["has_front"]
+        assert result.get("centerline").is_curved == False
+        assert result["num_groups"] == 6
+
+
+@pytest.mark.skipif(not os.path.exists(T14_PATH), reason="T14 model not found")
+class TestT14CurvedLProfile:
+    """Level 2 on T14 (45° arc, L cross-section)."""
+
+    def test_curved_l_classified(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+        model = load_model(T14_PATH)
+        walls = get_elements(model, "IfcWall")
+        result = validate_level2(extract_mesh(walls[0]))
+        assert result["has_crown"]
+        assert result["has_front"]
+        assert result.get("centerline").is_curved is True
+        # Multi-element: walls[0] = Mauersteg (simple curved box) → 6 groups
+        assert result["num_groups"] == 6
+
+
+# ── T6: Non-compliant wall (200mm thin) ─────────────────────────────
+
+T6_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T6_non_compliant.ifc")
+
+
+@pytest.mark.skipif(not os.path.exists(T6_PATH), reason="T6 model not found")
+class TestT6FaceClassification:
+    """Level 2 on T6 IFC file (non-compliant, 200mm thin wall)."""
+
+    def test_classification(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T6_PATH)
+        walls = get_elements(model, "IfcWall")
+        assert len(walls) > 0
+
+        result = validate_level2(extract_mesh(walls[0]))
+        assert result["has_crown"]
+        assert result["has_front"]
+        assert result["num_groups"] == 6
+
+
+# ── T7: Compliant wall ──────────────────────────────────────────────
+
+T7_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T7_compliant.ifc")
+
+
+@pytest.mark.skipif(not os.path.exists(T7_PATH), reason="T7 model not found")
+class TestT7FaceClassification:
+    """Level 2 on T7 IFC file (compliant, 300mm, inclined, crown slope)."""
+
+    def test_classification(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T7_PATH)
+        walls = get_elements(model, "IfcWall")
+        assert len(walls) > 0
+
+        result = validate_level2(extract_mesh(walls[0]))
+        assert result["has_crown"]
+        assert result["has_front"]
+        assert result["num_groups"] == 6
+
+    def test_not_curved(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T7_PATH)
+        walls = get_elements(model, "IfcWall")
+        result = validate_level2(extract_mesh(walls[0]))
+
+        centerline = result.get("centerline")
+        assert centerline is not None
+        assert centerline.is_curved is False
+
+
+# ── T15: Variable height wall ───────────────────────────────────────
+
+T15_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T15_variable_height.ifc")
+
+
+@pytest.mark.skipif(not os.path.exists(T15_PATH), reason="T15 model not found")
+class TestT15FaceClassification:
+    """Level 2 on T15 IFC file (variable height wall)."""
+
+    def test_classification(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T15_PATH)
+        walls = get_elements(model, "IfcWall")
+        assert len(walls) > 0
+
+        result = validate_level2(extract_mesh(walls[0]))
+        assert result["has_crown"]
+        assert result["has_front"]
+        assert result["num_groups"] == 6
+
+    def test_not_curved(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T15_PATH)
+        walls = get_elements(model, "IfcWall")
+        result = validate_level2(extract_mesh(walls[0]))
+
+        centerline = result.get("centerline")
+        assert centerline is not None
+        assert centerline.is_curved is False
+
+
+# ── T16: Height step (multi-element) ────────────────────────────────
+
+T16_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T16_height_step.ifc")
+
+
+@pytest.mark.skipif(not os.path.exists(T16_PATH), reason="T16 model not found")
+class TestT16FaceClassification:
+    """Level 2 on T16 IFC file (height step, multi-element)."""
+
+    def test_classification(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T16_PATH)
+        walls = get_elements(model, "IfcWall")
+        assert len(walls) > 0
+
+        result = validate_level2(extract_mesh(walls[0]))
+        assert result["has_crown"]
+        assert result["has_front"]
+        # Multi-element: walls[0] may be the upper section
+        assert result["num_groups"] >= 6
+
+
+# ── T17: Curved variable wall ───────────────────────────────────────
+
+T17_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T17_curved_variable.ifc")
+
+
+@pytest.mark.skipif(not os.path.exists(T17_PATH), reason="T17 model not found")
+class TestT17FaceClassification:
+    """Level 2 on T17 IFC file (curved with variable profile)."""
+
+    def test_classification(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T17_PATH)
+        walls = get_elements(model, "IfcWall")
+        assert len(walls) > 0
+
+        result = validate_level2(extract_mesh(walls[0]))
+        assert result["has_crown"]
+        assert result["has_front"]
+        assert result["num_groups"] == 6
+
+    def test_is_curved(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T17_PATH)
+        walls = get_elements(model, "IfcWall")
+        result = validate_level2(extract_mesh(walls[0]))
+
+        centerline = result.get("centerline")
+        assert centerline is not None
+        assert centerline.is_curved is True
+
+
+# ── T18: Buttressed wall (multi-element) ─────────────────────────────
+
+T18_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T18_buttressed.ifc")
+
+
+@pytest.mark.skipif(not os.path.exists(T18_PATH), reason="T18 model not found")
+class TestT18FaceClassification:
+    """Level 2 on T18 IFC file (buttressed, multi-element: walls[0]=Hauptmauer)."""
+
+    def test_classification(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T18_PATH)
+        walls = get_elements(model, "IfcWall")
+        assert len(walls) > 0
+
+        result = validate_level2(extract_mesh(walls[0]))
+        assert result["has_crown"]
+        assert result["has_front"]
+        assert result["num_groups"] == 6
+
+
+# ── T20: Triangulated representation ────────────────────────────────
+
+T20_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T20_triangulated.ifc")
+
+
+@pytest.mark.skipif(not os.path.exists(T20_PATH), reason="T20 model not found")
+class TestT20FaceClassification:
+    """Level 2 on T20 IFC file (triangulated, same geometry as T1)."""
+
+    def test_classification(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T20_PATH)
+        walls = get_elements(model, "IfcWall")
+        assert len(walls) > 0
+
+        result = validate_level2(extract_mesh(walls[0]))
+        assert result["has_crown"]
+        assert result["has_foundation"]
+        assert result["has_front"]
+        assert result["num_groups"] == 6
+
+
+# ── T21: Extruded trapezoid ─────────────────────────────────────────
+
+T21_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T21_extruded_trapezoid.ifc")
+
+
+@pytest.mark.skipif(not os.path.exists(T21_PATH), reason="T21 model not found")
+class TestT21FaceClassification:
+    """Level 2 on T21 IFC file (extruded trapezoid cross-section)."""
+
+    def test_classification(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T21_PATH)
+        walls = get_elements(model, "IfcWall")
+        assert len(walls) > 0
+
+        result = validate_level2(extract_mesh(walls[0]))
+        assert result["has_crown"]
+        assert result["has_front"]
+        assert result["num_groups"] == 6
+
+
+# ── T22: Wall with terrain ──────────────────────────────────────────
+
+T22_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T22_with_terrain.ifc")
+
+
+@pytest.mark.skipif(not os.path.exists(T22_PATH), reason="T22 model not found")
+class TestT22FaceClassification:
+    """Level 2 on T22 IFC file (wall with terrain context)."""
+
+    def test_classification(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T22_PATH)
+        walls = get_elements(model, "IfcWall")
+        assert len(walls) > 0
+
+        result = validate_level2(extract_mesh(walls[0]))
+        assert result["has_crown"]
+        assert result["has_front"]
+        assert result["num_groups"] == 6
+
+
+# ── T23: ASTRA compliant curved wall ─────────────────────────────────
+
+T23_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T23_astra_compliant_curved.ifc")
+
+
+@pytest.mark.skipif(not os.path.exists(T23_PATH), reason="T23 model not found")
+class TestT23ClassifyFaces:
+    """Level 2 on T23 IFC file (ASTRA compliant curved wall, 3 elements)."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T23_PATH)
+        self.walls = get_elements(model, "IfcWall")
+        self.stem_mesh = extract_mesh(self.walls[0])
+        self.stem_result = validate_level2(self.stem_mesh)
+
+    def test_num_elements(self):
+        """T23 should contain 3 wall elements (stem, foundation, buttress)."""
+        assert len(self.walls) == 3
+
+    def test_has_crown(self):
+        """Stem element should have a crown face."""
+        assert self.stem_result["has_crown"] is True
+
+    def test_has_foundation(self):
+        """Stem element should have a foundation face."""
+        assert self.stem_result["has_foundation"] is True
+
+    def test_is_curved(self):
+        """Stem element should be curved."""
+        centerline = self.stem_result.get("centerline")
+        assert centerline is not None
+        assert centerline.is_curved is True
+
+    def test_num_groups(self):
+        """Stem element should have 6 face groups."""
+        assert self.stem_result["num_groups"] == 6
+
+    def test_all_categories_present(self):
+        """All face categories should be present."""
+        assert self.stem_result["has_front"] is True
+        assert self.stem_result["has_back"] is True
+
+
+# ── T24: Highway wall with terrain ───────────────────────────────────
+
+T24_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T24_highway_with_terrain.ifc")
+
+
+@pytest.mark.skipif(not os.path.exists(T24_PATH), reason="T24 model not found")
+class TestT24ClassifyFaces:
+    """Level 2 on T24 IFC file (highway wall with terrain, 2 elements)."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T24_PATH)
+        self.walls = get_elements(model, "IfcWall")
+        self.stem_mesh = extract_mesh(self.walls[0])
+        self.stem_result = validate_level2(self.stem_mesh)
+        self.foundation_mesh = extract_mesh(self.walls[1])
+        self.foundation_result = validate_level2(self.foundation_mesh)
+
+    def test_num_elements(self):
+        """T24 should contain 2 wall elements (stem + foundation)."""
+        assert len(self.walls) == 2
+
+    def test_stem_has_crown(self):
+        """Stem element should have a crown face."""
+        assert self.stem_result["has_crown"] is True
+
+    def test_stem_groups(self):
+        """Stem element should have 6 face groups."""
+        assert self.stem_result["num_groups"] == 6
+
+    def test_foundation_has_crown(self):
+        """Foundation top is horizontal, so it should be detected as crown."""
+        assert self.foundation_result["has_crown"] is True
+
+    def test_not_curved(self):
+        """Stem element should not be curved."""
+        centerline = self.stem_result.get("centerline")
+        assert centerline is not None
+        assert centerline.is_curved is False
+
+    def test_all_categories_present(self):
+        """Stem should have all face categories."""
+        assert self.stem_result["has_foundation"] is True
+        assert self.stem_result["has_front"] is True
+        assert self.stem_result["has_back"] is True
+
+
+# ── T25: Multi-failure wall ──────────────────────────────────────────
+
+T25_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T25_multi_failure.ifc")
+
+
+@pytest.mark.skipif(not os.path.exists(T25_PATH), reason="T25 model not found")
+class TestT25ClassifyFaces:
+    """Level 2 on T25 IFC file (single non-compliant wall)."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T25_PATH)
+        self.walls = get_elements(model, "IfcWall")
+        self.mesh = extract_mesh(self.walls[0])
+        self.result = validate_level2(self.mesh)
+
+    def test_single_element(self):
+        """T25 should contain 1 wall element."""
+        assert len(self.walls) == 1
+
+    def test_has_all_categories(self):
+        """Wall should have crown, foundation, front, back, and 2 ends."""
+        assert self.result["has_crown"] is True
+        assert self.result["has_foundation"] is True
+        assert self.result["has_front"] is True
+        assert self.result["has_back"] is True
+
+    def test_num_groups(self):
+        """Wall should have 6 face groups."""
+        assert self.result["num_groups"] == 6
+
+
+# ── T23-T25: Face classification tests (additional) ──────────────────
+
+MODELS_DIR = os.path.join(os.path.dirname(__file__), "test_models")
+
+
+@pytest.mark.skipif(
+    not os.path.exists(os.path.join(MODELS_DIR, "T23_astra_compliant_curved.ifc")),
+    reason="T23 model not found",
+)
+class TestT23FaceClassification:
+    """Face classification tests for T23 (ASTRA compliant curved, 3 elements)."""
+
+    def _load(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        model = load_model(os.path.join(MODELS_DIR, "T23_astra_compliant_curved.ifc"))
+        walls = get_elements(model, "IfcWall")
+        return walls
+
+    def test_three_elements(self):
+        walls = self._load()
+        assert len(walls) == 3
+
+    def test_stem_has_crown(self):
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+        walls = self._load()
+        result = validate_level2(extract_mesh(walls[0]))
+        assert result["has_crown"] is True
+
+    def test_stem_is_curved(self):
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+        walls = self._load()
+        result = validate_level2(extract_mesh(walls[0]))
+        centerline = result.get("centerline")
+        assert centerline is not None
+        assert centerline.is_curved is True
+
+
+@pytest.mark.skipif(
+    not os.path.exists(os.path.join(MODELS_DIR, "T24_highway_with_terrain.ifc")),
+    reason="T24 model not found",
+)
+class TestT24FaceClassification:
+    """Face classification tests for T24 (highway wall with terrain, 2 elements)."""
+
+    def _load(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        model = load_model(os.path.join(MODELS_DIR, "T24_highway_with_terrain.ifc"))
+        walls = get_elements(model, "IfcWall")
+        return walls
+
+    def test_two_elements(self):
+        walls = self._load()
+        assert len(walls) == 2
+
+    def test_stem_six_groups(self):
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+        walls = self._load()
+        result = validate_level2(extract_mesh(walls[0]))
+        assert result["num_groups"] == 6
+
+
+@pytest.mark.skipif(
+    not os.path.exists(os.path.join(MODELS_DIR, "T25_multi_failure.ifc")),
+    reason="T25 model not found",
+)
+class TestT25FaceClassification:
+    """Face classification tests for T25 (single non-compliant wall)."""
+
+    def _load(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        model = load_model(os.path.join(MODELS_DIR, "T25_multi_failure.ifc"))
+        walls = get_elements(model, "IfcWall")
+        return walls
+
+    def test_single_element(self):
+        walls = self._load()
+        assert len(walls) == 1
+
+    def test_six_groups(self):
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+        walls = self._load()
+        result = validate_level2(extract_mesh(walls[0]))
+        assert result["num_groups"] == 6
+
+
+# ── T26: Extruded curved front profile ────────────────────────────────
+
+
+@pytest.mark.skipif(
+    not os.path.exists(os.path.join(MODELS_DIR, "T26_extruded_curved.ifc")),
+    reason="T26 model not found",
+)
+class TestT26FaceClassification:
+    """Face classification tests for T26 (extruded profile with curved front)."""
+
+    def _load(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+        model = load_model(os.path.join(MODELS_DIR, "T26_extruded_curved.ifc"))
+        walls = get_elements(model, "IfcWall")
+        mesh = extract_mesh(walls[0])
+        return validate_level2(mesh)
+
+    def test_has_crown(self):
+        result = self._load()
+        assert result["has_crown"] is True
+
+    def test_six_groups(self):
+        result = self._load()
+        assert result["num_groups"] == 6
+
+
+# ── Asymmetry index tests ─────────────────────────────────────────
+
+class TestAsymmetryIndex:
+    """Test front/back asymmetry index is computed and meaningful."""
+
+    def test_symmetric_wall_low_asymmetry(self):
+        """T1 simple box: symmetric front/back -> asymmetry near 0."""
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+        model = load_model(os.path.join(MODELS_DIR, "T1_simple_box.ifc"))
+        walls = get_elements(model, "IfcWall")
+        mesh = extract_mesh(walls[0])
+        result = validate_level2(mesh)
+        asym = result.get("front_back_asymmetry", -1)
+        assert 0 <= asym <= 0.1, f"Symmetric box should have low asymmetry, got {asym}"
+
+    def test_inclined_wall_has_asymmetry(self):
+        """T2 inclined wall (10:1): slight asymmetry due to inclination.
+        At 10:1 ratio (~5.7 deg), front/back areas differ only slightly.
+        Asymmetry should be > 0 but small (wall is nearly symmetric)."""
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+        model = load_model(os.path.join(MODELS_DIR, "T2_inclined_wall.ifc"))
+        walls = get_elements(model, "IfcWall")
+        mesh = extract_mesh(walls[0])
+        result = validate_level2(mesh)
+        asym = result.get("front_back_asymmetry", -1)
+        assert asym > 0, f"Inclined wall should have non-zero asymmetry, got {asym}"
+        assert asym < 0.1, f"10:1 wall is nearly symmetric, got {asym}"
+
+    def test_asymmetry_in_range(self):
+        """Asymmetry index must be in [0, 1]."""
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+        for name in ["T1_simple_box.ifc", "T2_inclined_wall.ifc", "T7_compliant.ifc"]:
+            path = os.path.join(MODELS_DIR, name)
+            if not os.path.exists(path):
+                continue
+            model = load_model(path)
+            walls = get_elements(model, "IfcWall")
+            mesh = extract_mesh(walls[0])
+            result = validate_level2(mesh)
+            asym = result.get("front_back_asymmetry", -1)
+            assert 0 <= asym <= 1, f"{name}: asymmetry {asym} out of range [0,1]"

@@ -1,0 +1,106 @@
+# =============================================================================
+# SIA 262 — Ergänzende Prüfregeln für Stützmauern (Betonbau)
+# Basierend auf: SIA 262:2013 "Betonbau" und SIA 267:2013 "Geotechnik"
+# =============================================================================
+#
+# Dieses Ruleset demonstriert die Erweiterbarkeit des Validators für
+# alternative Normen jenseits des ASTRA FHB T/G. Es kann über die CLI
+# oder die Web-App als --ruleset Parameter verwendet werden.
+#
+# Severity-Stufen:
+#   ERROR   — Normverstoss
+#   WARNING — Empfehlung
+#   INFO    — Hinweis
+# =============================================================================
+
+metadata:
+  name: "SIA 262 — Stützmauern (Betonbau)"
+  version: "1.1.0"
+  source: "SIA 262:2013, SIA 267:2013"
+  scope: "Geometrische Mindestanforderungen für Betonstützmauern"
+  ifc_filter:
+    entity: "IfcWall"
+    predefined_type: "RETAININGWALL"
+
+classification_thresholds:
+  horizontal_deg: 45.0
+  coplanar_deg: 5.0
+  lateral_deg: 45.0
+
+# =============================================================================
+# Level 1 — Plausibilitätsprüfungen
+# =============================================================================
+
+level_1:
+  - id: SIA-SM-L1-001
+    name: "Volumen positiv"
+    check: "volume > 0.01"
+    severity: ERROR
+    reference: "Allgemeine Plausibilität"
+
+  - id: SIA-SM-L1-002
+    name: "Mesh geschlossen"
+    check: "mesh_is_watertight == true"
+    severity: WARNING
+    reference: "Voraussetzung Volumenberechnung"
+
+# =============================================================================
+# Level 3 — Geometrische Anforderungen (SIA 262)
+# =============================================================================
+
+level_3:
+  - id: SIA-SM-L3-001
+    name: "Minimale Wandstärke"
+    description: "Mindestbauteilstärke gemäss SIA 262, Tab. 14"
+    check: "min_wall_thickness_mm >= 200"
+    severity: ERROR
+    reference: "SIA 262:2013, Tab. 14"
+
+  - id: SIA-SM-L3-002
+    name: "Minimale Kronenbreite"
+    description: "Mauerkrone mindestens 200 mm breit"
+    check: "crown_width_mm >= 200"
+    severity: ERROR
+    reference: "SIA 262:2013, Kap. 5.3"
+
+  - id: SIA-SM-L3-003
+    name: "Maximale Wandhöhe ohne Verstärkung"
+    description: "Unbewehrte Mauern max. 3.0 m hoch"
+    check: "wall_height_m <= 3.0"
+    severity: WARNING
+    reference: "SIA 267:2013, Kap. 9.2"
+    note: "Gilt nur für unbewehrte Schwergewichtsmauern"
+
+# =============================================================================
+# Level 4 — Zusammengesetzte Prüfungen
+# =============================================================================
+
+level_4:
+  - id: SIA-SM-L4-001
+    name: "Gesamtbewertung Pflicht"
+    description: "Alle Pflichtanforderungen (Wandstärke, Kronenbreite) erfüllt"
+    depends_on:
+      - SIA-SM-L3-001
+      - SIA-SM-L3-002
+    severity: ERROR
+    reference: "SIA 262:2013"
+
+  - id: SIA-SM-L4-002
+    name: "Gesamtbewertung Empfehlung"
+    description: "Empfohlene Wandhöhe eingehalten"
+    depends_on:
+      - SIA-SM-L3-003
+    severity: WARNING
+    reference: "SIA 267:2013"
+
+# =============================================================================
+# Level 5 — Geometrischer Kontext (Bauwerk-intern)
+# =============================================================================
+
+level_5:
+  - id: SIA-SM-L5-001
+    name: "Mauerkörper-Fundament-Anschluss"
+    description: "Geometrische Verbindung zwischen Mauerkörper und Fundament"
+    check: "wall_foundation_gap_mm <= 10"
+    severity: ERROR
+    reference: "SIA 262:2013, Kap. 4.3 — Konstruktive Durchbildung"

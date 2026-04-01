@@ -2,9 +2,9 @@ name: Tests
 
 on:
   push:
-    branches: [master]
+    branches: [master, main]
   pull_request:
-    branches: [master]
+    branches: [master, main]
 
 jobs:
   test:
@@ -33,3 +33,8 @@ jobs:
         if: matrix.python-version == '3.12'
         run: |
           pytest --cov=ifc_geo_validator --cov-report=term-missing
+
+      - name: Run review checklist
+        if: matrix.python-version == '3.12'
+        run: |
+          python review_checklist.py

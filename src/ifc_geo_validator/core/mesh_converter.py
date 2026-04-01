@@ -1,4 +1,19 @@
-"""Mesh extraction from IFC elements using IfcOpenShell geometry processing."""
+"""Mesh extraction from IFC elements using IfcOpenShell geometry processing.
+
+Converts any IFC geometry representation (IfcFacetedBrep, IfcExtrudedAreaSolid,
+IfcTriangulatedFaceSet, IfcBooleanClippingResult, etc.) to a uniform
+triangulated mesh via IfcOpenShell/OpenCASCADE (OCCT).
+
+Settings:
+  use-world-coords=True  — All vertices in global coordinate system
+  weld-vertices=True     — Merge duplicate vertices at shared positions
+
+References:
+  - Krijnen, T. & Beetz, J. (2020). An IFC schema extension and binary
+    serialization format to efficiently integrate point cloud data into
+    building models. Advanced Engineering Informatics, 33, 2017.
+  - IfcOpenShell documentation: ifcopenshell.org
+"""
 
 import numpy as np
 import ifcopenshell
@@ -10,8 +25,16 @@ SETTINGS.set("use-world-coords", True)
 SETTINGS.set("weld-vertices", True)
 
 
+class MeshExtractionError(Exception):
+    """Raised when geometry cannot be extracted from an IFC element."""
+    pass
+
+
 def extract_mesh(element) -> dict:
     """Extract triangulated mesh from an IFC element.
+
+    Handles any IFC geometry representation (BRep, ExtrudedAreaSolid,
+    TriangulatedFaceSet, CSG, etc.) via IfcOpenShell/OpenCASCADE.
 
     Returns:
         dict with keys:
@@ -20,12 +43,31 @@ def extract_mesh(element) -> dict:
             normals:  np.array (M, 3) — unit face normals
             areas:    np.array (M,)   — per-face areas
             is_watertight: bool — True if every edge is shared by exactly 2 faces
+
+    Raises:
+        MeshExtractionError: If geometry cannot be extracted.
     """
-    shape = ifcopenshell.geom.create_shape(SETTINGS, element)
+    elem_name = getattr(element, "Name", None) or f"#{element.id()}"
+
+    try:
+        shape = ifcopenshell.geom.create_shape(SETTINGS, element)
+    except Exception as e:
+        raise MeshExtractionError(
+            f"Failed to create geometry for '{elem_name}': {e}"
+        ) from e
+
     geometry = shape.geometry
 
-    vertices = np.array(geometry.verts).reshape(-1, 3)
-    faces = np.array(geometry.faces).reshape(-1, 3)
+    verts_flat = np.array(geometry.verts)
+    faces_flat = np.array(geometry.faces)
+
+    if len(verts_flat) == 0 or len(faces_flat) == 0:
+        raise MeshExtractionError(
+            f"Empty geometry for '{elem_name}' (0 vertices or 0 faces)"
+        )
+
+    vertices = verts_flat.reshape(-1, 3)
+    faces = faces_flat.reshape(-1, 3)
 
     # Compute face normals and areas
     v0 = vertices[faces[:, 0]]

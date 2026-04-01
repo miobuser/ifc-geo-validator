@@ -89,6 +89,9 @@ def _collect_properties(elem_result: dict) -> dict:
         props["HasFoundation"] = l2.get("has_foundation", False)
         props["HasFront"] = l2.get("has_front", False)
         props["HasBack"] = l2.get("has_back", False)
+        asym = l2.get("front_back_asymmetry")
+        if asym is not None:
+            props["FrontBackAsymmetry"] = round(asym, 4)
 
     # Level 3: face measurements
     l3 = elem_result.get("level3")
@@ -107,6 +110,30 @@ def _collect_properties(elem_result: dict) -> dict:
                 props["FrontInclination_ratio"] = "vertical"
             else:
                 props["FrontInclination_ratio"] = f"{ratio:.1f}:1"
+        if "wall_height_m" in l3:
+            props["WallHeight_m"] = round(l3["wall_height_m"], 4)
+        if "is_curved" in l3:
+            props["IsCurved"] = l3["is_curved"]
+        if "wall_length_m" in l3:
+            props["WallLength_m"] = round(l3["wall_length_m"], 4)
+        if "crown_width_cv" in l3:
+            props["CrownWidthCV"] = round(l3["crown_width_cv"], 6)
+
+    # Level 5: inter-element context
+    l5 = elem_result.get("level5_context")
+    if l5:
+        if "foundation_extends_beyond_wall" in l5:
+            props["FoundationOverhang"] = l5["foundation_extends_beyond_wall"]
+        if "wall_foundation_gap_mm" in l5:
+            props["FoundationGap_mm"] = round(l5["wall_foundation_gap_mm"], 1)
+
+    # Level 6: terrain context
+    l6 = elem_result.get("level6_context")
+    if l6:
+        if "earth_side_determined" in l6:
+            props["EarthSideDetermined"] = l6["earth_side_determined"]
+        if "foundation_embedment_m" in l6:
+            props["FoundationEmbedment_m"] = round(l6["foundation_embedment_m"], 4)
 
     # Level 4: rule check summary
     l4 = elem_result.get("level4")

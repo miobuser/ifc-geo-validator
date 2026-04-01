@@ -28,7 +28,7 @@ def generate_report(
     report = {
         "report": {
             "generator": "ifc-geo-validator",
-            "version": "0.1.0",
+            "version": "1.0.0",
             "timestamp": datetime.now().isoformat(),
             "ifc_file": str(Path(ifc_path).name),
             "ifc_path": str(ifc_path),
@@ -113,6 +113,9 @@ def _process_element(elem: dict) -> dict:
             "avg_wall_thickness_mm": _round(l3.get("avg_wall_thickness_mm")),
             "front_inclination_deg": _round(l3.get("front_inclination_deg")),
             "front_inclination_ratio": _safe_ratio(l3.get("front_inclination_ratio")),
+            "wall_height_m": _round(l3.get("wall_height_m")),
+            "is_curved": l3.get("is_curved"),
+            "wall_length_m": _round(l3.get("wall_length_m")),
         }
 
     # Level 4
@@ -122,6 +125,14 @@ def _process_element(elem: dict) -> dict:
             "summary": l4.get("summary"),
             "checks": l4.get("checks"),
         }
+
+    # Level 5 (inter-element context, if available)
+    if "level5" in elem:
+        result["inter_element"] = elem["level5"]
+
+    # Level 6 (terrain/distance context, if available)
+    if "level6" in elem:
+        result["terrain_context"] = elem["level6"]
 
     return result
 

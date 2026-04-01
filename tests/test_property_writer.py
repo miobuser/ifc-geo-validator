@@ -99,6 +99,39 @@ class TestInjectProperties:
         assert props is None
 
 
+class TestL5L6Context:
+    """Test that L5/L6 context properties are written."""
+
+    def test_l5_context_properties(self):
+        model, elem, result = _run_pipeline("T1_simple_box.ifc")
+        result["level5_context"] = {
+            "foundation_extends_beyond_wall": True,
+            "wall_foundation_gap_mm": 0.5,
+        }
+        inject_properties(model, elem, result)
+        props = _read_pset(elem)
+        assert props["FoundationOverhang"] is True
+        assert abs(props["FoundationGap_mm"] - 0.5) < 0.1
+
+    def test_l6_context_properties(self):
+        model, elem, result = _run_pipeline("T1_simple_box.ifc")
+        result["level6_context"] = {
+            "earth_side_determined": True,
+        }
+        inject_properties(model, elem, result)
+        props = _read_pset(elem)
+        assert props["EarthSideDetermined"] is True
+
+    def test_no_context_no_crash(self):
+        """Missing L5/L6 context should not crash."""
+        model, elem, result = _run_pipeline("T1_simple_box.ifc")
+        # No level5_context or level6_context keys
+        inject_properties(model, elem, result)
+        props = _read_pset(elem)
+        assert "FoundationOverhang" not in props
+        assert "EarthSideDetermined" not in props
+
+
 class TestInjectAll:
     """Test batch injection with file output."""
 
@@ -117,8 +150,8 @@ class TestInjectAll:
             assert len(walls2) >= 1
             props = _read_pset(walls2[0])
             assert props is not None
-            assert props["RulesPassed"] == 8
-            assert props["RulesTotal"] == 8
+            assert props["RulesPassed"] == 11   # L1+L3(6)+L4 all pass (T7 compliant)
+            assert props["RulesTotal"] == 17   # +4 L5/L6 + 2 L7 (skipped) + 1 L3
         finally:
             os.unlink(tmp_path)
 

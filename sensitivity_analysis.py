@@ -32,13 +32,33 @@ OUTPUT_DIR = Path(__file__).parent / "viz_output"
 
 # Reference: expected classification for each model at default thresholds
 EXPECTED_CATEGORIES = {
-    "T1_simple_box.ifc":      {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
-    "T2_inclined_wall.ifc":   {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
-    "T3_crown_slope.ifc":     {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
-    "T4_l_shaped.ifc":        {CROWN: 2, FOUNDATION: 1, FRONT: 1, BACK: 2, END_LEFT: 1, END_RIGHT: 1},
-    "T5_t_shaped.ifc":        {CROWN: 2, FOUNDATION: 1, FRONT: 2, BACK: 1, END_LEFT: 2, END_RIGHT: 2},
-    "T6_non_compliant.ifc":   {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
-    "T7_compliant.ifc":       {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T1_simple_box.ifc":        {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T2_inclined_wall.ifc":     {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T3_crown_slope.ifc":       {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T4_l_shaped.ifc":          {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T5_t_shaped.ifc":          {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T6_non_compliant.ifc":     {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T7_compliant.ifc":         {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T8_curved_wall.ifc":       {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T9_stepped_wall.ifc":      {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T10_complex_curved.ifc":   {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T11_s_curved.ifc":         {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T12_semicircle.ifc":       {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T13_polygonal.ifc":        {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T14_curved_l_profile.ifc": {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T15_variable_height.ifc":  {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T17_curved_variable.ifc":  {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T18_buttressed.ifc":       {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T20_triangulated.ifc":     {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T21_extruded_trapezoid.ifc": {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T22_with_terrain.ifc":     {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T23_astra_compliant_curved.ifc": {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T24_highway_with_terrain.ifc": {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T25_multi_failure.ifc":   {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T26_extruded_curved.ifc": {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    "T27_long_curved_slope.ifc": {CROWN: 1, FOUNDATION: 1, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1},
+    # T16 has complex categories (single-element height step, 8 groups at default thresholds)
+    "T16_height_step.ifc":      {CROWN: 1, FOUNDATION: 2, FRONT: 1, BACK: 1, END_LEFT: 1, END_RIGHT: 1, UNCLASSIFIED: 1},
 }
 
 
@@ -169,6 +189,37 @@ def main():
         writer.writerows(all_rows)
     print(f"Data saved: {csv_path}")
 
+    # Write summary statistics (robust ranges per parameter)
+    summary_path = OUTPUT_DIR / "sensitivity_summary.csv"
+    with open(summary_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=[
+            "parameter", "default", "robust_min", "robust_max", "robust_range_deg",
+            "models_at_default", "total_models",
+        ])
+        writer.writeheader()
+        for param_name in defaults:
+            param_rows = [r for r in all_rows if r["param"] == param_name]
+            by_value = {}
+            for r in param_rows:
+                v = r["value"]
+                if v not in by_value:
+                    by_value[v] = {"correct": 0, "total": 0}
+                by_value[v]["total"] += 1
+                if r["correct"]:
+                    by_value[v]["correct"] += 1
+            n_models = max(c["total"] for c in by_value.values()) if by_value else 0
+            robust = [v for v, c in by_value.items() if c["correct"] == c["total"]]
+            writer.writerow({
+                "parameter": param_name,
+                "default": defaults[param_name],
+                "robust_min": min(robust) if robust else None,
+                "robust_max": max(robust) if robust else None,
+                "robust_range_deg": round(max(robust) - min(robust), 1) if len(robust) >= 2 else 0,
+                "models_at_default": by_value.get(defaults[param_name], {}).get("correct", 0),
+                "total_models": n_models,
+            })
+    print(f"Summary: {summary_path}")
+
     # Generate plots if matplotlib available
     try:
         import matplotlib
@@ -183,6 +234,9 @@ def main():
             "T5_t_shaped": "#9467bd",
             "T6_non_compliant": "#8c564b",
             "T7_compliant": "#e377c2",
+            "T8_curved_wall": "#17becf",
+            "T9_stepped_wall": "#bcbd22",
+            "T10_complex_curved": "#ff9896",
         }
 
         for param_name, values in sweeps.items():

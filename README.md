@@ -12,13 +12,13 @@ Geometric validation of IFC infrastructure models against configurable requireme
 
 | Level | Description | Status |
 |-------|-------------|--------|
-| L1 | Geometric properties (volume, area, bbox, centroid) | Done |
-| L2 | Face classification (crown, foundation, front, back, end faces) | Done |
-| L3 | Face-specific values (crown width, inclination, wall thickness) | Done |
-| L4 | Requirement comparison (YAML ruleset) | Done |
-| L5 | Inter-component context (wall-foundation connection) | Optional |
-| L6 | External context (terrain, alignment) | Optional |
-| L7 | Distance calculations | Optional |
+| L1 | Geometric properties (volume, area, bbox, centroid, watertight) | Done |
+| L2 | Face classification (crown, foundation, front, back, ends) with curved wall support | Done |
+| L3 | Face-specific measurements (crown width, slope, thickness, inclination, height) | Done |
+| L4 | YAML rule evaluation (L1-L7 rules, composite checks) | Done |
+| L5 | Inter-element context (Contact Surface Normal Analysis: stacked/side-by-side) | Done |
+| L6 | Terrain context + distance checks (IfcSite geometry, clearance, element distances) | Done |
+| L7 | Distance calculations (YAML-configurable, evaluated via L4 engine) | Done |
 
 ## Installation
 
@@ -53,6 +53,9 @@ ifc-geo-validator model.ifc --enrich model_validated.ifc
 
 # Export failed checks as BCF 2.1 issues
 ifc-geo-validator model.ifc --bcf issues.bcf
+
+# Machine-readable summary for CI/CD (exits with code 1 on failure)
+ifc-geo-validator model.ifc --summary
 ```
 
 ### Web App
@@ -66,15 +69,14 @@ Upload an IFC file in the browser, configure filters, and view interactive valid
 
 ## Rulesets
 
-Validation rules are defined in YAML:
+Validation rules are defined in YAML and fully configurable. Two bundled rulesets demonstrate different normative requirements:
+
+| Ruleset | Standard | Crown min | Thickness min | Inclination |
+|---------|----------|-----------|---------------|-------------|
+| `astra_fhb_stuetzmauer.yaml` | ASTRA FHB T/G 24 001-15101 | 300 mm | 300 mm | 10:1 recommended |
+| `sia_262_stuetzmauer.yaml` | SIA 262 / SIA 267 | 200 mm | 200 mm | — |
 
 ```yaml
-metadata:
-  name: "ASTRA FHB T/G — Stützmauern"
-  ifc_filter:
-    entity: "IfcWall"
-    predefined_type: "RETAININGWALL"
-
 level_3:
   - id: ASTRA-SM-L3-001
     name: "Kronenbreite Minimum"
@@ -83,10 +85,27 @@ level_3:
     reference: "FHB T/G 24 001-15101, Kap. 3"
 ```
 
+Custom rulesets can define rules for any computed variable (L1–L7).
+
+## Key Features
+
+- **Curved wall support**: Centerline extraction with local coordinate frames for accurate measurements on arcs, S-curves, and polygonal walls
+- **Multi-element validation**: Separate IFC elements for wall stem, foundation, buttresses — each validated independently
+- **Contact Surface Normal Analysis** (L5): Mathematically founded pair classification using the contact surface orientation (no heuristics)
+- **Terrain context** (L6): Automatic earth/air side determination from IfcSite geometry, crown-terrain clearance measurement
+- **No heuristics**: All 17 algorithms are mathematically derived (cos(pi/4) thresholds, 3-sigma significance tests, CDR, natural-gap clustering)
+- **Foundation embedment depth** (L7): Automatic depth computation from terrain surface via barycentric interpolation
+- **Profile consistency** (L3): Coefficient of variation of crown width along curved walls
+- **26 test models** (T1–T27) covering: simple boxes, inclined walls, L/T-profiles, curved arcs (90/180/S-curve), polygonal walls, stepped profiles, variable height, buttresses, different IFC geometry types, terrain, and real-world scenarios (ASTRA-compliant, highway+terrain, multi-failure)
+- **340 automated tests** across 10 test suites
+
 ## Testing
 
 ```bash
-pytest
+pytest                                    # Run all 340 tests
+python validate_all_models.py             # Batch validate all 26 models
+python sensitivity_analysis.py            # Threshold sensitivity sweep
+python generate_thesis_figures.py         # Generate 3D classification figures
 ```
 
 ## Context

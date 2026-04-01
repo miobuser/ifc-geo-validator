@@ -65,11 +65,14 @@ def main():
         inc_r = l3.get("front_inclination_ratio")
         inc_s = "vert." if inc_r and math.isinf(inc_r) else f"{inc_r:.0f}:1" if inc_r else "—"
 
+        is_c = l3.get("is_curved", False)
+
         rows.append({
             "model": name.replace(".ifc", ""),
             "vol": f"{l1['volume']:.3f}",
             "wt": "Ja" if l1["is_watertight"] else "Nein",
             "groups": l2["num_groups"],
+            "curved": "Ja" if is_c else "Nein",
             "crown_mm": f"{l3.get('crown_width_mm', 0):.0f}",
             "slope_pct": f"{l3.get('crown_slope_percent', 0):.2f}",
             "thick_mm": f"{l3.get('min_wall_thickness_mm', 0):.0f}",
@@ -84,11 +87,11 @@ def main():
     # Write Markdown table
     md_path = OUTPUT_DIR / "validation_matrix.md"
     with open(md_path, "w", encoding="utf-8") as f:
-        f.write("# Validierungsmatrix — Testmodelle T1–T7\n\n")
-        f.write("| Modell | V (m³) | WT | Gr. | Krone (mm) | Neig. (%) | Dicke (mm) | Anzug | L3-001 | L3-002 | L3-003 | L3-004 | Score |\n")
-        f.write("|--------|--------|----|-----|------------|-----------|------------|-------|--------|--------|--------|--------|-------|\n")
+        f.write("# Validierungsmatrix — Testmodelle T1–T25\n\n")
+        f.write("| Modell | V (m³) | WT | Gr. | Kurve | Krone (mm) | Neig. (%) | Dicke (mm) | Anzug | L3-001 | L3-002 | L3-003 | L3-004 | Score |\n")
+        f.write("|--------|--------|----|-----|-------|------------|-----------|------------|-------|--------|--------|--------|--------|-------|\n")
         for r in rows:
-            f.write(f"| {r['model']} | {r['vol']} | {r['wt']} | {r['groups']} | {r['crown_mm']} | {r['slope_pct']} | {r['thick_mm']} | {r['incl']} | {r['L3-001']} | {r['L3-002']} | {r['L3-003']} | {r['L3-004']} | {r['score']} |\n")
+            f.write(f"| {r['model']} | {r['vol']} | {r['wt']} | {r['groups']} | {r['curved']} | {r['crown_mm']} | {r['slope_pct']} | {r['thick_mm']} | {r['incl']} | {r['L3-001']} | {r['L3-002']} | {r['L3-003']} | {r['L3-004']} | {r['score']} |\n")
 
         f.write("\n**Regeln:**\n")
         f.write("- L3-001: Kronenbreite ≥ 300 mm\n")
@@ -100,10 +103,10 @@ def main():
 
     # Also print to console
     print("\n" + "=" * 100)
-    print(f"{'Modell':<20} {'V (m³)':>8} {'WT':>4} {'Gr':>3} {'Krone':>7} {'Neig':>7} {'Dicke':>7} {'Anzug':>7} {'L3-1':>5} {'L3-2':>5} {'L3-3':>5} {'L3-4':>5} {'Score':>6}")
-    print("-" * 100)
+    print(f"{'Modell':<25} {'V (m3)':>8} {'WT':>4} {'Gr':>3} {'Kurv':>5} {'Krone':>7} {'Neig':>7} {'Dicke':>7} {'Anzug':>7} {'L3-1':>5} {'L3-2':>5} {'L3-3':>5} {'L3-4':>5} {'Score':>6}")
+    print("-" * 110)
     for r in rows:
-        print(f"{r['model']:<20} {r['vol']:>8} {r['wt']:>4} {r['groups']:>3} {r['crown_mm']:>6}mm {r['slope_pct']:>6}% {r['thick_mm']:>6}mm {r['incl']:>7} {r['L3-001']:>5} {r['L3-002']:>5} {r['L3-003']:>5} {r['L3-004']:>5} {r['score']:>6}")
+        print(f"{r['model']:<25} {r['vol']:>8} {r['wt']:>4} {r['groups']:>3} {r['curved']:>5} {r['crown_mm']:>6}mm {r['slope_pct']:>6}% {r['thick_mm']:>6}mm {r['incl']:>7} {r['L3-001']:>5} {r['L3-002']:>5} {r['L3-003']:>5} {r['L3-004']:>5} {r['score']:>6}")
 
     print(f"\n{len(models)} models processed, {len(rows)} validated.")
 

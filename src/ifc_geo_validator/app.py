@@ -7,12 +7,14 @@ from pathlib import Path
 
 import streamlit as st
 
-from ifc_geo_validator.core.ifc_parser import load_model, get_elements
-from ifc_geo_validator.core.mesh_converter import extract_mesh
+from ifc_geo_validator.core.ifc_parser import load_model, get_elements, get_terrain_mesh
+from ifc_geo_validator.core.mesh_converter import extract_mesh, MeshExtractionError
 from ifc_geo_validator.validation.level1 import validate_level1
 from ifc_geo_validator.validation.level2 import validate_level2
 from ifc_geo_validator.validation.level3 import validate_level3
 from ifc_geo_validator.validation.level4 import validate_level4, load_ruleset
+from ifc_geo_validator.validation.level5 import validate_level5
+from ifc_geo_validator.validation.level6 import validate_level6
 from ifc_geo_validator.report.json_report import generate_report
 
 
@@ -33,7 +35,15 @@ st.set_page_config(
 # ── Sidebar ──────────────────────────────────────────────────────────
 
 st.sidebar.title("IFC Geometry Validator")
-st.sidebar.caption("v0.1.0 — BSc Thesis BFH")
+def _get_version() -> str:
+    pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    if pyproject.exists():
+        for line in pyproject.read_text(encoding="utf-8").splitlines():
+            if line.strip().startswith("version"):
+                return line.split("=", 1)[1].strip().strip('"').strip("'")
+    return "unknown"
+
+st.sidebar.caption(f"v{_get_version()} — BSc Thesis BFH")
 
 uploaded_file = st.sidebar.file_uploader(
     "Upload IFC file",
@@ -79,6 +89,8 @@ if not uploaded_file and not run_button:
         | L2 | Face classification | Coplanar clustering, semantic groups |
         | L3 | Measurements | Crown width, slope, thickness, inclination |
         | L4 | Rule checks | PASS / FAIL against ruleset |
+        | L5 | Inter-element | Stacking, gaps, offsets |
+        | L6 | Terrain context | Terrain clearance, element distances |
 
         Upload an IFC file in the sidebar to begin.
         """
@@ -123,7 +135,8 @@ def run_validation(_file_bytes, file_name, entity_type, predefined_type, _rulese
             l1 = validate_level1(mesh)
             l2 = validate_level2(mesh)
             l3 = validate_level3(mesh, l2)
-            l4 = validate_level4(l1, l3, ruleset) if ruleset else None
+            # L4 evaluated after L5/L6 below; store None for now
+            l4 = None
 
             result = {
                 "element_id": elem.id(),
@@ -131,6 +144,7 @@ def run_validation(_file_bytes, file_name, entity_type, predefined_type, _rulese
                 "level1": l1,
                 "level2": l2,
                 "level3": l3,
+                "mesh_data": mesh,
             }
             if l4:
                 result["level4"] = l4
@@ -142,8 +156,54 @@ def run_validation(_file_bytes, file_name, entity_type, predefined_type, _rulese
                 "error": str(e),
             })
 
+    # L5: Inter-element analysis
+    l5_result = None
+    if len(all_results) > 1:
+        valid = [r for r in all_results if "error" not in r and "mesh_data" in r]
+        if len(valid) > 1:
+            l5_result = validate_level5(valid)
+
+    # L6: Terrain context & distances
+    terrain = get_terrain_mesh(model)
+    l6_result = None
+    valid_for_l6 = [r for r in all_results if "error" not in r and "mesh_data" in r]
+    if valid_for_l6:
+        l6_result = validate_level6(valid_for_l6, terrain_mesh=terrain)
+
+    # L4: Rule evaluation WITH L5/L6 context
+    if ruleset:
+        for r in all_results:
+            if "error" in r:
+                continue
+            l1 = r.get("level1")
+            l3 = r.get("level3")
+            if l1 and l3:
+                l5_ctx = {}
+                if l5_result:
+                    for p in l5_result.get("pairs", []):
+                        if p.get("element_a_id") == r.get("element_id") or \
+                           p.get("element_b_id") == r.get("element_id"):
+                            if p["pair_type"] == "stacked":
+                                l5_ctx["foundation_extends_beyond_wall"] = p.get("foundation_extends_beyond_wall", False)
+                                l5_ctx["wall_foundation_gap_mm"] = p.get("vertical_gap_mm", 0)
+                l6_ctx = {}
+                if terrain:
+                    l6_ctx["earth_side_determined"] = bool(l6_result and l6_result.get("terrain_side"))
+                    # Foundation embedment from L6 embedments
+                    if l6_result:
+                        for emb in l6_result.get("embedments", []):
+                            if emb.get("element_id") == r.get("element_id"):
+                                l6_ctx["foundation_embedment_m"] = emb["foundation_embedment_m"]
+                                break
+                # Store context for property writer / report
+                if l5_ctx:
+                    r["level5_context"] = l5_ctx
+                if l6_ctx:
+                    r["level6_context"] = l6_ctx
+                r["level4"] = validate_level4(l1, l3, ruleset, level5_context=l5_ctx, level6_context=l6_ctx)
+
     report = generate_report(file_name, all_results, ruleset)
-    return all_results, report, ruleset
+    return all_results, report, ruleset, l5_result, l6_result, terrain is not None
 
 
 if run_button or uploaded_file:
@@ -151,12 +211,13 @@ if run_button or uploaded_file:
     rs_bytes = ruleset_file.getvalue() if ruleset_file else None
     pred = predefined_type.strip() or ""
 
-    results, report, ruleset = run_validation(
+    results, report, ruleset, l5_result, l6_result, has_terrain = run_validation(
         file_bytes, uploaded_file.name, entity_type, pred, rs_bytes
     )
 
     if not results:
-        st.error(f"No {entity_type} elements found in the model.")
+        st.error(f"No {entity_type} elements found in the model. "
+                 f"Try a different entity type in the sidebar.")
         st.stop()
 
     st.title(f"Validation: {uploaded_file.name}")
@@ -170,10 +231,11 @@ if run_button or uploaded_file:
     valid_results = [r for r in results if "error" not in r]
     error_results = [r for r in results if "error" in r]
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("Elements", len(results))
     col2.metric("Validated", len(valid_results))
     col3.metric("Errors", len(error_results))
+    col4.metric("Terrain", "Detected" if has_terrain else "None")
 
     if valid_results and "level4" in valid_results[0]:
         total_checks = sum(
@@ -184,10 +246,52 @@ if run_button or uploaded_file:
             r["level4"]["summary"]["passed"]
             for r in valid_results if "level4" in r
         )
-        col4.metric("Rules passed", f"{total_passed}/{total_checks}")
+        col5.metric("Rules passed", f"{total_passed}/{total_checks}")
+
+    # ── Summary table (all elements at a glance) ────────────────
+    st.subheader("Element Overview")
+    summary_rows = []
+    for r in results:
+        row = {
+            "ID": r.get("element_id", "?"),
+            "Name": r.get("element_name", "?"),
+        }
+        if "error" in r:
+            row["Volume (m3)"] = None
+            row["Area (m2)"] = None
+            row["Watertight"] = None
+            row["L4 Result"] = "ERROR"
+        else:
+            l1 = r.get("level1", {})
+            row["Volume (m3)"] = round(l1.get("volume", 0), 3) if l1 else None
+            row["Area (m2)"] = round(l1.get("total_area", 0), 3) if l1 else None
+            row["Watertight"] = "Yes" if l1.get("is_watertight") else "No"
+            l4 = r.get("level4")
+            if l4:
+                s = l4["summary"]
+                row["L4 Result"] = f"{s['passed']}P / {s['failed']}F / {s['skipped']}S"
+            else:
+                row["L4 Result"] = "-"
+        summary_rows.append(row)
+    st.dataframe(summary_rows, use_container_width=True, hide_index=True)
+
+    # ── Element selector (when multiple elements) ───────────────
+    if len(valid_results) > 1:
+        elem_options = {
+            f"#{r['element_id']} {r.get('element_name', '?')}": i
+            for i, r in enumerate(results)
+            if "error" not in r
+        }
+        selected_label = st.selectbox(
+            "Select element for detail view",
+            options=list(elem_options.keys()),
+        )
+        detail_results = [results[elem_options[selected_label]]]
+    else:
+        detail_results = results
 
     # ── Per-element results ──────────────────────────────────────
-    for r in results:
+    for r in detail_results:
         name = r.get("element_name", "?")
         eid = r.get("element_id", "?")
 
@@ -249,6 +353,18 @@ if run_button or uploaded_file:
                 })
             st.dataframe(group_data, use_container_width=True, hide_index=True)
 
+            # ── Curved wall info ────────────────────────────
+            is_c = l3.get("is_curved")
+            if is_c is not None:
+                cinfo_cols = st.columns(3)
+                cinfo_cols[0].metric("Curved", "Yes" if is_c else "No")
+                wlen = l3.get("wall_length_m")
+                if wlen:
+                    cinfo_cols[1].metric("Wall length", f"{wlen:.2f} m")
+                cmethod = l3.get("crown_width_method", "")
+                if cmethod:
+                    cinfo_cols[2].metric("Measurement", cmethod)
+
             # ── L3: Measurements ─────────────────────────────
             st.subheader("Measurements (L3)")
             mc1, mc2, mc3, mc4 = st.columns(4)
@@ -269,6 +385,23 @@ if run_button or uploaded_file:
                     mc4.metric("Inclination", "vertical")
                 elif ratio:
                     mc4.metric("Inclination", f"{ratio:.1f}:1 ({inc:.1f}°)")
+
+            # Second row: foundation + height
+            fw = l3.get("foundation_width_mm")
+            wh = l3.get("wall_height_m")
+            if fw is not None or wh is not None:
+                mc5, mc6, _, _ = st.columns(4)
+                if fw is not None:
+                    mc5.metric("Foundation width", f"{fw:.0f} mm")
+                if wh is not None:
+                    mc6.metric("Wall height", f"{wh:.2f} m")
+
+            # ── Profile consistency (curved walls) ─────────
+            cv = l3.get("crown_width_cv")
+            if cv is not None:
+                st.metric("Profile consistency (CV)", f"{cv:.4f}",
+                          delta="uniform" if cv <= 0.1 else "variable",
+                          delta_color="normal" if cv <= 0.1 else "inverse")
 
             # ── L4: Rule checks ──────────────────────────────
             if l4:
@@ -294,15 +427,104 @@ if run_button or uploaded_file:
                     })
                 st.dataframe(checks_data, use_container_width=True, hide_index=True)
 
+    # ── L5: Inter-element analysis ─────────────────────────────
+    if l5_result and l5_result.get("pairs"):
+        st.subheader("Inter-Element Analysis (L5)")
+        st.caption(f"{l5_result['summary']['num_pairs']} pair(s) analysed")
+        l5_rows = []
+        for p in l5_result["pairs"]:
+            row = {
+                "Element A": p.get("element_a_name", "?"),
+                "Element B": p.get("element_b_name", "?"),
+                "Type": p.get("pair_type", "?"),
+            }
+            if p.get("pair_type") == "stacked":
+                row["Vertical gap (mm)"] = round(p.get("vertical_gap_mm", 0), 1)
+                row["Overhang (mm)"] = round(p.get("overhang_mm", 0), 0)
+                row["Center offset (mm)"] = round(p.get("center_offset_mm", 0), 1)
+            elif p.get("pair_type") == "side_by_side":
+                row["Horizontal gap (mm)"] = round(p.get("horizontal_gap_mm", 0), 1)
+            l5_rows.append(row)
+        st.dataframe(l5_rows, use_container_width=True, hide_index=True)
+
+    # ── L6: Terrain context & distances ─────────────────────────
+    if l6_result:
+        st.subheader("Terrain & Distance Checks (L6)")
+        st.caption(f"Terrain: {'Detected' if has_terrain else 'Not found'}")
+
+        # Terrain side assignments
+        if l6_result.get("terrain_side"):
+            st.markdown("**Terrain-based front/back assignment:**")
+            ts_rows = []
+            for eid, info in l6_result["terrain_side"].items():
+                ts_rows.append({
+                    "Element": info.get("element_name", eid),
+                    "Assignments": str(info.get("assignments", "")),
+                })
+            st.dataframe(ts_rows, use_container_width=True, hide_index=True)
+
+        # Clearances
+        clearances = [cl for cl in l6_result.get("clearances", []) if cl.get("min_m") is not None]
+        if clearances:
+            st.markdown("**Crown-terrain clearance:**")
+            cl_rows = []
+            for cl in clearances:
+                cl_rows.append({
+                    "Element": cl.get("element_name", "?"),
+                    "Min (m)": round(cl["min_m"], 2),
+                    "Max (m)": round(cl["max_m"], 2),
+                    "Avg (m)": round(cl["avg_m"], 2),
+                })
+            st.dataframe(cl_rows, use_container_width=True, hide_index=True)
+
+        # Foundation embedments
+        embedments = [e for e in l6_result.get("embedments", []) if e.get("foundation_embedment_m") is not None]
+        if embedments:
+            st.markdown("**Foundation embedment depth:**")
+            emb_rows = []
+            for e in embedments:
+                emb_rows.append({
+                    "Element": e.get("element_name", "?"),
+                    "Embedment (m)": round(e["foundation_embedment_m"], 2),
+                    "Terrain Z (m)": round(e["terrain_z"], 2),
+                    "Foundation min Z (m)": round(e["foundation_min_z"], 2),
+                })
+            st.dataframe(emb_rows, use_container_width=True, hide_index=True)
+
+        # Element distances
+        if l6_result.get("distances"):
+            st.markdown("**Inter-element distances:**")
+            d_rows = []
+            for d in l6_result["distances"]:
+                d_rows.append({
+                    "Element A": d.get("element_a_name", "?"),
+                    "Element B": d.get("element_b_name", "?"),
+                    "Min dist (mm)": round(d.get("min_distance_mm", 0), 1),
+                    "XY dist (mm)": round(d.get("horizontal_distance_mm", 0), 1),
+                })
+            st.dataframe(d_rows, use_container_width=True, hide_index=True)
+
     # ── Download report ──────────────────────────────────────────
     st.divider()
 
     def _json_default(obj):
+        if hasattr(obj, "to_dict"):
+            return obj.to_dict()  # WallCenterline → dict
         if hasattr(obj, "item"):
-            return obj.item()
+            return obj.item()  # numpy scalar
         if isinstance(obj, float) and math.isinf(obj):
             return "Infinity"
         raise TypeError(f"Not JSON serializable: {type(obj)}")
+
+    # Remove non-serializable objects from report (numpy arrays, WallCenterline)
+    for elem in report.get("elements", []):
+        l2_data = elem.get("level2") or elem.get("face_classification")
+        if l2_data and "centerline" in l2_data:
+            l2_data.pop("centerline", None)
+    # Also clean mesh_data from all_results if present
+    for r in results:
+        if isinstance(r, dict):
+            r.pop("mesh_data", None)
 
     report_json = json.dumps(report, indent=2, ensure_ascii=False, default=_json_default)
 

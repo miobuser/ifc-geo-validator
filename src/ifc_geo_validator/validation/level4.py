@@ -1,7 +1,18 @@
 """Level 4 Validation: Requirement comparison against YAML ruleset.
 
-Evaluates Level 1–3 results against configurable rules defined in YAML.
+Evaluates Level 1–7 results against configurable rules defined in YAML.
 Each rule produces a CheckResult with PASS/FAIL/SKIP status.
+
+The rule evaluation follows the four-stage process defined by Eastman et al.
+(2009): (1) rule interpretation (YAML parsing), (2) model preparation
+(L1–L3 computation), (3) rule execution (expression evaluation), and
+(4) report generation (PASS/FAIL/SKIP).
+
+References:
+  - Eastman, C. et al. (2009). Automatic rule-based checking of building
+    designs. Automation in Construction, 18(8), 1011-1033.
+  - Solihin, W. & Eastman, C. (2015). Classification of rules for automated
+    BIM rule checking development. Automation in Construction, 53, 69-82.
 """
 
 import yaml
@@ -45,6 +56,8 @@ def validate_level4(
     level1_result: dict,
     level3_result: dict,
     ruleset: dict,
+    level5_context: dict = None,
+    level6_context: dict = None,
 ) -> dict:
     """Evaluate rules from the ruleset against computed values.
 
@@ -52,6 +65,8 @@ def validate_level4(
         level1_result: dict from validate_level1().
         level3_result: dict from validate_level3().
         ruleset: parsed YAML ruleset dict.
+        level5_context: optional dict with L5 inter-element variables.
+        level6_context: optional dict with L6 distance/terrain variables.
 
     Returns:
         dict with:
@@ -60,6 +75,12 @@ def validate_level4(
     """
     # Build the evaluation context from computed values
     context = _build_context(level1_result, level3_result)
+
+    # Merge L5/L6 context variables if provided
+    if level5_context:
+        context.update(level5_context)
+    if level6_context:
+        context.update(level6_context)
 
     checks = []
 
@@ -71,7 +92,19 @@ def validate_level4(
     for rule in ruleset.get("level_3", []):
         checks.append(_evaluate_rule(rule, context))
 
-    # Evaluate Level 4 composite rules (depend on L3 results)
+    # Evaluate Level 5 rules (inter-element context)
+    for rule in ruleset.get("level_5", []):
+        checks.append(_evaluate_rule(rule, context))
+
+    # Evaluate Level 6 rules (distance/terrain context)
+    for rule in ruleset.get("level_6", []):
+        checks.append(_evaluate_rule(rule, context))
+
+    # Evaluate Level 7 rules (distance calculations)
+    for rule in ruleset.get("level_7", []):
+        checks.append(_evaluate_rule(rule, context))
+
+    # Evaluate Level 4 composite rules (depend on all other results)
     for rule in ruleset.get("level_4", []):
         checks.append(_evaluate_composite(rule, checks))
 
@@ -109,6 +142,18 @@ def _build_context(level1_result: dict, level3_result: dict) -> dict:
     ctx["avg_wall_thickness_mm"] = level3_result.get("avg_wall_thickness_mm")
     ctx["front_inclination_deg"] = level3_result.get("front_inclination_deg")
     ctx["front_inclination_ratio"] = level3_result.get("front_inclination_ratio")
+
+    # Level 3 — Curved wall metrics
+    ctx["is_curved"] = level3_result.get("is_curved", False)
+    ctx["wall_length_m"] = level3_result.get("wall_length_m")
+    ctx["wall_height_m"] = level3_result.get("wall_height_m")
+
+    # Level 3 — Profile consistency
+    ctx["crown_width_cv"] = level3_result.get("crown_width_cv")
+
+    # Level 3 — Foundation measurements
+    ctx["foundation_width_mm"] = level3_result.get("foundation_width_mm")
+    ctx["foundation_width_ratio"] = level3_result.get("foundation_width_ratio")
 
     return ctx
 

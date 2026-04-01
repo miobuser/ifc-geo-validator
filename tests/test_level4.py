@@ -62,7 +62,7 @@ class TestLoadRuleset:
         rs = load_ruleset(RULESET_PATH)
         assert rs["metadata"]["name"] == "ASTRA FHB T/G — Stützmauern"
         assert len(rs["level_1"]) == 2
-        assert len(rs["level_3"]) == 4
+        assert len(rs["level_3"]) == 6
 
 
 class TestT1Validation:
@@ -105,14 +105,18 @@ class TestT1Validation:
     def test_wall_thickness_pass(self):
         assert self.checks["ASTRA-SM-L3-003"]["status"] == "PASS"
 
-    def test_composite_crown_fail(self):
-        """Crown composite fails because slope check failed."""
-        assert self.checks["ASTRA-SM-L4-001"]["status"] == "FAIL"
+    def test_composite_crown_pass(self):
+        """Crown composite (L4-001) passes — only depends on L3-001 (width), not slope."""
+        assert self.checks["ASTRA-SM-L4-001"]["status"] == "PASS"
+
+    def test_composite_slope_fail(self):
+        """Slope composite (L4-003) fails because T1 has no crown slope."""
+        assert self.checks["ASTRA-SM-L4-003"]["status"] == "FAIL"
 
     def test_summary_counts(self):
         s = self.result["summary"]
-        assert s["total"] == 8  # 2 L1 + 4 L3 + 2 L4
-        assert s["passed"] >= 3
+        assert s["total"] == 17  # 2 L1 + 5 L3 + 2 L5 + 2 L6 + 2 L7 + 4 L4
+        assert s["passed"] >= 4
         assert s["failed"] >= 2
 
 
@@ -276,5 +280,232 @@ class TestT7FullyCompliant:
         ruleset = load_ruleset(RULESET_PATH)
         result = validate_level4(l1, l3, ruleset)
 
-        assert result["summary"]["passed"] == 8
+        assert result["summary"]["passed"] == 11  # L1+L3(6)+L4 all pass (T7 is fully compliant)
         assert result["summary"]["failed"] == 0
+        # L5+L6+L7 rules are SKIPPED (no context provided)
+
+
+# ── Alternative Ruleset (SIA 262) ─────────────────────────────────
+
+SIA_RULESET_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "src", "ifc_geo_validator",
+    "rules", "rulesets", "sia_262_stuetzmauer.yaml"
+)
+
+
+@pytest.mark.skipif(not os.path.exists(SIA_RULESET_PATH), reason="SIA ruleset not found")
+class TestSIARuleset:
+    """Test that alternative rulesets (SIA 262) work correctly."""
+
+    def test_load_sia_ruleset(self):
+        rs = load_ruleset(SIA_RULESET_PATH)
+        assert rs["metadata"]["name"] == "SIA 262 — Stützmauern (Betonbau)"
+
+    def test_t1_passes_sia_rules(self):
+        """T1 (400mm thick) passes SIA 262 minimum (200mm)."""
+        mesh = _make_mesh(T1_VERTS, T1_FACES)
+        l1 = validate_level1(mesh)
+        l2 = validate_level2(mesh)
+        l3 = validate_level3(mesh, l2)
+        rs = load_ruleset(SIA_RULESET_PATH)
+        result = validate_level4(l1, l3, rs)
+        # SIA has lower thresholds — T1 should pass everything
+        assert result["summary"]["failed"] == 0
+        assert result["summary"]["passed"] >= 5
+
+    def test_sia_l5_with_context(self):
+        """SIA L5-001 (foundation gap) should evaluate when context provided."""
+        mesh = _make_mesh(T1_VERTS, T1_FACES)
+        l1 = validate_level1(mesh)
+        l2 = validate_level2(mesh)
+        l3 = validate_level3(mesh, l2)
+        rs = load_ruleset(SIA_RULESET_PATH)
+        # Provide L5 context
+        l5_ctx = {"wall_foundation_gap_mm": 0.5}
+        result = validate_level4(l1, l3, rs, level5_context=l5_ctx)
+        # SIA-SM-L5-001 should PASS (0.5mm <= 10mm)
+        l5_check = next((c for c in result["checks"] if "L5-001" in c["rule_id"]), None)
+        assert l5_check is not None
+        assert l5_check["status"] == "PASS"
+
+    def test_different_thresholds(self):
+        """SIA allows 200mm minimum vs ASTRA 300mm — verify a 250mm wall
+        passes SIA but fails ASTRA."""
+        # 250mm thin wall
+        verts = np.array([
+            [0, 0, 0], [6, 0, 0], [6, 0.25, 0], [0, 0.25, 0],
+            [0, 0, 2], [6, 0, 2], [6, 0.25, 2], [0, 0.25, 2],
+        ], dtype=float)
+        faces = np.array([
+            [0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7],
+            [0, 1, 5], [0, 5, 4], [2, 3, 7], [2, 7, 6],
+            [0, 4, 7], [0, 7, 3], [1, 2, 6], [1, 6, 5],
+        ])
+        mesh = _make_mesh(verts, faces)
+        l1 = validate_level1(mesh)
+        l2 = validate_level2(mesh)
+        l3 = validate_level3(mesh, l2)
+
+        # SIA: 200mm min → 250mm passes
+        sia_rs = load_ruleset(SIA_RULESET_PATH)
+        sia_result = validate_level4(l1, l3, sia_rs)
+        sia_thick = next(c for c in sia_result["checks"] if "L3-001" in c["rule_id"])
+        assert sia_thick["status"] == "PASS"
+
+        # ASTRA: 300mm min → 250mm fails
+        astra_rs = load_ruleset(RULESET_PATH)
+        astra_result = validate_level4(l1, l3, astra_rs)
+        astra_thick = next(c for c in astra_result["checks"] if "L3-003" in c["rule_id"])
+        assert astra_thick["status"] == "FAIL"
+
+
+# ── T24: Highway wall — fully ASTRA compliant wall stem ──────────────
+
+T24_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T24_highway_with_terrain.ifc")
+
+
+@pytest.mark.skipif(
+    not os.path.exists(T24_PATH) or not os.path.exists(RULESET_PATH),
+    reason="T24 model or ruleset not found",
+)
+class TestT24FullyCompliant:
+    """T24 (inclined, crown slope, 350mm) — all mandatory (ERROR) rules should PASS."""
+
+    def test_all_mandatory_pass(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T24_PATH)
+        walls = get_elements(model, "IfcWall")
+        mesh = extract_mesh(walls[0])
+        l1 = validate_level1(mesh)
+        l2 = validate_level2(mesh)
+        l3 = validate_level3(mesh, l2)
+        ruleset = load_ruleset(RULESET_PATH)
+        result = validate_level4(l1, l3, ruleset)
+        checks = {c["rule_id"]: c for c in result["checks"]}
+
+        # All L1 rules pass
+        assert checks["ASTRA-SM-L1-001"]["status"] == "PASS"
+        assert checks["ASTRA-SM-L1-002"]["status"] == "PASS"
+        # All L3 rules pass (ASTRA compliant wall stem)
+        assert checks["ASTRA-SM-L3-001"]["status"] == "PASS"   # crown >= 300mm (350mm)
+        assert checks["ASTRA-SM-L3-002"]["status"] == "PASS"   # crown slope ~3%
+        assert checks["ASTRA-SM-L3-003"]["status"] == "PASS"   # thickness >= 300mm
+        assert checks["ASTRA-SM-L3-004"]["status"] == "PASS"   # inclination ~10:1
+        # No ERROR-level failures
+        assert result["summary"]["errors"] == 0
+
+
+# ── T25: Multi-failure — multiple ERROR rules should FAIL ────────────
+
+T25_PATH = os.path.join(os.path.dirname(__file__), "test_models", "T25_multi_failure.ifc")
+
+
+@pytest.mark.skipif(
+    not os.path.exists(T25_PATH) or not os.path.exists(RULESET_PATH),
+    reason="T25 model or ruleset not found",
+)
+class TestT25MultiFailure:
+    """T25 (thin, no slope, vertical) — multiple ERROR rules should FAIL."""
+
+    def test_multiple_failures(self):
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+
+        model = load_model(T25_PATH)
+        walls = get_elements(model, "IfcWall")
+        mesh = extract_mesh(walls[0])
+        l1 = validate_level1(mesh)
+        l2 = validate_level2(mesh)
+        l3 = validate_level3(mesh, l2)
+        ruleset = load_ruleset(RULESET_PATH)
+        result = validate_level4(l1, l3, ruleset)
+        checks = {c["rule_id"]: c for c in result["checks"]}
+
+        # L1 rules still pass (volume > 0, watertight)
+        assert checks["ASTRA-SM-L1-001"]["status"] == "PASS"
+        # L3 rules fail (200mm thin, no slope, vertical)
+        assert checks["ASTRA-SM-L3-001"]["status"] == "FAIL"   # 200mm < 300mm crown
+        assert checks["ASTRA-SM-L3-003"]["status"] == "FAIL"   # 200mm < 300mm thickness
+        # Multiple ERROR-level failures
+        assert result["summary"]["errors"] >= 2
+
+
+# ── L5 context in L4 ──────────────────────────────────────────────
+
+class TestL5ContextInL4:
+    """Test L5 inter-element context passed to validate_level4."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        if not os.path.exists(RULESET_PATH):
+            pytest.skip("Ruleset not found")
+        self.mesh = _make_mesh(T1_VERTS, T1_FACES)
+        self.l1 = validate_level1(self.mesh)
+        self.l2 = validate_level2(self.mesh)
+        self.l3 = validate_level3(self.mesh, self.l2)
+        self.ruleset = load_ruleset(RULESET_PATH)
+
+    def test_l5_foundation_overhang_pass(self):
+        """L5 context with good values → L5 rules PASS."""
+        l5_ctx = {
+            "foundation_extends_beyond_wall": True,
+            "wall_foundation_gap_mm": 0.5,
+        }
+        result = validate_level4(self.l1, self.l3, self.ruleset, level5_context=l5_ctx)
+        checks = {c["rule_id"]: c for c in result["checks"]}
+        assert checks["ASTRA-SM-L5-001"]["status"] == "PASS"
+        assert checks["ASTRA-SM-L5-002"]["status"] == "PASS"
+
+    def test_l5_gap_fail(self):
+        """L5 context with bad values → L5 rules FAIL."""
+        l5_ctx = {
+            "foundation_extends_beyond_wall": False,
+            "wall_foundation_gap_mm": 50.0,
+        }
+        result = validate_level4(self.l1, self.l3, self.ruleset, level5_context=l5_ctx)
+        checks = {c["rule_id"]: c for c in result["checks"]}
+        assert checks["ASTRA-SM-L5-001"]["status"] == "FAIL"
+        assert checks["ASTRA-SM-L5-002"]["status"] == "FAIL"
+
+    def test_l5_no_context_skips(self):
+        """No L5 context provided → L5 rules SKIP."""
+        result = validate_level4(self.l1, self.l3, self.ruleset)
+        checks = {c["rule_id"]: c for c in result["checks"]}
+        assert checks["ASTRA-SM-L5-001"]["status"] == "SKIP"
+        assert checks["ASTRA-SM-L5-002"]["status"] == "SKIP"
+
+
+# ── L6 context in L4 ──────────────────────────────────────────────
+
+class TestL6ContextInL4:
+    """Test L6 terrain/distance context passed to validate_level4."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        if not os.path.exists(RULESET_PATH):
+            pytest.skip("Ruleset not found")
+        self.mesh = _make_mesh(T1_VERTS, T1_FACES)
+        self.l1 = validate_level1(self.mesh)
+        self.l2 = validate_level2(self.mesh)
+        self.l3 = validate_level3(self.mesh, self.l2)
+        self.ruleset = load_ruleset(RULESET_PATH)
+
+    def test_l6_earth_side_pass(self):
+        """L6 context with terrain data → L6 rules PASS."""
+        l6_ctx = {
+            "earth_side_determined": True,
+            "crown_slope_towards_earth_side": True,
+        }
+        result = validate_level4(self.l1, self.l3, self.ruleset, level6_context=l6_ctx)
+        checks = {c["rule_id"]: c for c in result["checks"]}
+        assert checks["ASTRA-SM-L6-001"]["status"] == "PASS"
+        assert checks["ASTRA-SM-L6-002"]["status"] == "PASS"
+
+    def test_l6_no_terrain_skips(self):
+        """No L6 context provided → L6 rules SKIP."""
+        result = validate_level4(self.l1, self.l3, self.ruleset)
+        checks = {c["rule_id"]: c for c in result["checks"]}
+        assert checks["ASTRA-SM-L6-001"]["status"] == "SKIP"
+        assert checks["ASTRA-SM-L6-002"]["status"] == "SKIP"

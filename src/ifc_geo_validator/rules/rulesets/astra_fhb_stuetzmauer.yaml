@@ -25,9 +25,9 @@ metadata:
 
 # Klassifikations-Schwellwerte (konfigurierbar pro Ruleset)
 classification_thresholds:
-  horizontal_deg: 30.0       # Winkel für horizontal/vertikal-Trennung
-  coplanar_deg: 5.0          # Winkel für Koplanar-Clustering benachbarter Dreiecke
-  lateral_deg: 45.0          # Winkel für Front/Back vs. Left/Right-Trennung
+  horizontal_deg: 45.0       # π/4 = geometrische Symmetrieachse horizontal/vertikal
+  coplanar_deg: 5.0          # 180°/(2×18) = halber Tessellierungs-Segmentwinkel
+  lateral_deg: 45.0          # π/4 = geometrische Symmetrieachse parallel/senkrecht
 
 # =============================================================================
 # Level 1 — Geometrische Kenngrössen (Plausibilität)
@@ -87,6 +87,20 @@ level_3:
     reference: "FHB T/G 24 001-15101, Kap. 3, Absatz 'Generell'"
     quote: "Eine Neigung der Stützmauer von 10:1 wird empfohlen."
 
+  - id: ASTRA-SM-L3-005
+    name: "Profilkonsistenz"
+    description: "Kronenbreite soll entlang der Mauer konstant sein"
+    check: "crown_width_cv <= 0.1"
+    severity: INFO
+    reference: "Konstruktive Empfehlung — gleichmässiges Profil"
+
+  - id: ASTRA-SM-L3-006
+    name: "Fundamentbreite"
+    description: "Fundament mindestens 600 mm breit"
+    check: "foundation_width_mm >= 600"
+    severity: WARNING
+    reference: "FHB T/G, Konstruktive Anforderung"
+
 # =============================================================================
 # Level 4 — Anforderungsabgleich (zusammengesetzte Prüfungen)
 # =============================================================================
@@ -94,20 +108,34 @@ level_3:
 level_4:
   - id: ASTRA-SM-L4-001
     name: "Gesamtbewertung Mauerkrone"
-    description: "Mauerkrone erfüllt alle Anforderungen (Breite, Neigung)"
+    description: "Mauerkrone erfüllt alle Pflichtanforderungen (Breite)"
     depends_on:
-      - ASTRA-SM-L3-001  # Kronenbreite
-      - ASTRA-SM-L3-002  # Kronenneigung
+      - ASTRA-SM-L3-001  # Kronenbreite (Pflicht)
     severity: ERROR
+    reference: "FHB T/G 24 001-15101, Kap. 3"
+
+  - id: ASTRA-SM-L4-003
+    name: "Gesamtbewertung Kronenneigung"
+    description: "Mauerkrone erfüllt Neigungsempfehlung"
+    depends_on:
+      - ASTRA-SM-L3-002  # Kronenneigung (Empfehlung)
+    severity: WARNING
     reference: "FHB T/G 24 001-15101, Kap. 3"
 
   - id: ASTRA-SM-L4-002
     name: "Gesamtbewertung Wandgeometrie"
-    description: "Wandgeometrie erfüllt Mindestanforderungen"
+    description: "Wandgeometrie erfüllt Pflichtanforderungen (Mindestbauteilstärke)"
     depends_on:
-      - ASTRA-SM-L3-003  # Mindestbauteilstärke
-      - ASTRA-SM-L3-004  # Neigung
-    severity: WARNING
+      - ASTRA-SM-L3-003  # Mindestbauteilstärke (Pflicht)
+    severity: ERROR
+    reference: "FHB T/G 24 001-15101, Kap. 3"
+
+  - id: ASTRA-SM-L4-004
+    name: "Gesamtbewertung Wandneigung"
+    description: "Wandneigung erfüllt Empfehlung (10:1)"
+    depends_on:
+      - ASTRA-SM-L3-004  # Neigung (Empfehlung)
+    severity: INFO
     reference: "FHB T/G 24 001-15101, Kap. 3"
 
 # =============================================================================
@@ -155,9 +183,9 @@ level_6:
 
 level_7:
   - id: ASTRA-SM-L7-001
-    name: "Rampengefälle bei Notausgängen"
-    description: "Rampen bei Notausgängen max. 6% Gefälle"
-    check: "ramp_slope_percent <= 6.0"
-    severity: ERROR
-    reference: "FHB T/G, Sicherheitsanforderungen"
-    note: "Nur relevant wenn Stützmauer Teil eines Tunnelportals"
+    name: "Fundament-Einbindetiefe"
+    description: "Fundament muss mindestens frostfrei eingebunden sein"
+    check: "foundation_embedment_m >= 0.8"
+    severity: WARNING
+    reference: "FHB T/G, Kap. 3 — Frostfreie Gründung (0.8m in der Schweiz)"
+

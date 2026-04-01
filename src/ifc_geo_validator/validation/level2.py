@@ -6,6 +6,7 @@ suitable for downstream Level 3 (face-specific measurements) and reporting.
 
 from ifc_geo_validator.core.face_classifier import (
     classify_faces,
+    WallCenterline,
     CROWN,
     FOUNDATION,
     FRONT,
@@ -59,9 +60,15 @@ def validate_level2(mesh_data: dict, thresholds: dict = None) -> dict:
             "num_triangles": g.num_triangles,
         })
 
+    # Extract centerline metadata
+    centerline = result.get("centerline")
+    centerline_dict = centerline.to_dict() if centerline else None
+
     return {
         "face_groups": group_dicts,
         "wall_axis": result["wall_axis"],
+        "centerline": centerline,            # WallCenterline object (for level3)
+        "centerline_info": centerline_dict,   # serialized metadata (for JSON)
         "num_groups": result["num_groups"],
         "thresholds_used": result["thresholds_used"],
         "summary": summary,
@@ -69,4 +76,5 @@ def validate_level2(mesh_data: dict, thresholds: dict = None) -> dict:
         "has_foundation": FOUNDATION in summary,
         "has_front": FRONT in summary,
         "has_back": BACK in summary,
+        "front_back_asymmetry": result.get("front_back_asymmetry", 0.0),
     }

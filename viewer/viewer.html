@@ -1,0 +1,1338 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>IFC Geo Validator</title>
+<style>
+:root{--bg:#1a1a1a;--bg2:#222;--bg3:#2a2a2a;--tx:#e0e0e0;--tx2:#909090;--acc:#0098ff;--brd:#404040;--ok:#4ec9b0;--err:#f14c4c}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--tx);font-size:12px}
+::-webkit-scrollbar{width:8px}::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:#4a4a4a;border-radius:4px}::-webkit-scrollbar-thumb:hover{background:#5a5a5a}
+
+#app{display:flex;flex-direction:column;width:100%;height:100%}
+
+/* Top: Toolbar bar (like IFC-Editor — spans full width) */
+#toolbar-bar{display:flex;align-items:center;padding:4px 10px;gap:8px;background:linear-gradient(180deg,var(--bg3),var(--bg2));border-bottom:1px solid var(--brd);flex-shrink:0;min-height:36px}
+#toolbar-bar .tg-label{font-size:10px;color:var(--tx2);text-transform:uppercase;letter-spacing:.5px;margin-right:2px}
+#toolbar-bar .tg-btns{display:flex;gap:2px;background:var(--bg2);border:1px solid var(--brd);border-radius:4px;padding:2px}
+#toolbar-bar button{background:transparent;color:var(--tx);border:none;padding:4px 8px;border-radius:3px;cursor:pointer;font:11px/1 'Segoe UI',system-ui,sans-serif;transition:.12s;white-space:nowrap}
+#toolbar-bar button:hover{background:var(--bg3)}
+#toolbar-bar button.on{background:var(--acc);color:#fff}
+.tb-sep{width:1px;height:20px;background:var(--brd);margin:0 4px}
+
+/* Main area: viewer + panel side by side */
+#main{display:flex;flex:1;min-height:0}
+
+/* Left: 3D viewport */
+#viewport{flex:1;overflow:hidden;position:relative;background:linear-gradient(135deg,#2a2a2a,#1a1a1a)}
+#viewport canvas{display:block;width:100%;height:100%}
+#drop{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);z-index:2}
+#drop.off{display:none}
+#drop h1{color:var(--acc);font-size:18px;font-weight:600}
+#drop p{color:var(--tx2);margin:4px 0}
+.dbtn{padding:6px 14px;border:1px solid var(--acc);background:transparent;color:var(--acc);border-radius:3px;cursor:pointer;font:inherit;margin:2px;transition:.15s}
+.dbtn:hover,.dbtn.f{background:var(--acc);color:#fff}
+#loading{display:none;margin-top:12px;text-align:center}
+#loading .sp{width:20px;height:20px;border:2px solid var(--brd);border-top-color:var(--acc);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 4px}
+@keyframes spin{to{transform:rotate(360deg)}}
+#stat{position:absolute;bottom:4px;left:4px;background:rgba(26,26,26,.9);padding:2px 8px;border-radius:3px;font-size:10px;color:var(--tx2);z-index:1}
+
+/* Right: Panel (properties/results) */
+#panel{width:320px;display:flex;flex-direction:column;background:var(--bg2);border-left:1px solid var(--brd)}
+#panel-hdr{padding:8px 12px;border-bottom:1px solid var(--brd);background:var(--bg3)}
+#panel-hdr h1{font-size:12px;font-weight:600;color:var(--acc)}
+#pb{flex:1;overflow-y:auto;min-height:0}
+
+/* Panel content styles */
+.sec{border-bottom:1px solid var(--brd)}
+.sh{padding:6px 12px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--tx2);background:var(--bg3)}
+.sb{padding:6px 12px 8px}
+.mg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px;margin-bottom:4px}
+.mi{background:var(--bg);padding:3px 6px;border-radius:2px}.mi .l{font-size:9px;color:var(--tx2)}.mi .v{font-size:12px;font-weight:600;color:#fff}
+.mi.ok .v{color:var(--ok)}.mi.bad .v{color:var(--err)}.mi.ac .v{color:var(--acc)}
+.tg{display:inline-block;padding:1px 5px;border-radius:2px;font-size:9px;color:#fff;margin:1px}
+.fg{padding:5px 7px;margin:2px 0;border-radius:2px;cursor:pointer;border-left:3px solid #555;transition:.1s}
+.fg:hover{background:var(--bg3)}.fg.sel{background:#333;border-left-color:#ff69b4!important}
+.fg .n{font-weight:600;font-size:11px}.fg .d{font-size:10px;color:var(--tx2)}.fg .w{font-size:9px;color:#5dade2;margin-top:1px}
+.rl{font-size:11px;padding:1px 0;display:flex;gap:4px}.rl.pass{color:var(--ok)}.rl.fail{color:var(--err)}.rl.skip{color:#555}
+.pr{padding:4px 6px;margin:2px 0;border-radius:2px;background:var(--bg);font-size:11px}
+input[type=file]{display:none}
+
+/* CSS2D labels for measurements */
+.label-2d{color:#fff;font-size:10px;font-family:'Segoe UI',system-ui,sans-serif;background:rgba(0,0,0,.7);padding:1px 5px;border-radius:2px;pointer-events:none;white-space:nowrap}
+.label-2d.dim{border:1px solid rgba(255,255,255,.3)}
+.label-2d.pair{color:#ffd700;border:1px solid rgba(255,215,0,.4);font-size:11px;font-weight:600}
+
+/* L5 pair items in sidebar */
+.l5-pair{padding:5px 7px;margin:2px 0;border-radius:2px;cursor:pointer;border-left:3px solid #ff69b4;transition:.1s;background:var(--bg)}
+.l5-pair:hover{background:var(--bg3)}
+.l5-pair.sel{background:#332233;border-left-color:#ff69b4}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- TOP: Toolbar bar (like IFC-Editor — full width, not over canvas) -->
+  <div id="toolbar-bar">
+    <div style="font-weight:600;color:var(--acc);font-size:13px;margin-right:8px">IFC Geo Validator</div>
+    <div class="tb-sep"></div>
+    <div class="tg-btns">
+      <button id="btn-open">Open</button>
+    </div>
+    <div class="tb-sep"></div>
+    <span class="tg-label">View</span>
+    <div class="tg-btns">
+      <button id="btn-fit">Fit</button>
+      <button id="btn-edges">Edges</button>
+      <button id="btn-explode">Explode</button>
+    </div>
+    <div class="tb-sep"></div>
+    <div class="tg-btns">
+      <button id="btn-screenshot" title="Screenshot exportieren">&#128247; Screenshot</button>
+    </div>
+    <div class="tb-sep"></div>
+    <div class="tg-btns">
+      <button id="btn-help" title="Hilfe / Info">&#9432; Info</button>
+    </div>
+    <div style="flex:1"></div>
+    <div id="stat" style="font-size:10px;color:var(--tx2)"></div>
+  </div>
+
+  <!-- Help Modal -->
+  <div id="help-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;justify-content:center;align-items:center">
+    <div style="background:var(--bg2);border:1px solid var(--brd);border-radius:8px;max-width:520px;width:90%;max-height:80vh;overflow-y:auto;padding:24px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h2 style="color:var(--acc);font-size:16px;margin:0">IFC Geo Validator</h2>
+        <button id="help-close" style="background:none;border:none;color:var(--tx2);font-size:18px;cursor:pointer">&times;</button>
+      </div>
+      <p style="color:var(--tx);margin-bottom:12px">Geometrische Validierung von IFC-Infrastrukturmodellen gegen konfigurierbare YAML-Regelsets (ASTRA FHB T/G).</p>
+      <h3 style="color:var(--tx);font-size:13px;margin:12px 0 6px">Farblegende</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:2px;background:#2196F3;display:inline-block"></span><span>Krone (Mauerkrone)</span></div>
+        <div style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:2px;background:#795548;display:inline-block"></span><span>Fundament (Sohle)</span></div>
+        <div style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:2px;background:#F44336;display:inline-block"></span><span>Ansichtsfläche (Front)</span></div>
+        <div style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:2px;background:#FF9800;display:inline-block"></span><span>Rückseite (Back)</span></div>
+        <div style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:2px;background:#4CAF50;display:inline-block"></span><span>Stirnfläche links</span></div>
+        <div style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:2px;background:#8BC34A;display:inline-block"></span><span>Stirnfläche rechts</span></div>
+      </div>
+      <h3 style="color:var(--tx);font-size:13px;margin:12px 0 6px">Validierungslevel</h3>
+      <table style="width:100%;font-size:11px;border-collapse:collapse">
+        <tr><td style="padding:2px 6px;color:var(--acc);font-weight:600">L1</td><td style="padding:2px 6px">Geometrische Kennwerte (Volumen, Fläche, BBox)</td></tr>
+        <tr><td style="padding:2px 6px;color:var(--acc);font-weight:600">L2</td><td style="padding:2px 6px">Semantische Flächenklassifikation</td></tr>
+        <tr><td style="padding:2px 6px;color:var(--acc);font-weight:600">L3</td><td style="padding:2px 6px">Flächenspezifische Masse (Kronenbreite, Neigung, Dicke)</td></tr>
+        <tr><td style="padding:2px 6px;color:var(--acc);font-weight:600">L4</td><td style="padding:2px 6px">Regelprüfung gegen YAML-Regelset (PASS/FAIL/SKIP)</td></tr>
+        <tr><td style="padding:2px 6px;color:var(--acc);font-weight:600">L5</td><td style="padding:2px 6px">Inter-Element-Beziehungen (gestapelt, nebeneinander)</td></tr>
+        <tr><td style="padding:2px 6px;color:var(--acc);font-weight:600">L6</td><td style="padding:2px 6px">Terrain-Kontext (Erd-/Luftseite, Freibord, Einbindetiefe)</td></tr>
+      </table>
+      <h3 style="color:var(--tx);font-size:13px;margin:12px 0 6px">Bedienung</h3>
+      <ul style="color:var(--tx2);font-size:11px;padding-left:16px;margin:0">
+        <li>IFC-Datei per Drag & Drop laden</li>
+        <li>Element anklicken für Details und Dimensionslinien</li>
+        <li>L5-Paar anklicken für Hervorhebung beider Elemente</li>
+        <li>Maus: Drehen, Zoom, Verschieben</li>
+      </ul>
+      <p style="color:var(--tx2);font-size:10px;margin-top:16px;border-top:1px solid var(--brd);padding-top:8px">BSc Thesis BFH — Geometrische Validierung von IFC-Infrastrukturmodellen</p>
+    </div>
+  </div>
+
+  <!-- MAIN: Viewer + Panel side by side -->
+  <div id="main">
+    <!-- LEFT: 3D Viewport -->
+    <div id="viewport">
+      <div id="drop">
+        <h1>IFC Geo Validator</h1>
+        <p>IFC-Datei hierher ziehen</p>
+        <div style="margin-top:8px">
+          <input type="file" id="fi" accept=".ifc,.json">
+          <button class="dbtn f" id="btn-open-drop">Datei öffnen</button>
+          <button class="dbtn" id="btn-demo">Demo</button>
+        </div>
+        <div id="loading"><div class="sp"></div><div id="lmsg" style="font-size:10px;color:var(--tx2)"></div></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Properties Panel -->
+    <div id="panel">
+      <div id="panel-hdr"><h1>Validierung</h1></div>
+      <!-- Detail panel: shown when a face group is selected -->
+      <div id="detail" style="display:none;border-bottom:1px solid var(--brd);background:#1e2a35;padding:10px 12px;flex-shrink:0;max-height:40%;overflow-y:auto"></div>
+      <div id="pb">
+        <div class="sec"><div class="sb" style="padding:14px 12px;color:var(--tx2)">IFC-Datei laden.</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+// ═══════════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════════
+const CC = {crown:[33,150,243],foundation:[121,85,72],front:[244,67,54],back:[255,152,0],end_left:[76,175,80],end_right:[139,195,74],unclassified:[158,158,158]};
+const CL = {crown:'Krone',foundation:'Fundament',front:'Ansichtsfläche',back:'Rückseite',end_left:'Stirnfl. L',end_right:'Stirnfl. R',unclassified:'Unklassifiziert'};
+
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+let data = null;
+let selectedMesh = null;
+let edgesVisible = false;
+let exploded = false;
+let needsRender = true;
+const allMeshes = [];      // flat list of THREE.Mesh (for raycasting)
+const elemGroups = [];     // THREE.Group per element (for explode)
+
+// Overlay objects (centerline, measurements, L5 pair)
+let centerlineObj = null;     // THREE.Line for selected element centerline
+let measureObjs = [];         // measurement annotation lines + labels
+let l5PairObjs = [];          // L5 pair highlight objects (lines, labels, mesh refs)
+let l5SelectedPairIdx = -1;   // currently highlighted L5 pair index
+
+// ═══════════════════════════════════════════════════════════════
+// THREE.JS SETUP (exact IFC-Editor settings)
+// ═══════════════════════════════════════════════════════════════
+const container = document.getElementById('viewport');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1a1a);
+
+const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100000);
+// Z-up orientation (IFC convention: Z is vertical/height)
+camera.up.set(0, 0, 1);
+camera.position.set(50, -50, 30);
+
+const renderer = new THREE.WebGLRenderer({
+  antialias: true, alpha: true, stencil: true,
+  powerPreference: 'high-performance',
+  logarithmicDepthBuffer: true,
+  preserveDrawingBuffer: true,  // required for screenshot export
+});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.domElement.style.width = '100%';
+renderer.domElement.style.height = '100%';
+renderer.domElement.style.display = 'block';
+container.appendChild(renderer.domElement);
+
+// CSS2D label renderer (overlays HTML labels on 3D scene)
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(container.clientWidth, container.clientHeight);
+labelRenderer.domElement.style.position = 'absolute';
+labelRenderer.domElement.style.top = '0';
+labelRenderer.domElement.style.left = '0';
+labelRenderer.domElement.style.pointerEvents = 'none';
+container.appendChild(labelRenderer.domElement);
+
+// 4-light setup (exact IFC-Editor)
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+[[50,100,50,0.8],[-50,50,-50,0.4],[0,-100,0,0.3]].forEach(([x,y,z,i]) => {
+  const l = new THREE.DirectionalLight(0xffffff, i);
+  l.position.set(x, y, z);
+  scene.add(l);
+});
+
+// OrbitControls (exact IFC-Editor)
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.15;
+controls.zoomSpeed = 1.5;
+controls.rotateSpeed = 1.0;
+controls.panSpeed = 1.0;
+controls.zoomToCursor = true;
+controls.minDistance = 0.001;
+controls.addEventListener('change', () => { needsRender = true; });
+
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+// ═══════════════════════════════════════════════════════════════
+// RESIZE (ResizeObserver, like IFC-Editor)
+// ═══════════════════════════════════════════════════════════════
+function onResize() {
+  const w = container.clientWidth, h = container.clientHeight;
+  if (w === 0 || h === 0) return;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+  labelRenderer.setSize(w, h);
+  needsRender = true;
+}
+onResize();
+new ResizeObserver(onResize).observe(container);
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER LOOP (demand-based, like IFC-Editor)
+// ═══════════════════════════════════════════════════════════════
+(function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  if (needsRender) {
+    // Dynamic near plane (IFC-Editor technique)
+    const dist = camera.position.distanceTo(controls.target);
+    camera.near = Math.max(0.0001, dist * 0.0005);
+    camera.updateProjectionMatrix();
+    renderer.render(scene, camera);
+    labelRenderer.render(scene, camera);
+    needsRender = false;
+  }
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// CLICK SELECTION (exact IFC-Editor pattern)
+// ═══════════════════════════════════════════════════════════════
+renderer.domElement.addEventListener('click', (event) => {
+  if (!data) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  // Process next frame (IFC-Editor pattern — avoids blocking interaction)
+  requestAnimationFrame(() => {
+    raycaster.setFromCamera(mouse, camera);
+    const hits = raycaster.intersectObjects(allMeshes, false);
+    const hit = hits.find(h => h.object.userData.gi !== undefined);
+    if (hit) selectGroup(hit.object);
+    else deselectAll();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// OVERLAY HELPERS (centerline, measurements, L5 pair)
+// ═══════════════════════════════════════════════════════════════
+function makeLabel(text, cssClass = 'label-2d') {
+  const div = document.createElement('div');
+  div.className = cssClass;
+  div.textContent = text;
+  return new CSS2DObject(div);
+}
+
+function clearCenterline() {
+  if (centerlineObj) { scene.remove(centerlineObj); centerlineObj = null; }
+}
+
+function clearMeasurements() {
+  measureObjs.forEach(o => scene.remove(o));
+  measureObjs = [];
+}
+
+function clearL5Pair() {
+  l5PairObjs.forEach(o => {
+    if (o.userData && o.userData._l5Meshes) {
+      o.userData._l5Meshes.forEach(m => {
+        if (m.userData._cloned) {
+          m.material.emissive.setHex(0x000000);
+          m.material.emissiveIntensity = 0;
+          m.material.needsUpdate = true;
+        }
+      });
+    }
+    scene.remove(o);
+  });
+  l5PairObjs = [];
+  l5SelectedPairIdx = -1;
+  document.querySelectorAll('.l5-pair').forEach(e => e.classList.remove('sel'));
+  needsRender = true;
+}
+
+function showCenterline(ei) {
+  clearCenterline();
+  if (!data) return;
+  const elem = data.elements[ei];
+  if (!elem.centerline || !elem.centerline.points || elem.centerline.points.length < 2) return;
+
+  // Get crown Z height from element bounding box (top)
+  const group = elemGroups[ei];
+  if (!group) return;
+  const box = new THREE.Box3().setFromObject(group);
+  const crownZ = box.max.z + 0.05; // slightly above crown
+
+  const pts = elem.centerline.points.map(p => new THREE.Vector3(p[0], p[1], crownZ));
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  const mat = new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 2 });
+  centerlineObj = new THREE.Line(geo, mat);
+  centerlineObj.userData._overlay = true;
+  scene.add(centerlineObj);
+  needsRender = true;
+}
+
+function showMeasurements(ei) {
+  clearMeasurements();
+  if (!data) return;
+  const elem = data.elements[ei];
+  const m = elem.metrics;
+  if (!m) return;
+
+  const group = elemGroups[ei];
+  if (!group) return;
+  const box = new THREE.Box3().setFromObject(group);
+  const center = new THREE.Vector3();
+  box.getCenter(center);
+
+  const offset = 0.15; // offset from bounding box for annotation lines
+
+  // Crown width: horizontal line across the top
+  if (m.crown_width_mm > 0) {
+    // Horizontal line at crown level, across the shorter horizontal axis
+    const sizeX = box.max.x - box.min.x;
+    const sizeY = box.max.y - box.min.y;
+    const crownZ = box.max.z + offset;
+
+    let p1, p2;
+    if (sizeX < sizeY) {
+      // Wall runs along Y — crown width is along X
+      p1 = new THREE.Vector3(box.min.x, center.y, crownZ);
+      p2 = new THREE.Vector3(box.max.x, center.y, crownZ);
+    } else {
+      // Wall runs along X — crown width is along Y
+      p1 = new THREE.Vector3(center.x, box.min.y, crownZ);
+      p2 = new THREE.Vector3(center.x, box.max.y, crownZ);
+    }
+
+    // End ticks (short vertical lines at each end)
+    const tickLen = (box.max.z - box.min.z) * 0.05;
+    const tick1 = [new THREE.Vector3(p1.x, p1.y, p1.z - tickLen), new THREE.Vector3(p1.x, p1.y, p1.z + tickLen)];
+    const tick2 = [new THREE.Vector3(p2.x, p2.y, p2.z - tickLen), new THREE.Vector3(p2.x, p2.y, p2.z + tickLen)];
+
+    const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+    const lineMat = new THREE.LineBasicMaterial({ color: 0xffcc00 });
+    const line = new THREE.Line(lineGeo, lineMat);
+    line.userData._overlay = true;
+    scene.add(line);
+    measureObjs.push(line);
+
+    for (const tick of [tick1, tick2]) {
+      const tGeo = new THREE.BufferGeometry().setFromPoints(tick);
+      const tLine = new THREE.Line(tGeo, lineMat.clone());
+      tLine.userData._overlay = true;
+      scene.add(tLine);
+      measureObjs.push(tLine);
+    }
+
+    // Label at midpoint
+    const mid = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
+    mid.z += tickLen * 1.5;
+    const lbl = makeLabel(`${m.crown_width_mm} mm`, 'label-2d dim');
+    lbl.position.copy(mid);
+    lbl.userData._overlay = true;
+    scene.add(lbl);
+    measureObjs.push(lbl);
+  }
+
+  // Wall height: vertical line on the side
+  if (m.wall_height_m > 0) {
+    const sizeX = box.max.x - box.min.x;
+    const sizeY = box.max.y - box.min.y;
+
+    let px, py;
+    if (sizeX < sizeY) {
+      px = box.max.x + offset;
+      py = center.y;
+    } else {
+      px = center.x;
+      py = box.min.y - offset;
+    }
+
+    const p1 = new THREE.Vector3(px, py, box.min.z);
+    const p2 = new THREE.Vector3(px, py, box.max.z);
+
+    // Horizontal ticks at top and bottom
+    const tickLen = Math.max(sizeX, sizeY) * 0.03;
+    let tick1, tick2;
+    if (sizeX < sizeY) {
+      tick1 = [new THREE.Vector3(px - tickLen, py, box.min.z), new THREE.Vector3(px + tickLen, py, box.min.z)];
+      tick2 = [new THREE.Vector3(px - tickLen, py, box.max.z), new THREE.Vector3(px + tickLen, py, box.max.z)];
+    } else {
+      tick1 = [new THREE.Vector3(px, py - tickLen, box.min.z), new THREE.Vector3(px, py + tickLen, box.min.z)];
+      tick2 = [new THREE.Vector3(px, py - tickLen, box.max.z), new THREE.Vector3(px, py + tickLen, box.max.z)];
+    }
+
+    const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x00ff88 });
+    const line = new THREE.Line(lineGeo, lineMat);
+    line.userData._overlay = true;
+    scene.add(line);
+    measureObjs.push(line);
+
+    for (const tick of [tick1, tick2]) {
+      const tGeo = new THREE.BufferGeometry().setFromPoints(tick);
+      const tLine = new THREE.Line(tGeo, lineMat.clone());
+      tLine.userData._overlay = true;
+      scene.add(tLine);
+      measureObjs.push(tLine);
+    }
+
+    const mid = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
+    if (sizeX < sizeY) mid.x += tickLen * 2;
+    else mid.y -= tickLen * 2;
+    const lbl = makeLabel(`${m.wall_height_m} m`, 'label-2d dim');
+    lbl.position.copy(mid);
+    lbl.userData._overlay = true;
+    scene.add(lbl);
+    measureObjs.push(lbl);
+  }
+
+  // Foundation width: horizontal line at the bottom
+  if (m.foundation_width_mm && m.foundation_width_mm > 0) {
+    const sizeX = box.max.x - box.min.x;
+    const sizeY = box.max.y - box.min.y;
+    const foundZ = box.min.z - offset;
+
+    let p1, p2;
+    if (sizeX < sizeY) {
+      p1 = new THREE.Vector3(box.min.x, center.y, foundZ);
+      p2 = new THREE.Vector3(box.max.x, center.y, foundZ);
+    } else {
+      p1 = new THREE.Vector3(center.x, box.min.y, foundZ);
+      p2 = new THREE.Vector3(center.x, box.max.y, foundZ);
+    }
+
+    const tickLen = (box.max.z - box.min.z) * 0.05;
+    const tick1 = [new THREE.Vector3(p1.x, p1.y, p1.z - tickLen), new THREE.Vector3(p1.x, p1.y, p1.z + tickLen)];
+    const tick2 = [new THREE.Vector3(p2.x, p2.y, p2.z - tickLen), new THREE.Vector3(p2.x, p2.y, p2.z + tickLen)];
+
+    const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x8b5e3c }); // brown for foundation
+    const line = new THREE.Line(lineGeo, lineMat);
+    line.userData._overlay = true;
+    scene.add(line);
+    measureObjs.push(line);
+
+    for (const tick of [tick1, tick2]) {
+      const tGeo = new THREE.BufferGeometry().setFromPoints(tick);
+      const tLine = new THREE.Line(tGeo, lineMat.clone());
+      tLine.userData._overlay = true;
+      scene.add(tLine);
+      measureObjs.push(tLine);
+    }
+
+    const mid = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
+    mid.z -= tickLen * 1.5;
+    const lbl = makeLabel(`${m.foundation_width_mm} mm`, 'label-2d dim');
+    lbl.position.copy(mid);
+    lbl.userData._overlay = true;
+    scene.add(lbl);
+    measureObjs.push(lbl);
+  }
+
+  needsRender = true;
+}
+
+function showL5Pair(pairIdx) {
+  clearL5Pair();
+  if (!data || !data.l5_pairs || pairIdx < 0 || pairIdx >= data.l5_pairs.length) return;
+  l5SelectedPairIdx = pairIdx;
+
+  const pair = data.l5_pairs[pairIdx];
+  const eidA = pair.element_a_id, eidB = pair.element_b_id;
+
+  // Find element indices
+  const eiA = data.elements.findIndex(e => e.id === eidA);
+  const eiB = data.elements.findIndex(e => e.id === eidB);
+  if (eiA < 0 || eiB < 0) return;
+
+  // Highlight both elements (emissive glow)
+  const pairMeshes = [];
+  allMeshes.forEach(m => {
+    if (m.userData.ei === eiA || m.userData.ei === eiB) {
+      if (!m.userData._cloned) { m.material = m.material.clone(); m.userData._cloned = true; }
+      m.material.emissive.setHex(0xff69b4);
+      m.material.emissiveIntensity = 0.35;
+      m.material.needsUpdate = true;
+      pairMeshes.push(m);
+    }
+  });
+
+  // Compute centroids of both element groups
+  const boxA = new THREE.Box3().setFromObject(elemGroups[eiA]);
+  const boxB = new THREE.Box3().setFromObject(elemGroups[eiB]);
+  const cA = new THREE.Vector3(), cB = new THREE.Vector3();
+  boxA.getCenter(cA);
+  boxB.getCenter(cB);
+
+  // Dashed line between centroids
+  const lineGeo = new THREE.BufferGeometry().setFromPoints([cA, cB]);
+  const lineMat = new THREE.LineDashedMaterial({
+    color: 0xff69b4, dashSize: 0.3, gapSize: 0.15, linewidth: 1
+  });
+  const line = new THREE.Line(lineGeo, lineMat);
+  line.computeLineDistances();
+  line.userData._overlay = true;
+  line.userData._l5Meshes = pairMeshes;
+  scene.add(line);
+  l5PairObjs.push(line);
+
+  // Label at midpoint
+  const mid = new THREE.Vector3().lerpVectors(cA, cB, 0.5);
+  mid.z += 0.2;
+  const typeLabel = pair.pair_type === 'stacked' ? 'gestapelt' : 'nebeneinander';
+  const gapInfo = pair.pair_type === 'stacked'
+    ? `${pair.vertical_gap_mm || 0} mm`
+    : `${pair.horizontal_gap_mm || 0} mm`;
+  const lbl = makeLabel(`${typeLabel} (${gapInfo})`, 'label-2d pair');
+  lbl.position.copy(mid);
+  lbl.userData._overlay = true;
+  scene.add(lbl);
+  l5PairObjs.push(lbl);
+
+  // Highlight sidebar
+  document.querySelectorAll('.l5-pair').forEach((e, i) => {
+    e.classList.toggle('sel', i === pairIdx);
+  });
+
+  needsRender = true;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CLICK SELECTION (with overlay support)
+// ═══════════════════════════════════════════════════════════════
+
+function selectGroup(mesh) {
+  deselectAll();
+  if (!mesh.userData._cloned) { mesh.material = mesh.material.clone(); mesh.userData._cloned = true; }
+  mesh.material.emissive.setHex(0xff69b4);
+  mesh.material.emissiveIntensity = 0.5;
+  mesh.material.needsUpdate = true;
+  selectedMesh = mesh;
+  needsRender = true;
+
+  // Sidebar highlight
+  document.querySelectorAll('.fg').forEach(e => e.classList.remove('sel'));
+  const el = document.getElementById(`fg-${mesh.userData.ei}-${mesh.userData.gi}`);
+  if (el) { el.classList.add('sel'); el.scrollIntoView({behavior:'smooth', block:'nearest'}); }
+
+  // Show centerline and measurements for this element
+  showCenterline(mesh.userData.ei);
+  showMeasurements(mesh.userData.ei);
+
+  // Show detailed explanation
+  showDetail(mesh.userData.ei, mesh.userData.gi);
+}
+
+function deselectAll() {
+  if (selectedMesh) {
+    selectedMesh.material.emissive.setHex(0x000000);
+    selectedMesh.material.emissiveIntensity = 0;
+    selectedMesh.material.needsUpdate = true;
+    needsRender = true;
+  }
+  selectedMesh = null;
+  document.querySelectorAll('.fg').forEach(e => e.classList.remove('sel'));
+  document.getElementById('detail').style.display = 'none';
+
+  // Clear overlays
+  clearCenterline();
+  clearMeasurements();
+  clearL5Pair();
+}
+
+function showDetail(ei, gi) {
+  const elem = data.elements[ei];
+  const grp = elem.groups[gi];
+  const n = grp.normal;
+  const cat = grp.category;
+  const rgb = CC[cat] || [158,158,158];
+  const dotZ = Math.abs(n[2]);
+  const cos45 = Math.SQRT2 / 2; // 0.7071
+
+  let h = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">`;
+  h += `<div style="width:14px;height:14px;border-radius:2px;background:rgb(${rgb});flex-shrink:0"></div>`;
+  h += `<div style="font-weight:700;font-size:13px;color:#fff">${CL[cat] || cat}</div>`;
+  h += `</div>`;
+
+  // Step-by-step classification reasoning
+  h += `<div style="font-size:11px;line-height:1.6;color:#c0d0e0">`;
+
+  // Step 1: Normal vector
+  h += `<div style="margin-bottom:6px"><span style="color:var(--tx2)">Schritt 1 — Normalenvektor:</span><br>`;
+  h += `<code style="color:#7ec8e3">n = (${n[0].toFixed(4)}, ${n[1].toFixed(4)}, ${n[2].toFixed(4)})</code></div>`;
+
+  // Step 2: Vertical component test
+  h += `<div style="margin-bottom:6px"><span style="color:var(--tx2)">Schritt 2 — Vertikaltest:</span><br>`;
+  h += `|n · e<sub>z</sub>| = |${n[2].toFixed(4)}| = <b>${dotZ.toFixed(4)}</b><br>`;
+  h += `cos(45°) = √2/2 = <b>${cos45.toFixed(4)}</b><br>`;
+
+  if (dotZ > cos45) {
+    h += `<span style="color:var(--ok)">→ ${dotZ.toFixed(4)} > ${cos45.toFixed(4)}</span> → Fläche ist <b>horizontal</b> (näher an Z-Achse als an XY-Ebene)`;
+  } else {
+    h += `<span style="color:#f0ad4e">→ ${dotZ.toFixed(4)} ≤ ${cos45.toFixed(4)}</span> → Fläche ist <b>vertikal</b> (näher an XY-Ebene als an Z-Achse)`;
+  }
+  h += `</div>`;
+
+  // Step 3: Category-specific reasoning
+  h += `<div style="margin-bottom:6px"><span style="color:var(--tx2)">Schritt 3 — Kategorie-Zuweisung:</span><br>`;
+
+  if (cat === 'crown') {
+    h += `Normale zeigt nach <b>oben</b> (n<sub>z</sub> = ${n[2].toFixed(3)} > 0)<br>`;
+    h += `<span style="color:var(--ok)">→ <b>Krone</b> (Mauerkrone / oberste horizontale Fläche)</span>`;
+  } else if (cat === 'foundation') {
+    h += `Normale zeigt nach <b>unten</b> (n<sub>z</sub> = ${n[2].toFixed(3)} < 0)<br>`;
+    h += `<span style="color:var(--ok)">→ <b>Fundament</b> (Sohle / unterste horizontale Fläche)</span>`;
+  } else if (cat === 'front' || cat === 'back') {
+    const nHoriz = Math.sqrt(n[0]*n[0] + n[1]*n[1]);
+    h += `Vertikale Fläche → Horizontalkomponente der Normalen prüfen:<br>`;
+    h += `n<sub>horiz</sub> = (${n[0].toFixed(3)}, ${n[1].toFixed(3)}, 0), |n<sub>horiz</sub>| = ${nHoriz.toFixed(4)}<br>`;
+    h += `Winkel zur Wandachse ≥ 45° → Normale steht <b>senkrecht zur Wandrichtung</b><br>`;
+    if (cat === 'front') {
+      h += `Grössere Gesamtfläche dieser Seite<br>`;
+      h += `<span style="color:var(--ok)">→ <b>Ansichtsfläche</b> (Luftseite)</span>`;
+      h += `<div style="margin-top:4px;padding:4px 6px;background:rgba(255,255,255,0.05);border-radius:2px;font-size:10px;color:#888">`;
+      h += `Hinweis: Ohne Terrain-Kontext (L6) wird die Seite mit grösserer Fläche als Ansichtsfläche angenommen. `;
+      h += `Mit Terrain wäre die Zuweisung definitiv.</div>`;
+    } else {
+      h += `Kleinere Gesamtfläche dieser Seite<br>`;
+      h += `<span style="color:var(--ok)">→ <b>Rückseite</b> (Erdseite)</span>`;
+    }
+  } else if (cat === 'end_left' || cat === 'end_right') {
+    h += `Vertikale Fläche → Winkel zur Wandachse < 45°<br>`;
+    h += `Normale steht <b>parallel zur Wandrichtung</b><br>`;
+    h += `Position am <b>Wandende</b> (innerhalb einer Wandbreite der Extremität)<br>`;
+    h += `<span style="color:var(--ok)">→ <b>${CL[cat]}</b></span>`;
+  } else if (cat === 'unclassified') {
+    h += `Normale parallel zur Wandachse, aber <b>nicht</b> am Wandende<br>`;
+    h += `<span style="color:var(--tx2)">→ <b>Interne Fläche</b> (z.B. Strebepfeiler-Seite, T-Sporn)</span>`;
+  }
+  h += `</div>`;
+
+  // Properties table
+  h += `<table style="width:100%;font-size:10px;border-collapse:collapse;margin-top:6px">`;
+  h += `<tr style="border-top:1px solid #334"><td style="padding:2px 4px;color:var(--tx2)">Fläche</td><td style="text-align:right">${grp.area} m²</td></tr>`;
+  h += `<tr style="border-top:1px solid #334"><td style="padding:2px 4px;color:var(--tx2)">Dreiecke</td><td style="text-align:right">${grp.triangles}</td></tr>`;
+  h += `<tr style="border-top:1px solid #334"><td style="padding:2px 4px;color:var(--tx2)">Schwerpunkt</td><td style="text-align:right">(${grp.centroid[0].toFixed(2)}, ${grp.centroid[1].toFixed(2)}, ${grp.centroid[2].toFixed(2)})</td></tr>`;
+  h += `<tr style="border-top:1px solid #334"><td style="padding:2px 4px;color:var(--tx2)">Normale</td><td style="text-align:right">(${n[0].toFixed(4)}, ${n[1].toFixed(4)}, ${n[2].toFixed(4)})</td></tr>`;
+  h += `<tr style="border-top:1px solid #334"><td style="padding:2px 4px;color:var(--tx2)">|n·Z|</td><td style="text-align:right">${dotZ.toFixed(4)}</td></tr>`;
+  h += `<tr style="border-top:1px solid #334"><td style="padding:2px 4px;color:var(--tx2)">Schwellwert</td><td style="text-align:right">cos(π/4) = ${cos45.toFixed(4)}</td></tr>`;
+  h += `</table>`;
+
+  h += `</div>`;
+
+  const detailEl = document.getElementById('detail');
+  detailEl.innerHTML = h;
+  detailEl.style.display = 'block';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LOAD MODEL
+// ═══════════════════════════════════════════════════════════════
+function loadModel(d) {
+  data = d;
+  document.getElementById('drop').classList.add('off');
+
+  // Clear previous
+  allMeshes.length = 0;
+  elemGroups.forEach(g => scene.remove(g));
+  elemGroups.length = 0;
+  scene.children.filter(c => c.userData._t || c.userData._overlay).forEach(c => scene.remove(c));
+  clearCenterline();
+  clearMeasurements();
+  clearL5Pair();
+  selectedMesh = null;
+
+  const worldBox = new THREE.Box3();
+
+  d.elements.forEach((elem, ei) => {
+    const verts = Array.isArray(elem.vertices[0])
+      ? new Float32Array(elem.vertices.flat())
+      : new Float32Array(elem.vertices);
+    const group = new THREE.Group();
+    group.userData = { ei };
+
+    elem.groups.forEach((grp, gi) => {
+      if (!grp.face_indices || !grp.face_indices.length) return;
+
+      // Build sub-geometry (one mesh per face group)
+      const vmap = new Map();
+      const pos = [];
+      const idx = [];
+
+      for (const fi of grp.face_indices) {
+        const tri = elem.faces[fi];
+        if (!tri || tri.length < 3) continue;
+        for (const vi of tri) {
+          if (!vmap.has(vi)) {
+            vmap.set(vi, pos.length / 3);
+            pos.push(verts[vi * 3], verts[vi * 3 + 1], verts[vi * 3 + 2]);
+          }
+          idx.push(vmap.get(vi));
+        }
+      }
+
+      if (idx.length === 0) return;
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setIndex(new THREE.BufferAttribute(new Uint32Array(idx), 1));
+      geo.computeVertexNormals();
+
+      const rgb = CC[grp.category] || [158, 158, 158];
+      const mat = new THREE.MeshLambertMaterial({
+        color: new THREE.Color(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255),
+        emissive: new THREE.Color(0x000000),
+        side: THREE.DoubleSide,
+      });
+
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.userData = { ei, gi, cat: grp.category };
+
+      // Edges
+      const edgeGeo = new THREE.EdgesGeometry(geo, 20);
+      const edgeMat = new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.1 });
+      const edges = new THREE.LineSegments(edgeGeo, edgeMat);
+      mesh.add(edges);
+
+      group.add(mesh);
+      allMeshes.push(mesh);
+    });
+
+    scene.add(group);
+    elemGroups.push(group);
+    worldBox.expandByObject(group);
+  });
+
+  // Terrain
+  if (d.terrain && d.terrain.vertices && d.terrain.faces) {
+    const tv = Array.isArray(d.terrain.vertices[0])
+      ? new Float32Array(d.terrain.vertices.flat())
+      : new Float32Array(d.terrain.vertices);
+    const ti = new Uint32Array(
+      Array.isArray(d.terrain.faces[0]) ? d.terrain.faces.flat() : d.terrain.faces
+    );
+    const tg = new THREE.BufferGeometry();
+    tg.setAttribute('position', new THREE.Float32BufferAttribute(tv, 3));
+    tg.setIndex(new THREE.BufferAttribute(ti, 1));
+    tg.computeVertexNormals();
+    const tmesh = new THREE.Mesh(tg, new THREE.MeshLambertMaterial({
+      color: 0x5a8a5a, side: THREE.DoubleSide, transparent: true, opacity: 0.3
+    }));
+    tmesh.userData._t = true;
+    scene.add(tmesh);
+    worldBox.expandByObject(tmesh);
+  }
+
+  // Grid on XY plane (Z-up: grid is the "floor")
+  const center = new THREE.Vector3(), size = new THREE.Vector3();
+  worldBox.getCenter(center); worldBox.getSize(size);
+  const maxDim = Math.max(size.x, size.y, size.z, 1);
+  const gs = Math.max(maxDim * 2.5, 50);
+  const grid = new THREE.GridHelper(gs, Math.round(gs), 0x444444, 0x333333);
+  grid.rotation.x = Math.PI / 2; // Rotate from XZ to XY plane (Z-up)
+  grid.position.z = worldBox.min.z - 0.01;
+  grid.userData._t = true;
+  scene.add(grid);
+
+  // Fit camera (Z-up: look from front-above)
+  camera.position.set(
+    center.x + maxDim * 0.8,
+    center.y - maxDim * 1.0,
+    center.z + maxDim * 0.6
+  );
+  controls.target.copy(center);
+  needsRender = true;
+
+  buildPanel(d);
+  document.getElementById('stat').textContent =
+    `${d.source} · ${d.elements.length} Element(e)` + (d.terrain ? ' · Terrain' : '');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PANEL
+// ═══════════════════════════════════════════════════════════════
+function buildPanel(d) {
+  let h = '';
+
+  d.elements.forEach((el, ei) => {
+    const m = el.metrics;
+    h += `<div class="sec"><div class="sh">${el.name}</div><div class="sb">`;
+    h += `<div class="mg">`;
+    h += mi('Vol', m.volume_m3 + 'm³');
+    h += mi('Krone', m.crown_width_mm + 'mm', m.crown_width_mm >= 300 ? 'ok' : 'bad');
+    h += mi('Dicke', m.wall_thickness_mm + 'mm', m.wall_thickness_mm >= 300 ? 'ok' : 'bad');
+    h += mi('Höhe', m.wall_height_m + 'm');
+    h += mi('Neig.', m.crown_slope_pct + '%');
+    h += mi('Anzug', m.inclination || 'vert.');
+    h += `</div>`;
+    // Second row: foundation + profile metrics
+    const hasFoundation = m.foundation_width_mm && m.foundation_width_mm > 0;
+    const hasCv = m.crown_width_cv != null && m.crown_width_cv > 0;
+    if (hasFoundation || hasCv) {
+      h += `<div class="mg" style="margin-top:2px">`;
+      if (hasFoundation) h += mi('Fundament', m.foundation_width_mm + 'mm', m.foundation_width_mm >= 600 ? 'ok' : 'bad');
+      if (hasCv) h += mi('Profil-CV', m.crown_width_cv.toFixed(4), m.crown_width_cv <= 0.1 ? 'ok' : 'bad');
+      h += `</div>`;
+    }
+    if (m.is_curved) h += `<span class="tg" style="background:var(--acc)">Gekrümmt</span> `;
+    h += `<span class="tg" style="background:${m.watertight ? 'var(--ok)' : 'var(--err)'}">${m.watertight ? 'Watertight' : 'Mesh offen'}</span>`;
+
+    // Model assessment summary — distinguish ERROR (mandatory) vs WARNING/INFO (recommendations)
+    if (el.rules && el.rules.length) {
+      const errors = el.rules.filter(r => r.status === 'FAIL' && r.severity === 'ERROR');
+      const warnings = el.rules.filter(r => r.status === 'FAIL' && r.severity === 'WARNING');
+      const infos = el.rules.filter(r => r.status === 'FAIL' && r.severity === 'INFO');
+      const passed = el.rules.filter(r => r.status === 'PASS').length;
+      const skipped = el.rules.filter(r => r.status === 'SKIP').length;
+      const total = el.rules.length;
+      const hasErrors = errors.length > 0;
+
+      // Main verdict
+      h += `<div style="margin:6px 0;padding:6px 8px;border-radius:3px;border-left:3px solid ${hasErrors ? 'var(--err)' : errors.length === 0 && warnings.length === 0 ? 'var(--ok)' : '#f0ad4e'};background:${hasErrors ? 'rgba(241,76,76,0.08)' : 'rgba(78,201,176,0.06)'}">`;
+      if (hasErrors) {
+        h += `<div style="font-size:12px;font-weight:700;color:var(--err)">✗ Normverstoss — ${errors.length} Pflichtprüfung${errors.length > 1 ? 'en' : ''} fehlgeschlagen</div>`;
+      } else if (warnings.length > 0 || infos.length > 0) {
+        h += `<div style="font-size:12px;font-weight:700;color:#f0ad4e">⚠ Pflichtprüfungen bestanden — ${warnings.length + infos.length} Empfehlung${warnings.length + infos.length > 1 ? 'en' : ''} nicht erfüllt</div>`;
+      } else {
+        h += `<div style="font-size:12px;font-weight:700;color:var(--ok)">✓ Alle Prüfungen bestanden</div>`;
+      }
+      h += `<div style="font-size:10px;color:var(--tx2);margin-top:2px">${passed} bestanden · ${skipped} übersprungen (${total} total)</div>`;
+
+      // List failed mandatory rules (ERROR)
+      if (errors.length > 0) {
+        h += `<div style="margin-top:4px;font-size:10px">`;
+        errors.forEach(r => h += `<div style="color:var(--err)">✗ <b>Pflicht:</b> ${r.name}</div>`);
+        h += `</div>`;
+      }
+      // List failed recommendations (WARNING/INFO) — styled differently
+      if (warnings.length > 0 || infos.length > 0) {
+        h += `<div style="margin-top:3px;font-size:10px">`;
+        warnings.forEach(r => h += `<div style="color:#f0ad4e">⚠ <b>Empfehlung:</b> ${r.name}</div>`);
+        infos.forEach(r => h += `<div style="color:#888">ℹ <b>Hinweis:</b> ${r.name}</div>`);
+        h += `</div>`;
+      }
+      h += `</div>`;
+    }
+
+    el.groups.forEach((g, gi) => {
+      const rgb = CC[g.category] || [158, 158, 158];
+      const dz = Math.abs(g.normal[2]).toFixed(3);
+      let why;
+      if (g.category === 'crown' || g.category === 'foundation') why = `|n·Z|=${dz} > 0.707 → ${CL[g.category]}`;
+      else if (g.category === 'front' || g.category === 'back') why = `|n·Z|=${dz} < 0.707 → ${CL[g.category]}`;
+      else if (g.category.startsWith('end_')) why = `∥ Achse, am Ende → ${CL[g.category]}`;
+      else why = 'intern';
+
+      h += `<div class="fg" id="fg-${ei}-${gi}" style="border-left-color:rgb(${rgb})" data-ei="${ei}" data-gi="${gi}">`;
+      h += `<div class="n">${CL[g.category] || g.category}</div>`;
+      h += `<div class="d">${g.area}m² · ${g.triangles}△</div>`;
+      h += `<div class="w">${why}</div></div>`;
+    });
+
+    if (el.rules && el.rules.length) {
+      h += `<div style="margin-top:6px;font-size:10px;font-weight:600;color:var(--tx2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Regelprüfung</div>`;
+      el.rules.forEach((r, ri) => {
+        const ic = r.status === 'PASS' ? '✓' : r.status === 'FAIL' ? '✗' : '–';
+        // Color by severity, not just status
+        const sevLabel = r.severity === 'ERROR' ? 'Pflicht' : r.severity === 'WARNING' ? 'Empfehlung' : 'Hinweis';
+        const sevIcon = r.severity === 'ERROR' ? '●' : r.severity === 'WARNING' ? '◐' : '○';
+        let borderColor, statusStyle;
+        if (r.status === 'PASS') {
+          borderColor = 'var(--ok)'; statusStyle = 'color:var(--ok)';
+        } else if (r.status === 'FAIL' && r.severity === 'ERROR') {
+          borderColor = 'var(--err)'; statusStyle = 'color:var(--err)';
+        } else if (r.status === 'FAIL') {
+          borderColor = '#f0ad4e'; statusStyle = 'color:#f0ad4e';  // warning/info fail = orange
+        } else {
+          borderColor = '#555'; statusStyle = 'color:#555';
+        }
+        h += `<div class="rl-item" data-ei="${ei}" data-ri="${ri}" style="padding:4px 6px;margin:2px 0;border-radius:2px;cursor:pointer;transition:.1s;border-left:3px solid ${borderColor}">`;
+        h += `<div style="display:flex;align-items:center;gap:4px"><span style="font-size:12px;${statusStyle}">${ic}</span><span style="font-weight:600;font-size:11px">${r.name}</span>`;
+        h += `<span style="font-size:9px;color:#666;margin-left:auto">${sevLabel}</span></div>`;
+        h += `<div style="font-size:10px;color:var(--tx2);margin-top:1px">${r.id}</div>`;
+        h += `</div>`;
+      });
+    }
+    h += `</div></div>`;
+  });
+
+  if (d.l5_pairs && d.l5_pairs.length) {
+    h += `<div class="sec"><div class="sh">Inter-Element (L5)</div><div class="sb">`;
+    d.l5_pairs.forEach((p, pi) => {
+      const typeLabel = p.pair_type === 'stacked' ? 'gestapelt' : 'nebeneinander';
+      const gapInfo = p.pair_type === 'stacked' ? `${p.vertical_gap_mm || 0} mm Abstand` : `${p.horizontal_gap_mm || 0} mm Abstand`;
+      h += `<div class="l5-pair" data-pi="${pi}">`;
+      h += `<div style="font-weight:600;font-size:11px"><b>${p.element_a_name || '#' + p.element_a_id}</b> ↔ <b>${p.element_b_name || '#' + p.element_b_id}</b></div>`;
+      h += `<div style="font-size:10px;color:var(--tx2)">${typeLabel} · ${gapInfo}</div>`;
+      h += `</div>`;
+    });
+    h += `</div></div>`;
+  }
+
+  document.getElementById('pb').innerHTML = h;
+
+  // Sidebar click → 3D selection
+  document.querySelectorAll('.fg').forEach(el => {
+    el.addEventListener('click', () => {
+      const ei = +el.dataset.ei, gi = +el.dataset.gi;
+      const mesh = allMeshes.find(m => m.userData.ei === ei && m.userData.gi === gi);
+      if (mesh) selectGroup(mesh);
+    });
+    el.addEventListener('mouseenter', () => {
+      const ei = +el.dataset.ei, gi = +el.dataset.gi;
+      if (selectedMesh && selectedMesh.userData.ei === ei && selectedMesh.userData.gi === gi) return;
+      const mesh = allMeshes.find(m => m.userData.ei === ei && m.userData.gi === gi);
+      if (mesh) {
+        if (!mesh.userData._cloned) { mesh.material = mesh.material.clone(); mesh.userData._cloned = true; }
+        mesh.material.emissive.setHex(0x446688);
+        mesh.material.emissiveIntensity = 0.3;
+        mesh.material.needsUpdate = true;
+        needsRender = true;
+      }
+    });
+    el.addEventListener('mouseleave', () => {
+      const ei = +el.dataset.ei, gi = +el.dataset.gi;
+      if (selectedMesh && selectedMesh.userData.ei === ei && selectedMesh.userData.gi === gi) return;
+      const mesh = allMeshes.find(m => m.userData.ei === ei && m.userData.gi === gi);
+      if (mesh && mesh.userData._cloned) {
+        mesh.material.emissive.setHex(0x000000);
+        mesh.material.emissiveIntensity = 0;
+        mesh.material.needsUpdate = true;
+        needsRender = true;
+      }
+    });
+  });
+
+  // Rule click → show detail with slider
+  document.querySelectorAll('.rl-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const ei = +el.dataset.ei, ri = +el.dataset.ri;
+      showRuleDetail(ei, ri);
+    });
+    el.style.cursor = 'pointer';
+    el.addEventListener('mouseenter', () => { el.style.background = 'var(--bg3)'; });
+    el.addEventListener('mouseleave', () => { el.style.background = ''; });
+  });
+
+  // L5 pair click → highlight pair in 3D
+  document.querySelectorAll('.l5-pair').forEach(el => {
+    el.addEventListener('click', () => {
+      const pi = +el.dataset.pi;
+      if (l5SelectedPairIdx === pi) {
+        clearL5Pair();  // toggle off
+      } else {
+        deselectAll();  // clear element selection first
+        showL5Pair(pi);
+      }
+    });
+  });
+}
+
+function mi(l, v, c = '') { return `<div class="mi ${c}"><div class="l">${l}</div><div class="v">${v}</div></div>`; }
+
+// ═══════════════════════════════════════════════════════════════
+// RULE DETAIL with interactive threshold slider
+// ═══════════════════════════════════════════════════════════════
+function showRuleDetail(ei, ri) {
+  const elem = data.elements[ei];
+  const rule = elem.rules[ri];
+  const m = elem.metrics;
+
+  const match = rule.check ? rule.check.match(/(\w+)\s*(>=|<=|>|<|==)\s*([\d.]+)/) : null;
+
+  // Human-readable descriptions for each rule variable
+  const varDesc = {
+    crown_width_mm: {name: 'Kronenbreite', unit: 'mm', what: 'Breite der obersten horizontalen Fläche (Mauerkrone)', norm: 'ASTRA FHB T/G 24 001-15101, Kap. 3: "Die Mauerkrone ist mindestens 300 mm breit auszubilden."'},
+    crown_slope_percent: {name: 'Kronenneigung', unit: '%', what: 'Querneigung der Kronenoberfläche für Wasserableitung', norm: 'ASTRA FHB T/G 24 001-15101, Kap. 3: "Die Mauerkrone ist 3%, in der Regel gegen den Hang, geneigt."'},
+    min_wall_thickness_mm: {name: 'Mindestbauteilstärke', unit: 'mm', what: 'Minimale Wanddicke (Abstand Ansichtsfläche ↔ Rückseite)', norm: 'ASTRA FHB T/G 24 001-15101, Kap. 3: "Eine konstruktive Mindestbauteilstärke von 300 mm ist stets einzuhalten."'},
+    front_inclination_ratio: {name: 'Neigung (Anzug)', unit: ':1', what: 'Neigungsverhältnis der Ansichtsfläche (horizontal:vertikal)', norm: 'ASTRA FHB T/G 24 001-15101, Kap. 3: "Eine Neigung der Stützmauer von 10:1 wird empfohlen."'},
+    volume: {name: 'Volumen', unit: 'm³', what: 'Gesamtvolumen des Bauteils (Divergenzsatz)', norm: 'Plausibilitätsprüfung'},
+    mesh_is_watertight: {name: 'Mesh geschlossen', unit: '', what: 'Jede Kante wird von genau 2 Dreiecken geteilt', norm: 'Voraussetzung für korrekte Volumenberechnung'},
+    wall_height_m: {name: 'Wandhöhe', unit: 'm', what: 'Vertikale Ausdehnung der Ansichts-/Rückseite', norm: ''},
+  };
+
+  let h = '';
+
+  // Header: Element + Rule status
+  h += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">`;
+  const statusColor = rule.status === 'PASS' ? 'var(--ok)' : rule.status === 'FAIL' ? 'var(--err)' : 'var(--tx2)';
+  const statusIcon = rule.status === 'PASS' ? '✓' : rule.status === 'FAIL' ? '✗' : '–';
+  const statusText = rule.status === 'PASS' ? 'BESTANDEN' : rule.status === 'FAIL' ? 'FEHLGESCHLAGEN' : 'ÜBERSPRUNGEN';
+  h += `<div style="font-size:20px;color:${statusColor}">${statusIcon}</div>`;
+  h += `<div style="flex:1"><div style="font-weight:700;font-size:13px;color:#fff">${rule.name}</div>`;
+  h += `<div style="font-size:10px;color:var(--tx2)">${rule.id} · ${rule.severity} · <span style="color:${statusColor}">${statusText}</span></div></div>`;
+  h += `</div>`;
+
+  // Element context
+  h += `<div style="font-size:10px;color:var(--tx2);padding:3px 6px;background:rgba(255,255,255,0.03);border-radius:2px;margin-bottom:6px">`;
+  h += `Element: <b style="color:var(--tx)">${elem.name}</b> (#${elem.id})`;
+  h += ` · V=${m.volume_m3}m³ · Krone=${m.crown_width_mm}mm · Dicke=${m.wall_thickness_mm}mm`;
+  h += `</div>`;
+
+  h += `<div style="font-size:11px;line-height:1.6;color:#c0d0e0">`;
+
+  if (rule.message) {
+    h += `<div style="margin-bottom:6px;padding:4px 6px;background:rgba(255,255,255,0.04);border-radius:2px">${rule.message}</div>`;
+  }
+
+  if (match) {
+    const varName = match[1];
+    const op = match[2];
+    const threshold = parseFloat(match[3]);
+
+    // Get actual value from metrics
+    const varMap = {
+      crown_width_mm: m.crown_width_mm,
+      crown_slope_percent: m.crown_slope_pct,
+      min_wall_thickness_mm: m.wall_thickness_mm,
+      front_inclination_ratio: null, // string in metrics
+      volume: m.volume_m3,
+      wall_height_m: m.wall_height_m,
+      mesh_is_watertight: m.watertight,
+    };
+    const actualVal = varMap[varName];
+
+    const vd = varDesc[varName] || {name: varName, unit: '', what: '', norm: ''};
+
+    // What is being checked?
+    h += `<div style="margin-bottom:6px"><span style="color:var(--tx2)">Was wird geprüft:</span><br>`;
+    h += `<b>${vd.name}</b>`;
+    if (vd.what) h += ` — ${vd.what}`;
+    h += `</div>`;
+
+    // Norm reference
+    if (vd.norm) {
+      h += `<div style="margin-bottom:6px;padding:4px 6px;background:rgba(0,152,255,0.06);border-left:2px solid var(--acc);border-radius:0 2px 2px 0;font-size:10px">`;
+      h += `<span style="color:var(--acc)">Normvorgabe:</span> ${vd.norm}</div>`;
+    }
+
+    h += `<div style="margin-bottom:6px"><span style="color:var(--tx2)">Prüfausdruck:</span><br>`;
+    h += `<code style="color:#7ec8e3">${rule.check || '—'}</code></div>`;
+
+    if (actualVal !== undefined && actualVal !== null) {
+      h += `<div style="margin-bottom:6px"><span style="color:var(--tx2)">Ist-Wert:</span> <b>${actualVal}${vd.unit ? ' ' + vd.unit : ''}</b><br>`;
+      h += `<span style="color:var(--tx2)">Schwellwert:</span> <b>${threshold}${vd.unit ? ' ' + vd.unit : ''}</b><br>`;
+
+      const passed = op === '>=' ? actualVal >= threshold :
+                     op === '<=' ? actualVal <= threshold :
+                     op === '>'  ? actualVal > threshold :
+                     op === '<'  ? actualVal < threshold :
+                     op === '==' ? actualVal == threshold : false;
+
+      h += `<span style="color:var(--tx2)">Ergebnis:</span> ${actualVal} ${op} ${threshold} → `;
+      h += passed ? `<span style="color:var(--ok)"><b>BESTANDEN</b></span>` : `<span style="color:var(--err)"><b>FEHLGESCHLAGEN</b></span>`;
+
+      // Margin / distance to threshold
+      const diff = actualVal - threshold;
+      const absDiff = Math.abs(diff);
+      h += `<br><span style="color:var(--tx2)">Abstand zum Grenzwert:</span> `;
+      if (op === '>=' || op === '>') {
+        h += diff >= 0 ? `<span style="color:var(--ok)">+${absDiff.toFixed(1)} (Reserve)</span>` : `<span style="color:var(--err)">-${absDiff.toFixed(1)} (Unterschreitung)</span>`;
+      } else {
+        h += diff <= 0 ? `<span style="color:var(--ok)">${absDiff.toFixed(1)} unter Grenzwert</span>` : `<span style="color:var(--err)">${absDiff.toFixed(1)} über Grenzwert</span>`;
+      }
+      h += `</div>`;
+
+      // Interactive slider to explore threshold
+      const sliderMin = Math.max(0, Math.min(actualVal, threshold) * 0.5);
+      const sliderMax = Math.max(actualVal, threshold) * 1.5;
+      h += `<div style="margin-top:8px;padding:6px;background:rgba(255,255,255,0.04);border-radius:3px">`;
+      h += `<div style="font-size:10px;color:var(--tx2);margin-bottom:4px">Schwellwert anpassen (Was-wäre-wenn):</div>`;
+      h += `<div style="display:flex;align-items:center;gap:8px">`;
+      h += `<input type="range" id="rule-slider" min="${sliderMin.toFixed(0)}" max="${sliderMax.toFixed(0)}" value="${threshold}" step="1" style="flex:1;accent-color:var(--acc)">`;
+      h += `<span id="slider-val" style="font-weight:700;min-width:50px;text-align:right">${threshold}</span>`;
+      h += `</div>`;
+      h += `<div id="slider-result" style="margin-top:4px;font-size:11px"></div>`;
+      h += `</div>`;
+
+      // Store info for slider callback
+      window._sliderInfo = { actualVal, op, varName, unit: vd.unit };
+
+      // Failure explanation
+      if (!passed) {
+        h += `<div style="margin-top:8px;padding:6px;background:rgba(241,76,76,0.08);border-left:2px solid var(--err);border-radius:0 2px 2px 0">`;
+        h += `<div style="font-size:11px;font-weight:600;color:var(--err);margin-bottom:3px">Warum fehlgeschlagen?</div>`;
+        h += `<div style="font-size:11px;color:#d0a0a0">`;
+        if (varName === 'crown_width_mm') {
+          h += `Die Kronenbreite des Elements <b>${elem.name}</b> beträgt ${actualVal} mm. `;
+          h += `Die ASTRA-Norm verlangt mindestens ${threshold} mm. `;
+          h += `Das Bauteil ist ${absDiff.toFixed(0)} mm zu schmal. `;
+          h += `Mögliche Ursache: Zu dünne Modellierung der Mauerkrone oder falsches Querschnittsprofil.`;
+        } else if (varName === 'crown_slope_percent') {
+          if (actualVal < threshold) {
+            h += `Die Kronenneigung beträgt ${actualVal}%. `;
+            h += `Für die Wasserableitung sind ${threshold}% erforderlich. `;
+            h += `Mögliche Ursache: Krone wurde horizontal modelliert (keine Neigung im Modell).`;
+          } else {
+            h += `Die Kronenneigung beträgt ${actualVal}% und liegt ausserhalb des Toleranzbereichs.`;
+          }
+        } else if (varName === 'min_wall_thickness_mm') {
+          h += `Die Wandstärke des Elements <b>${elem.name}</b> beträgt ${actualVal} mm. `;
+          h += `Minimum gemäss ASTRA: ${threshold} mm. `;
+          h += `Unterschreitung: ${absDiff.toFixed(0)} mm.`;
+        } else if (varName === 'front_inclination_ratio') {
+          h += `Die Wandneigung entspricht nicht der empfohlenen 10:1 Neigung. `;
+          h += `Mögliche Ursache: Vertikale Ansichtsfläche (kein Anzug modelliert).`;
+        } else if (varName === 'volume') {
+          h += `Volumen = ${actualVal} m³ ist zu klein. Möglicherweise fehlt Geometrie oder das Mesh ist defekt.`;
+        } else {
+          h += `Der Ist-Wert ${actualVal} erfüllt die Bedingung ${rule.check} nicht.`;
+        }
+        h += `</div></div>`;
+      }
+    }
+  } else if (rule.check) {
+    h += `<div><span style="color:var(--tx2)">Prüfausdruck:</span><br>`;
+    h += `<code style="color:#7ec8e3">${rule.check}</code></div>`;
+  }
+
+  if (rule.status === 'SKIP') {
+    h += `<div style="margin-top:6px;padding:4px 6px;background:rgba(255,255,255,0.04);border-radius:2px;color:#888">`;
+    h += `Übersprungen: Benötigte Kontextdaten nicht verfügbar (z.B. kein Terrain für L6, oder Single-Element für L5).`;
+    h += `</div>`;
+  }
+
+  h += `</div>`;
+
+  const detailEl = document.getElementById('detail');
+  detailEl.innerHTML = h;
+  detailEl.style.display = 'block';
+
+  // Slider interactivity
+  const slider = document.getElementById('rule-slider');
+  if (slider) {
+    slider.addEventListener('input', () => {
+      const newThreshold = parseFloat(slider.value);
+      document.getElementById('slider-val').textContent = newThreshold;
+      const info = window._sliderInfo;
+      if (!info) return;
+      const wouldPass = info.op === '>=' ? info.actualVal >= newThreshold :
+                        info.op === '<=' ? info.actualVal <= newThreshold :
+                        info.op === '>'  ? info.actualVal > newThreshold :
+                        info.op === '<'  ? info.actualVal < newThreshold : false;
+      const diff = Math.abs(info.actualVal - newThreshold);
+      document.getElementById('slider-result').innerHTML =
+        `${info.actualVal} ${info.op} ${newThreshold} → ` +
+        (wouldPass
+          ? `<span style="color:var(--ok)"><b>BESTANDEN</b></span> (Reserve: ${diff.toFixed(1)})`
+          : `<span style="color:var(--err)"><b>FEHLGESCHLAGEN</b></span> (Abweichung: ${diff.toFixed(1)})`);
+    });
+    // Trigger initial display
+    slider.dispatchEvent(new Event('input'));
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TOOLBAR (all inside panel — no canvas interference)
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('btn-edges').addEventListener('click', () => {
+  edgesVisible = !edgesVisible;
+  document.getElementById('btn-edges').classList.toggle('on', edgesVisible);
+  allMeshes.forEach(m => m.children.forEach(c => { if (c.isLineSegments) c.visible = edgesVisible; }));
+  needsRender = true;
+});
+
+document.getElementById('btn-explode').addEventListener('click', () => {
+  exploded = !exploded;
+  document.getElementById('btn-explode').classList.toggle('on', exploded);
+  if (elemGroups.length <= 1) return;
+  const ctr = new THREE.Vector3();
+  elemGroups.forEach(g => ctr.add(new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3())));
+  ctr.divideScalar(elemGroups.length);
+  elemGroups.forEach(g => {
+    if (exploded) {
+      const c = new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3());
+      g.position.add(c.sub(ctr).normalize().multiplyScalar(2));
+    } else {
+      g.position.set(0, 0, 0);
+    }
+  });
+  needsRender = true;
+});
+
+document.getElementById('btn-fit').addEventListener('click', () => {
+  if (!data) return;
+  const box = new THREE.Box3();
+  elemGroups.forEach(g => box.expandByObject(g));
+  const c = new THREE.Vector3(), s = new THREE.Vector3();
+  box.getCenter(c); box.getSize(s);
+  const md = Math.max(s.x, s.y, s.z, 1);
+  camera.position.set(c.x + md * 1.2, c.y + md * 0.6, c.z + md * 1.2);
+  controls.target.copy(c);
+  needsRender = true;
+});
+
+// Screenshot export
+document.getElementById('btn-screenshot').addEventListener('click', () => {
+  // Force a render so the canvas is up to date
+  renderer.render(scene, camera);
+  renderer.domElement.toBlob(blob => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const modelName = (data && data.source) ? data.source.replace(/\.[^.]+$/, '') : 'viewer';
+    a.download = `${modelName}_screenshot.png`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, 'image/png');
+});
+
+// Help modal
+const helpModal = document.getElementById('help-modal');
+document.getElementById('btn-help').addEventListener('click', () => {
+  helpModal.style.display = helpModal.style.display === 'flex' ? 'none' : 'flex';
+});
+document.getElementById('help-close').addEventListener('click', () => {
+  helpModal.style.display = 'none';
+});
+helpModal.addEventListener('click', (e) => {
+  if (e.target === helpModal) helpModal.style.display = 'none';
+});
+
+document.getElementById('btn-open').addEventListener('click', () => document.getElementById('fi').click());
+document.getElementById('btn-open-drop').addEventListener('click', () => document.getElementById('fi').click());
+document.getElementById('btn-demo').addEventListener('click', () => {
+  fetch('model_data.json').then(r => r.json()).then(loadModel)
+    .catch(() => alert('Kein Modell vorhanden.\nExportiere: python viewer/export_for_viewer.py tests/test_models/T8_curved_wall.ifc'));
+});
+
+// ═══════════════════════════════════════════════════════════════
+// FILE HANDLING
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('fi').addEventListener('change', e => {
+  if (e.target.files[0]) handleFile(e.target.files[0]);
+});
+
+// Drag & drop on drop zone
+const dropEl = document.getElementById('drop');
+dropEl.addEventListener('dragover', e => e.preventDefault());
+dropEl.addEventListener('drop', e => { e.preventDefault(); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+
+// Drag & drop on canvas (when drop zone is hidden)
+renderer.domElement.addEventListener('dragover', e => e.preventDefault());
+renderer.domElement.addEventListener('drop', e => { e.preventDefault(); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+
+function handleFile(f) {
+  if (f.name.endsWith('.json')) {
+    const r = new FileReader();
+    r.onload = ev => loadModel(JSON.parse(ev.target.result));
+    r.readAsText(f);
+  } else if (f.name.endsWith('.ifc')) {
+    uploadIFC(f);
+  }
+}
+
+async function uploadIFC(f) {
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('lmsg').textContent = `${f.name} (${(f.size / 1024).toFixed(0)} KB)`;
+  try {
+    const resp = await fetch('/validate', { method: 'POST', body: await f.arrayBuffer() });
+    if (!resp.ok) throw new Error((await resp.json()).error || 'Server error');
+    const d = await resp.json();
+    document.getElementById('loading').style.display = 'none';
+    if (d.error) { alert(d.error); return; }
+    loadModel(d);
+  } catch (e) {
+    document.getElementById('loading').style.display = 'none';
+    alert(e.message.includes('fetch')
+      ? 'Server nicht erreichbar.\n\nStarte: python view.py'
+      : e.message);
+  }
+}
+
+// Auto-load default model
+fetch('model_data.json').then(r => r.json()).then(loadModel).catch(() => {});
+</script>
+</body>
+</html>

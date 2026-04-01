@@ -164,22 +164,26 @@ def plot_classified_faces(
 
 def plot_model_from_ifc(
     ifc_path: str,
-    element_index: int = 0,
+    element_index: int = None,
     entity_type: str = "IfcWall",
     show: bool = True,
     screenshot: str = None,
 ):
     """Convenience function: load IFC, classify faces, and visualize.
 
+    When element_index is None (default) and the model contains multiple
+    elements, ALL elements are rendered in a single scene. When element_index
+    is set, only that element is rendered.
+
     Args:
         ifc_path: Path to IFC file.
-        element_index: Which element to visualize (default: first).
+        element_index: Which element to visualize (None = all elements).
         entity_type: IFC entity type filter.
         show: If True, display interactive window.
         screenshot: If given, save PNG to this path.
 
     Returns:
-        Tuple of (level2_result, plotter).
+        Tuple of (level2_result_or_list, plotter).
     """
     from ifc_geo_validator.core.ifc_parser import load_model, get_elements
     from ifc_geo_validator.core.mesh_converter import extract_mesh
@@ -188,14 +192,142 @@ def plot_model_from_ifc(
     model = load_model(ifc_path)
     elements = get_elements(model, entity_type)
 
-    if element_index >= len(elements):
-        raise IndexError(f"Element index {element_index} out of range (found {len(elements)})")
+    if not elements:
+        raise ValueError(f"No {entity_type} elements found in {ifc_path}")
 
-    elem = elements[element_index]
-    name = getattr(elem, "Name", None) or "Unnamed"
-    mesh_data = extract_mesh(elem)
-    l2 = validate_level2(mesh_data)
+    # Single element mode (backward compatible)
+    if element_index is not None:
+        if element_index >= len(elements):
+            raise IndexError(f"Element index {element_index} out of range (found {len(elements)})")
+        elem = elements[element_index]
+        name = getattr(elem, "Name", None) or "Unnamed"
+        mesh_data = extract_mesh(elem)
+        l2 = validate_level2(mesh_data)
+        title = f"{name} — Face Classification"
+        pl = plot_classified_faces(mesh_data, l2, title=title, show=show, screenshot=screenshot)
+        return l2, pl
 
-    title = f"{name} — Face Classification"
-    pl = plot_classified_faces(mesh_data, l2, title=title, show=show, screenshot=screenshot)
-    return l2, pl
+    # Multi-element mode: render all elements in one scene
+    return plot_all_elements(elements, extract_mesh, validate_level2,
+                             ifc_path, show=show, screenshot=screenshot)
+
+
+def _lighten_hex(hex_color, factor=0.45):
+    """Lighten a hex color toward white by the given factor (0=unchanged, 1=white)."""
+    r = int(hex_color[1:3], 16)
+    g = int(hex_color[3:5], 16)
+    b = int(hex_color[5:7], 16)
+    r = int(r + (255 - r) * factor)
+    g = int(g + (255 - g) * factor)
+    b = int(b + (255 - b) * factor)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+# Per-element color palettes: element 0 = saturated, 1+ = progressively lighter
+def _element_palette(element_idx, n_elements):
+    """Generate a per-element color palette.
+
+    Element 0 (main wall): original saturated colors.
+    Element 1+ (foundation, buttresses): lightened versions so they're
+    visually distinct from the main wall while preserving category meaning.
+    """
+    if n_elements <= 1 or element_idx == 0:
+        return CATEGORY_COLORS
+
+    # Lighten factor: strong contrast between element 0 and 1+
+    factor = min(0.5 + 0.15 * (element_idx - 1), 0.85)
+    return {cat: _lighten_hex(color, factor) for cat, color in CATEGORY_COLORS.items()}
+
+
+def plot_all_elements(elements, extract_mesh_fn, validate_l2_fn,
+                      ifc_path="", show=True, screenshot=None,
+                      window_size=(1600, 900)):
+    """Render all wall elements in a single scene with face classification.
+
+    Each element gets a distinct color palette: the first element (main wall)
+    uses saturated colors, subsequent elements (foundation, buttresses) use
+    progressively lighter pastel versions. Face categories are preserved.
+    """
+    if pv is None:
+        raise ImportError("pyvista is required for visualization: pip install pyvista")
+
+    from pathlib import Path
+    file_stem = Path(ifc_path).stem if ifc_path else "Model"
+
+    pl = pv.Plotter(window_size=window_size, off_screen=not show)
+    pl.set_background("white")
+
+    all_results = []
+    legend_entries = []
+    legend_added = set()
+    n_elements = len(elements)
+
+    for ei, elem in enumerate(elements):
+        name = getattr(elem, "Name", None) or "Unnamed"
+        mesh_data = extract_mesh_fn(elem)
+        l2 = validate_l2_fn(mesh_data)
+        all_results.append((name, mesh_data, l2))
+
+        vertices = mesh_data["vertices"]
+        faces_arr = mesh_data["faces"]
+        groups = l2["face_groups"]
+        palette = _element_palette(ei, n_elements)
+
+        # Build per-triangle RGB colors directly
+        n_tris = len(faces_arr)
+        tri_colors = np.zeros((n_tris, 3), dtype=np.uint8)
+        tri_categories = [UNCLASSIFIED] * n_tris
+
+        for g in groups:
+            cat = g["category"]
+            hex_c = palette.get(cat, palette[UNCLASSIFIED])
+            rgb = (int(hex_c[1:3], 16), int(hex_c[3:5], 16), int(hex_c[5:7], 16))
+            for fi in g["face_indices"]:
+                tri_colors[fi] = rgb
+                tri_categories[fi] = cat
+
+        # Build PyVista mesh
+        pv_faces = np.column_stack([
+            np.full(n_tris, 3, dtype=int),
+            faces_arr,
+        ]).ravel()
+        mesh = pv.PolyData(vertices, pv_faces)
+        mesh.cell_data["colors"] = tri_colors
+
+        pl.add_mesh(
+            mesh,
+            scalars="colors",
+            rgb=True,
+            show_scalar_bar=False,
+            show_edges=True,
+            edge_color="#cccccc",
+            line_width=0.5,
+        )
+
+        # Build legend entries (categories for this element)
+        present = set(tri_categories)
+        for cat in CATEGORY_COLORS:
+            if cat in present:
+                key = (cat, ei)
+                if key not in legend_added:
+                    legend_added.add(key)
+                    label = CATEGORY_LABELS.get(cat, cat)
+                    if n_elements > 1:
+                        label = f"{label} ({name})"
+                    legend_entries.append([label, palette[cat]])
+
+    if legend_entries:
+        pl.add_legend(legend_entries, bcolor="white", border=True,
+                      size=(0.2, min(0.05 * len(legend_entries) + 0.05, 0.5)))
+
+    title = f"{file_stem} — Face Classification ({n_elements} elements)"
+    pl.add_title(title, font_size=14, color="black")
+
+    if screenshot:
+        pl.show(auto_close=False)
+        pl.screenshot(screenshot)
+        pl.close()
+    elif show:
+        pl.show()
+
+    return all_results, pl
