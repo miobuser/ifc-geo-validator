@@ -213,22 +213,31 @@ def horizontal_distance_xy(bbox_a_min, bbox_a_max, bbox_b_min, bbox_b_max) -> fl
 
 
 def classify_terrain_side(face_groups, terrain_verts, terrain_faces):
-    """Classify front/back faces using terrain proximity.
+    """Classify front/back faces using terrain gradient direction.
 
-    For each face group classified as FRONT or BACK, determines whether
-    its normal points toward or away from the terrain surface.
+    Determines which side of the wall faces the earth (terrain rises)
+    and which faces the air (terrain falls or is absent).
 
-    Algorithm:
-      1. For each face group, query terrain height at face centroid XY
-      2. Compute vector from face centroid to terrain point
-      3. dot(face_normal, to_terrain) > 0 → normal points toward terrain → BACK (earth)
-      4. dot(face_normal, to_terrain) ≤ 0 → normal points away from terrain → FRONT (air)
+    Algorithm (terrain gradient method):
+      1. For each face group, sample terrain height at two points:
+         - p_plus  = centroid + δ · n_horiz  (offset along face normal)
+         - p_minus = centroid - δ · n_horiz  (offset against face normal)
+         where δ = 1m (probe distance) and n_horiz = horizontal normal.
+      2. z_plus = terrain(p_plus), z_minus = terrain(p_minus)
+      3. If z_plus > z_minus: terrain rises in the normal direction → BACK (earth)
+         If z_plus < z_minus: terrain falls in the normal direction → FRONT (air)
 
-    Mathematical basis: sign(dot(n, p_terrain - c_face)) — same as L5 κ.
+    This is robust even when the terrain is far below the wall (retaining
+    walls on slopes), because it uses the terrain GRADIENT rather than the
+    absolute height relative to the face centroid.
+
+    Fallback: if gradient sampling fails, uses the original centroid-to-terrain
+    vector method.
 
     Returns dict mapping face_group index to "front" or "back".
     """
     assignments = {}
+    PROBE_DIST = 1.0  # 1m offset for gradient sampling
 
     for i, g in enumerate(face_groups):
         cat = g.get("category", g.category if hasattr(g, "category") else "")
@@ -238,26 +247,46 @@ def classify_terrain_side(face_groups, terrain_verts, terrain_faces):
         centroid = np.array(g.get("centroid", g.centroid if hasattr(g, "centroid") else [0, 0, 0]))
         normal = np.array(g.get("normal", g.normal if hasattr(g, "normal") else [0, 0, 0]))
 
-        # Query terrain at face centroid XY
+        # Horizontal component of the face normal
+        n_horiz = np.array([normal[0], normal[1], 0.0])
+        n_mag = np.linalg.norm(n_horiz)
+        if n_mag < 1e-10:
+            continue
+        n_horiz /= n_mag
+
+        # Method 1: Terrain gradient — sample terrain height on both sides
+        p_plus = centroid[:2] + PROBE_DIST * n_horiz[:2]
+        p_minus = centroid[:2] - PROBE_DIST * n_horiz[:2]
+
+        z_plus = terrain_height_at_xy(terrain_verts, terrain_faces,
+                                       p_plus[0], p_plus[1])
+        z_minus = terrain_height_at_xy(terrain_verts, terrain_faces,
+                                        p_minus[0], p_minus[1])
+
+        if z_plus is not None and z_minus is not None:
+            gradient = z_plus - z_minus  # positive = terrain rises in normal direction
+            if abs(gradient) > 0.01:  # significant gradient (> 1cm over 2m)
+                assignments[i] = "back" if gradient > 0 else "front"
+                continue
+
+        # Method 2: Fallback — centroid-to-terrain vector
         z_terrain = terrain_height_at_xy(terrain_verts, terrain_faces,
                                           centroid[0], centroid[1])
         if z_terrain is None:
-            # Try nearest point as fallback; skip if too far from terrain
             nearest_pt, dist = nearest_terrain_point(terrain_verts, terrain_faces, centroid)
-            if dist > 50.0:  # Element > 50m from terrain — unreliable
+            if dist > 50.0:
                 continue
             terrain_point = nearest_pt
         else:
             terrain_point = np.array([centroid[0], centroid[1], z_terrain])
 
-        # Direction from face centroid to terrain
         to_terrain = terrain_point - centroid
         alignment = float(np.dot(normal, to_terrain))
 
         if alignment > 0:
-            assignments[i] = "back"   # normal points toward terrain → earth side
+            assignments[i] = "back"
         else:
-            assignments[i] = "front"  # normal points away from terrain → air side
+            assignments[i] = "front"
 
     return assignments
 

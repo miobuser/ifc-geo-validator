@@ -202,18 +202,19 @@ def _evaluate_rule(rule: dict, context: dict) -> dict:
             f"Skipped: evaluation error: {e}"
         )
 
+    actual = _get_actual_value(check_expr, context)
+
     if bool(result):
         return _make_result(
             rule_id, name, PASS, severity,
-            _get_actual_value(check_expr, context),
-            check_expr, reference, "Check passed"
+            actual, check_expr, reference, "Check passed"
         )
     else:
+        # Build actionable failure message
+        msg = _build_fail_message(rule, actual, check_expr)
         return _make_result(
             rule_id, name, FAIL, severity,
-            _get_actual_value(check_expr, context),
-            check_expr, reference,
-            f"Check failed: {check_expr}"
+            actual, check_expr, reference, msg
         )
 
 
@@ -287,6 +288,42 @@ def _safe_eval(expr: str, context: dict) -> bool:
         # Extract variable name from NameError message
         var = str(e).split("'")[1] if "'" in str(e) else str(e)
         raise _MissingVariable(var)
+
+
+def _build_fail_message(rule: dict, actual, check_expr: str) -> str:
+    """Build an actionable failure message explaining what went wrong.
+
+    Includes: actual value, expected condition, and where to look.
+    """
+    name = rule.get("name", "")
+    desc = rule.get("description", "")
+    reference = rule.get("reference", "")
+    quote = rule.get("quote", "")
+
+    parts = [f"FAIL: {name}"]
+
+    # Show actual vs expected
+    if actual is not None:
+        # Extract the threshold from the check expression
+        for op in [">=", "<=", "!=", "==", ">", "<"]:
+            if op in check_expr:
+                lhs, rhs = check_expr.split(op, 1)
+                lhs_name = lhs.strip()
+                rhs_val = rhs.strip()
+                if isinstance(actual, (int, float)):
+                    parts.append(f"  Ist: {actual:.2f}, Anforderung: {lhs_name} {op} {rhs_val}")
+                else:
+                    parts.append(f"  Ist: {actual}, Anforderung: {check_expr}")
+                break
+        else:
+            parts.append(f"  Bedingung nicht erfüllt: {check_expr}")
+
+    if quote:
+        parts.append(f"  Quelle: \"{quote}\"")
+    elif reference:
+        parts.append(f"  Referenz: {reference}")
+
+    return " | ".join(parts)
 
 
 def _get_actual_value(expr: str, context: dict):

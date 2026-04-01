@@ -4,9 +4,27 @@ import argparse
 import json
 import math
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
+
+
+# ── ANSI color helpers ────────────────────────────────────────────
+
+def _supports_color():
+    """Check if terminal supports ANSI colors."""
+    if sys.platform == "win32":
+        return "ANSICON" in __import__("os").environ or "WT_SESSION" in __import__("os").environ
+    return hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
+
+_COLOR = _supports_color()
+
+def _green(s): return f"\033[32m{s}\033[0m" if _COLOR else s
+def _red(s): return f"\033[31m{s}\033[0m" if _COLOR else s
+def _yellow(s): return f"\033[33m{s}\033[0m" if _COLOR else s
+def _dim(s): return f"\033[2m{s}\033[0m" if _COLOR else s
+def _bold(s): return f"\033[1m{s}\033[0m" if _COLOR else s
 
 
 def _get_version() -> str:
@@ -181,13 +199,15 @@ def main():
         return
 
     all_results = []
+    t_start = time.time()
 
     for elem in elements:
         name = getattr(elem, "Name", None) or "Unnamed"
         print(f"\n{'='*60}")
-        print(f"Element: {name} (#{elem.id()})")
+        print(f"Element: {_bold(name)} (#{elem.id()})")
         print(f"{'='*60}")
 
+        t_elem = time.time()
         try:
             mesh_data = extract_mesh(elem)
             elem_result = {
@@ -349,10 +369,14 @@ def main():
             # Store mesh_data for L5/L6 (needed after the per-element loop)
             elem_result["mesh_data"] = mesh_data
 
+            dt = time.time() - t_elem
+            if args.verbose:
+                print(f"\n  {_dim(f'Processed in {dt:.2f}s')}")
+
             all_results.append(elem_result)
 
         except Exception as e:
-            print(f"  ERROR: {e}")
+            print(f"  {_red('ERROR')}: {e}")
             all_results.append({
                 "element_id": elem.id(),
                 "element_name": name,
@@ -469,13 +493,26 @@ def main():
             name = elem_result.get("element_name", "?")
             print(f"\n  Rule Checks for {name} ({l4['summary']['total']} rules):")
             for chk in l4["checks"]:
-                icon = "PASS" if chk["status"] == "PASS" else (
-                    "FAIL" if chk["status"] == "FAIL" else "SKIP")
-                print(f"    [{icon}] {chk['rule_id']}  {chk['name']}  ({chk['severity']})")
+                status = chk["status"]
+                if status == "PASS":
+                    icon = _green("PASS")
+                elif status == "FAIL":
+                    icon = _red("FAIL")
+                else:
+                    icon = _dim("SKIP")
+                sev = chk["severity"]
+                sev_str = _red(sev) if sev == "ERROR" else (_yellow(sev) if sev == "WARNING" else _dim(sev))
+                print(f"    [{icon}] {chk['rule_id']}  {chk['name']}  ({sev_str})")
+                if status == "FAIL" and chk.get("message", "").startswith("FAIL:"):
+                    # Show actionable message for failures
+                    msg_parts = chk["message"].split(" | ")
+                    for part in msg_parts[1:]:
+                        print(f"           {_yellow(part)}")
 
             s = l4["summary"]
-            print(f"\n  Summary: {s['passed']} passed, {s['failed']} failed, "
-                  f"{s['skipped']} skipped")
+            passed_str = _green(f"{s['passed']} passed")
+            failed_str = _red(f"{s['failed']} failed") if s["failed"] > 0 else f"{s['failed']} failed"
+            print(f"\n  Summary: {passed_str}, {failed_str}, {s['skipped']} skipped")
 
     # ── Summary table ─────────────────────────────────────────────
     print(f"\n{'='*60}")
@@ -515,8 +552,11 @@ def main():
         total_err = sum(r["level4"]["summary"].get("errors", 0)
                         for r in all_results if "level4" in r)
         overall = "PASS" if total_err == 0 else "FAIL"
-        print(f"\n  Overall: {overall}  ({total_p} passed, {total_f} failed, {total_s} skipped)")
-    print()
+        overall_str = _green("PASS") if overall == "PASS" else _red("FAIL")
+        print(f"\n  Overall: {overall_str}  ({total_p} passed, {total_f} failed, {total_s} skipped)")
+
+    dt_total = time.time() - t_start
+    print(f"\n  {_dim(f'Total time: {dt_total:.2f}s for {len(all_results)} elements')}")
 
     # Machine-readable summary (for CI/CD integration)
     if args.summary:
