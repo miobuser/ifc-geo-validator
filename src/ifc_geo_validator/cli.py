@@ -45,7 +45,7 @@ def main():
         prog="ifc-geo-validator",
         description="Geometric validation of IFC infrastructure models",
     )
-    parser.add_argument("ifc_file", help="Path to IFC file")
+    parser.add_argument("ifc_file", nargs="+", help="Path to IFC file(s) or directory")
     parser.add_argument(
         "-r", "--ruleset",
         help="Path to YAML ruleset file",
@@ -132,6 +132,52 @@ def main():
     levels = [int(x) for x in args.levels.split(",")]
     entity_types = [t.strip() for t in args.filter_type.split(",")]
 
+    # Resolve input files (support directories and globs)
+    import glob as globmod
+    ifc_files = []
+    for path_arg in args.ifc_file:
+        p = Path(path_arg)
+        if p.is_dir():
+            ifc_files.extend(sorted(p.glob("*.ifc")))
+        elif "*" in path_arg or "?" in path_arg:
+            ifc_files.extend(sorted(Path(f) for f in globmod.glob(path_arg)))
+        else:
+            ifc_files.append(p)
+
+    if len(ifc_files) > 1:
+        # Batch mode: process each file separately
+        print(f"IFC Geometry Validator v{_get_version()} — Batch Mode")
+        print(f"Processing {len(ifc_files)} files...")
+        batch_summary = []
+        for i, fpath in enumerate(ifc_files, 1):
+            print(f"\n{'#'*60}")
+            print(f"# [{i}/{len(ifc_files)}] {fpath.name}")
+            print(f"{'#'*60}")
+            # Run single file (recursive call via subprocess to isolate state)
+            batch_args = [str(fpath)]
+            for flag in ["--filter-type", "--filter-predefined", "--levels",
+                         "--ruleset", "--enrich", "--bcf", "--html"]:
+                val = getattr(args, flag.lstrip("-").replace("-", "_"), None)
+                if val:
+                    batch_args.extend([flag, str(val)])
+            if args.verbose:
+                batch_args.append("-v")
+            if args.summary:
+                batch_args.append("--summary")
+            # Save original argv and re-run
+            orig_argv = sys.argv
+            sys.argv = ["ifc-geo-validator"] + batch_args
+            try:
+                main()
+            except SystemExit:
+                pass
+            finally:
+                sys.argv = orig_argv
+        return
+
+    # Single file mode
+    ifc_file = str(ifc_files[0])
+
     from ifc_geo_validator.core.ifc_parser import load_model, get_elements, get_terrain_mesh
     from ifc_geo_validator.core.mesh_converter import extract_mesh
     from ifc_geo_validator.validation.level5 import validate_level5
@@ -143,7 +189,7 @@ def main():
 
     version = _get_version()
     print(f"IFC Geometry Validator v{version}")
-    print(f"File: {args.ifc_file}")
+    print(f"File: {ifc_file}")
     print(f"Filter: {', '.join(entity_types)}"
           + (f" ({args.filter_predefined})" if args.filter_predefined else ""))
     print(f"Levels: {args.levels}")
@@ -161,7 +207,7 @@ def main():
             print(f"Ruleset: {ruleset['metadata']['name']} v{ruleset['metadata']['version']}")
 
     # Load model
-    model = load_model(args.ifc_file)
+    model = load_model(ifc_file)
 
     # --scan: discover all entity types with geometry, then exit
     if args.scan:
@@ -616,7 +662,7 @@ def main():
     # Export BCF issues for failed checks
     if args.bcf:
         from ifc_geo_validator.report.bcf_export import export_bcf
-        ifc_name = Path(args.ifc_file).name
+        ifc_name = Path(ifc_file).name
         export_bcf(all_results, args.bcf, ifc_name=ifc_name)
         print(f"\nBCF issues written to: {args.bcf}")
 
@@ -631,7 +677,7 @@ def main():
         from ifc_geo_validator.report.html_report import generate_html_report
         rs_name = ruleset["metadata"]["name"] if ruleset else "—"
         html = generate_html_report(
-            all_results, ifc_filename=Path(args.ifc_file).name,
+            all_results, ifc_filename=Path(ifc_file).name,
             ruleset_name=rs_name,
         )
         with open(args.html, "w", encoding="utf-8") as f:
