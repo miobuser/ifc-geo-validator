@@ -1,0 +1,278 @@
+# =============================================================================
+# ASTRA FHB T/G — Umfassendes Regelset (alle Bauteile)
+# Basierend auf: ASTRA 24 000 Fachhandbuch Tunnel/Geotechnik, Januar 2026
+# =============================================================================
+#
+# Dieses Ruleset deckt ALLE geometrisch prüfbaren Anforderungen des
+# ASTRA FHB T/G ab, aufgeteilt nach Bauteilkategorien:
+#
+#   - Stützbauwerke      (24 001-15101)  → Stützmauern
+#   - Tunnelquerschnitt  (24 001-10201)  → Lichtraumprofil, Fahrbahnbreite
+#   - Fahrbahn           (24 001-10401)  → Belag, Bankette, Gefälle
+#   - Ausbau             (24 001-10301)  → Tübbingauskleidung, Verkleidung
+#   - Entwässerung       (24 001-10601)  → Drainage, Schlitzrinne
+#   - Sicherheit         (24 001-10701)  → Nischen, Querverbindungen
+#   - Portale            (24 001-10801)  → Portalgestaltung
+#   - Allgemeine Plausibilitätsprüfungen
+#
+# Anwendung:
+#   ifc-geo-validator model.ifc -r rulesets/astra_fhb_komplett.yaml \
+#     --filter-type IfcWall,IfcSlab,IfcFooting,IfcBuildingElementProxy
+#
+# Severity-Stufen:
+#   ERROR   — Normverstoss, muss korrigiert werden
+#   WARNING — Empfehlung, sollte geprüft werden
+#   INFO    — Hinweis, informativer Wert
+# =============================================================================
+
+metadata:
+  name: "ASTRA FHB T/G — Komplett"
+  version: "2.0.0"
+  source: "ASTRA 24 000 V3.02, 01.01.2025 (Fachhandbuch Tunnel/Geotechnik)"
+  scope: "Alle geometrisch prüfbaren Anforderungen für Nationalstrassentunnel"
+  ifc_filter:
+    entity: "IfcWall,IfcSlab,IfcFooting,IfcBuildingElementProxy"
+
+classification_thresholds:
+  horizontal_deg: 45.0
+  coplanar_deg: 5.0
+  lateral_deg: 45.0
+
+# =============================================================================
+# Level 1 — Allgemeine Plausibilität (gilt für ALLE Bauteile)
+# =============================================================================
+
+level_1:
+  - id: FHB-L1-001
+    name: "Volumen positiv"
+    description: "Jedes Bauteil muss ein positives Volumen haben"
+    check: "volume > 0.001"
+    severity: ERROR
+    reference: "Allgemeine geometrische Plausibilität"
+
+  - id: FHB-L1-002
+    name: "Mesh geschlossen"
+    description: "Geschlossenes Mesh für korrekte Volumenberechnung"
+    check: "mesh_is_watertight == true"
+    severity: WARNING
+    reference: "Voraussetzung für zuverlässige Geometrieanalyse"
+
+  - id: FHB-L1-003
+    name: "Bauteilgrösse plausibel"
+    description: "Dünnste BBox-Dimension > 50mm (kein degeneriertes Element)"
+    check: "bbox_dim_min_m >= 0.05"
+    severity: WARNING
+    reference: "Allgemeine Plausibilitätsprüfung"
+
+  - id: FHB-L1-004
+    name: "Vertikale Ausdehnung"
+    description: "Bauteil hat messbare vertikale Ausdehnung (> 10cm)"
+    check: "bbox_height_m >= 0.1"
+    severity: INFO
+    reference: "Plausibilitätsprüfung — Unterscheidung 2D/3D-Elemente"
+
+# =============================================================================
+# Level 3 — Stützbauwerke (24 001-15101)
+# Gilt für: IfcWall (RETAININGWALL), Element-Rolle=wall_stem
+# =============================================================================
+
+level_3:
+
+  # ── Stützmauern: Mauerkrone ──────────────────────────────────────
+
+  - id: FHB-SM-L3-001
+    name: "Stützmauer: Kronenbreite min. 300mm"
+    description: "Mauerkrone mindestens 300 mm breit"
+    check: "crown_width_mm >= 300"
+    severity: ERROR
+    reference: "FHB T/G 24 001-15101, Kap. 3, 'Generell'"
+    quote: "Die Mauerkrone ist [...] mindestens 300 mm breit auszubilden."
+
+  - id: FHB-SM-L3-002
+    name: "Stützmauer: Kronenneigung 3%"
+    description: "Mauerkrone 3% geneigt, in der Regel gegen den Hang"
+    check: "crown_slope_percent >= 2.5 and crown_slope_percent <= 3.5"
+    tolerance: 0.5
+    severity: WARNING
+    reference: "FHB T/G 24 001-15101, Kap. 3, 'Generell'"
+    quote: "Die Mauerkrone ist 3 %, in der Regel gegen den Hang, geneigt [...]"
+
+  - id: FHB-SM-L3-003
+    name: "Stützmauer: Quergefälle Krone max. 10%"
+    description: "Maximales lokales Quergefälle der Mauerkrone"
+    check: "cross_slope_max_pct <= 10.0"
+    severity: WARNING
+    reference: "FHB T/G 24 001-15101, Kap. 3"
+
+  # ── Stützmauern: Wandgeometrie ───────────────────────────────────
+
+  - id: FHB-SM-L3-004
+    name: "Stützmauer: Mindestbauteilstärke 300mm"
+    description: "Konstruktive Mindestbauteilstärke (Wandstärke) von 300 mm"
+    check: "min_wall_thickness_mm >= 300"
+    severity: ERROR
+    reference: "FHB T/G 24 001-15101, Kap. 3, 'Generell'"
+    quote: "Eine konstruktive Mindestbauteilstärke (Wandstärke) von 300 mm ist stets einzuhalten."
+
+  - id: FHB-SM-L3-005
+    name: "Stützmauer: Empfohlene Neigung 10:1"
+    description: "Neigung der Stützmauer von 10:1 wird empfohlen"
+    check: "front_inclination_ratio >= 9.0 and front_inclination_ratio <= 11.0"
+    tolerance: 1.0
+    severity: INFO
+    reference: "FHB T/G 24 001-15101, Kap. 3, 'Generell'"
+    quote: "Eine Neigung der Stützmauer von 10:1 wird empfohlen."
+
+  - id: FHB-SM-L3-006
+    name: "Stützmauer: Profilkonsistenz"
+    description: "Kronenbreite entlang der Mauer möglichst konstant (CV ≤ 10%)"
+    check: "crown_width_cv <= 0.1"
+    severity: INFO
+    reference: "Konstruktive Empfehlung — gleichmässiges Querschnittsprofil"
+
+  # ── Stützmauern: Fundament ──────────────────────────────────────
+
+  - id: FHB-SM-L3-007
+    name: "Stützmauer: Fundamentbreite min. 600mm"
+    description: "Fundament mindestens 600 mm breit"
+    check: "foundation_width_mm >= 600"
+    severity: WARNING
+    reference: "FHB T/G 24 001-15101, Konstruktive Anforderung"
+
+  # ── Tunnel: Fahrbahngeometrie (10101, 10201, 10401) ──────────────
+
+  - id: FHB-TN-L3-001
+    name: "Tunnel: Quergefälle max. 5%"
+    description: "Quergefälle im Tunnel maximal 5%"
+    check: "cross_slope_max_pct <= 5.0"
+    severity: ERROR
+    reference: "FHB T/G 24 001-10101 — Linienführung"
+    quote: "Das Quergefälle beträgt im Tunnel maximal 5%."
+
+  - id: FHB-TN-L3-002
+    name: "Tunnel: Längsgefälle empfohlen max. 3%"
+    description: "Längsgefälle im Tunnel empfohlen maximal 3%"
+    check: "long_slope_max_pct <= 3.0"
+    severity: INFO
+    reference: "FHB T/G 24 001-10101 — Linienführung"
+
+  - id: FHB-TN-L3-003
+    name: "Tunnel: Längsgefälle absolut max. 5%"
+    description: "Längsgefälle im Tunnel maximal 5%"
+    check: "long_slope_max_pct <= 5.0"
+    severity: WARNING
+    reference: "FHB T/G 24 001-10101 — Linienführung"
+
+  - id: FHB-TN-L3-004
+    name: "Tunnel: Mindestbauteilstärke Auskleidung 200mm"
+    description: "Ausbauteile/Auskleidung mindestens 200 mm Wandstärke"
+    check: "min_wall_thickness_mm >= 200"
+    severity: ERROR
+    reference: "FHB T/G 24 001-10301 — Ausbau"
+
+  # ── Allgemein: BBox-basierte Checks ─────────────────────────────
+
+  - id: FHB-AL-L3-001
+    name: "Rampenneigung max. 6%"
+    description: "Rampen bei Notausgängen max. 6% Gefälle"
+    check: "long_slope_max_pct <= 6.0"
+    severity: WARNING
+    reference: "FHB T/G 24 001-10701 — Sicherheit, Notausgänge"
+    note: "Gilt nur für Rampenelemente bei Notausgängen"
+
+# =============================================================================
+# Level 4 — Zusammengesetzte Prüfungen
+# =============================================================================
+
+level_4:
+  - id: FHB-L4-001
+    name: "Gesamtbewertung Mauerkrone"
+    description: "Mauerkrone erfüllt Pflichtanforderungen (Breite)"
+    depends_on:
+      - FHB-SM-L3-001
+    severity: ERROR
+    reference: "FHB T/G 24 001-15101, Kap. 3"
+
+  - id: FHB-L4-002
+    name: "Gesamtbewertung Wandgeometrie"
+    description: "Wandgeometrie erfüllt Pflichtanforderungen (Stärke)"
+    depends_on:
+      - FHB-SM-L3-004
+    severity: ERROR
+    reference: "FHB T/G 24 001-15101, Kap. 3"
+
+  - id: FHB-L4-003
+    name: "Gesamtbewertung Kronenneigung"
+    description: "Mauerkrone erfüllt Neigungsempfehlung"
+    depends_on:
+      - FHB-SM-L3-002
+    severity: WARNING
+    reference: "FHB T/G 24 001-15101, Kap. 3"
+
+  - id: FHB-L4-004
+    name: "Gesamtbewertung Gefälle Tunnel"
+    description: "Tunnelbauteil erfüllt Gefälle-Anforderungen"
+    depends_on:
+      - FHB-TN-L3-001
+      - FHB-TN-L3-003
+    severity: ERROR
+    reference: "FHB T/G 24 001-10101"
+
+# =============================================================================
+# Level 5 — Inter-Element-Kontext
+# =============================================================================
+
+level_5:
+  - id: FHB-L5-001
+    name: "Fundament-Überstand"
+    description: "Fundament ragt über Mauerkörper hinaus"
+    check: "foundation_extends_beyond_wall == true"
+    severity: INFO
+    reference: "FHB T/G 24 001-15101, Konstruktive Anforderung"
+
+  - id: FHB-L5-002
+    name: "Bauteil-Bauteil-Anschluss"
+    description: "Benachbarte Bauteile geometrisch verbunden (Spalt ≤ 10mm)"
+    check: "wall_foundation_gap_mm <= 10"
+    severity: ERROR
+    reference: "Allgemeine konstruktive Anforderung"
+
+# =============================================================================
+# Level 6 — Terrain-Kontext
+# =============================================================================
+
+level_6:
+  - id: FHB-L6-001
+    name: "Erd-/Luftseite bestimmt"
+    description: "Automatische Bestimmung der Erd- und Luftseite via Terrain"
+    check: "earth_side_determined == true"
+    severity: INFO
+    reference: "Erforderlich für korrekte Flächenklassifikation"
+
+  - id: FHB-L6-002
+    name: "Kronenneigung gegen Hang"
+    description: "Kronenneigung zeigt gegen den Hang (Richtungsprüfung)"
+    check: "crown_slope_towards_earth_side == true"
+    severity: WARNING
+    reference: "FHB T/G 24 001-15101, Kap. 3"
+    quote: "Die Mauerkrone ist 3 %, in der Regel gegen den Hang, geneigt [...]"
+
+# =============================================================================
+# Level 7 — Distanzberechnungen
+# =============================================================================
+
+level_7:
+  - id: FHB-L7-001
+    name: "Frostfreie Gründung"
+    description: "Fundament mindestens frostfrei eingebunden (0.8m in der Schweiz)"
+    check: "foundation_embedment_m >= 0.8"
+    severity: WARNING
+    reference: "FHB T/G, Kap. 3 — Frostfreie Gründung"
+    note: "0.8m Frosttiefe gilt für Mittelland, in Berglagen bis 1.5m"
+
+  - id: FHB-L7-002
+    name: "Einbindetiefe positiv"
+    description: "Fundament muss im Boden eingebunden sein (nicht freiliegend)"
+    check: "foundation_embedment_m >= 0.0"
+    severity: ERROR
+    reference: "FHB T/G, Konstruktive Anforderung"
