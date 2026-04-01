@@ -111,6 +111,12 @@ def main():
         help="Show slope heatmap: cross (Quergefälle), long (Längsgefälle), total",
     )
     parser.add_argument(
+        "--cross-section",
+        type=float, nargs="?", const=0.5, default=None,
+        metavar="FRACTION",
+        help="Show cross-section at position (0.0=start, 0.5=middle, 1.0=end)",
+    )
+    parser.add_argument(
         "--heatmap-categories",
         default="crown",
         help="Face categories for heatmap, comma-separated (default: crown). "
@@ -365,6 +371,28 @@ def main():
                         print("    (PyVista not installed — skipping 3D view)")
                 else:
                     print(f"\n  Slope Heatmap: no faces in category '{args.heatmap_categories}'")
+
+            # ── Cross-section (if requested) ──────────────────────
+            if args.cross_section is not None and l2 is not None:
+                from ifc_geo_validator.viz.cross_section import (
+                    extract_cross_section, plot_cross_section,
+                )
+                cs_cl = alignment_centerline or l2.get("centerline")
+                section = extract_cross_section(
+                    mesh_data, cs_cl, position_fraction=args.cross_section,
+                )
+                if section is not None:
+                    print(f"\n  Cross-Section at {section['position_m']:.1f}m "
+                          f"({args.cross_section:.0%}):")
+                    print(f"    Width:  {section['width_mm']:.0f} mm")
+                    print(f"    Height: {section['height_m']:.2f} m")
+                    print(f"    Vertices in slice: {section['n_vertices']}")
+                    try:
+                        plot_cross_section(section, title=f"{name} — Querschnitt")
+                    except ImportError:
+                        print("    (Matplotlib not installed — skipping plot)")
+                else:
+                    print(f"\n  Cross-Section: not enough vertices at position {args.cross_section:.0%}")
 
             # Store mesh_data for L5/L6 (needed after the per-element loop)
             elem_result["mesh_data"] = mesh_data
