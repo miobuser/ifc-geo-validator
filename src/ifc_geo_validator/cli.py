@@ -72,6 +72,11 @@ def main():
         action="store_true",
         help="Print one-line summary per element (for CI/CD)",
     )
+    parser.add_argument(
+        "--scan",
+        action="store_true",
+        help="Scan model for all entity types with geometry and exit",
+    )
 
     args = parser.parse_args()
     levels = [int(x) for x in args.levels.split(",")]
@@ -107,6 +112,11 @@ def main():
 
     # Load model
     model = load_model(args.ifc_file)
+
+    # --scan: discover all entity types with geometry, then exit
+    if args.scan:
+        _scan_model(model)
+        return
 
     # Collect elements from all specified entity types
     elements = []
@@ -450,6 +460,77 @@ def main():
         with open(args.output, "w", encoding="utf-8") as f:
             json.dump(all_results, f, indent=2, ensure_ascii=False, default=_default)
         print(f"\nReport written to: {args.output}")
+
+
+def _scan_model(model):
+    """Scan an IFC model for all entity types with geometry.
+
+    Groups elements by entity type and PredefinedType, reports counts
+    and a sample element for each group. Helps users discover what
+    --filter-type to use for unknown models.
+    """
+    from collections import Counter
+
+    # Common structural entity types to check
+    check_types = [
+        "IfcWall", "IfcSlab", "IfcColumn", "IfcBeam", "IfcMember",
+        "IfcFooting", "IfcPile", "IfcPlate", "IfcRailing",
+        "IfcBuildingElementProxy", "IfcCivilElement",
+        "IfcBearing", "IfcDeepFoundation", "IfcCourse",
+    ]
+
+    print("Entity Type Scan")
+    print("=" * 60)
+
+    found_any = False
+    for etype in check_types:
+        try:
+            elems = model.by_type(etype)
+        except Exception:
+            continue
+        if not elems:
+            continue
+
+        # Count by PredefinedType
+        ptype_counts = Counter()
+        has_repr = 0
+        sample_name = None
+        for e in elems:
+            pt = getattr(e, "PredefinedType", None) or "—"
+            ptype_counts[pt] += 1
+            if e.Representation is not None:
+                has_repr += 1
+                if sample_name is None:
+                    sample_name = getattr(e, "Name", None) or f"#{e.id()}"
+
+        if has_repr == 0:
+            continue
+
+        found_any = True
+        print(f"\n  {etype}: {len(elems)} elements ({has_repr} with geometry)")
+        for pt, count in ptype_counts.most_common():
+            print(f"    PredefinedType={pt}: {count}")
+        if sample_name:
+            print(f"    Sample: \"{sample_name}\"")
+
+    if not found_any:
+        print("\n  No elements with geometry found.")
+        print("  This model may use non-standard entity types or lack geometry.")
+
+    print(f"\n{'=' * 60}")
+    print("Usage example:")
+    if found_any:
+        found_types = []
+        for t in check_types:
+            try:
+                elems = model.by_type(t)
+                if elems and any(e.Representation is not None for e in elems):
+                    found_types.append(t)
+            except Exception:
+                pass
+        if found_types:
+            print(f"  ifc-geo-validator model.ifc --filter-type {','.join(found_types)}")
+    print()
 
 
 def _check_crown_slope_direction(elem_result, terrain_side_info):
