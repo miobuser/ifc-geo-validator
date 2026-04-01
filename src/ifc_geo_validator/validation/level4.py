@@ -97,35 +97,50 @@ def validate_level4(
     for rule in ruleset.get("level_1", []):
         checks.append(_evaluate_rule(rule, context))
 
-    # Evaluate Level 3 rules (skip wall-specific for non-wall elements)
-    # Wall-specific rules only apply to wall_stem and parapet roles.
-    # Foundation, slab, column, unknown → skip wall measurement rules.
+    # Evaluate rules from all levels with role-based filtering.
+    # Each rule can have an optional "applies_to" field listing element roles
+    # (e.g., applies_to: ["wall_stem", "parapet"]). If absent, the rule applies
+    # to all wall-like elements (backward compatible). Non-wall elements skip
+    # wall-specific rules unless the rule explicitly includes their role.
     wall_roles = {"wall_stem", "parapet", "unknown"}
-    skip_l3 = not is_wall_like or (element_role not in wall_roles and element_role != "unknown")
+    role_labels = {"foundation": "Fundament", "slab": "Platte",
+                   "column": "Stütze", "wall_stem": "Mauerstiel",
+                   "parapet": "Brüstung", "unknown": "unbekannt"}
 
-    for rule in ruleset.get("level_3", []):
-        if skip_l3:
-            role_label = {"foundation": "Fundament", "slab": "Platte",
-                          "column": "Stütze"}.get(element_role, element_role)
-            checks.append(_make_result(
-                rule["id"], rule["name"], SKIP, rule.get("severity", INFO),
-                None, rule.get("check", ""), rule.get("reference", ""),
-                f"Skipped: element is {role_label} (wall-specific rule)"
-            ))
-        else:
+    def _should_skip(rule):
+        """Check if rule should be skipped for this element's role."""
+        applies_to = rule.get("applies_to")
+        if applies_to:
+            # Explicit role list → skip if element role not in list
+            if element_role not in applies_to:
+                return True, f"gilt nur für {', '.join(applies_to)}"
+            return False, ""
+        # No applies_to → wall-specific by default for L3 rules
+        return False, ""
+
+    for level_key in ["level_3", "level_5", "level_6", "level_7"]:
+        for rule in ruleset.get(level_key, []):
+            # Check explicit applies_to first
+            skip, reason = _should_skip(rule)
+            if skip:
+                checks.append(_make_result(
+                    rule["id"], rule["name"], SKIP, rule.get("severity", INFO),
+                    None, rule.get("check", ""), rule.get("reference", ""),
+                    f"Skipped: {reason} (Element ist {role_labels.get(element_role, element_role)})"
+                ))
+                continue
+
+            # For L3 rules: skip for non-wall elements unless applies_to is set
+            if level_key == "level_3" and not rule.get("applies_to"):
+                if not is_wall_like or (element_role not in wall_roles):
+                    checks.append(_make_result(
+                        rule["id"], rule["name"], SKIP, rule.get("severity", INFO),
+                        None, rule.get("check", ""), rule.get("reference", ""),
+                        f"Skipped: wandspezifische Regel (Element ist {role_labels.get(element_role, element_role)})"
+                    ))
+                    continue
+
             checks.append(_evaluate_rule(rule, context))
-
-    # Evaluate Level 5 rules (inter-element context)
-    for rule in ruleset.get("level_5", []):
-        checks.append(_evaluate_rule(rule, context))
-
-    # Evaluate Level 6 rules (distance/terrain context)
-    for rule in ruleset.get("level_6", []):
-        checks.append(_evaluate_rule(rule, context))
-
-    # Evaluate Level 7 rules (distance calculations)
-    for rule in ruleset.get("level_7", []):
-        checks.append(_evaluate_rule(rule, context))
 
     # Evaluate Level 4 composite rules (depend on all other results)
     for rule in ruleset.get("level_4", []):

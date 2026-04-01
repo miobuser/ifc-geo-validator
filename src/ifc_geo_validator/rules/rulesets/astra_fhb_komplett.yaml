@@ -229,6 +229,7 @@ level_5:
     check: "foundation_extends_beyond_wall == true"
     severity: INFO
     reference: "FHB T/G 24 001-15101, Konstruktive Anforderung"
+    applies_to: ["wall_stem", "foundation"]
 
   - id: FHB-L5-002
     name: "Bauteil-Bauteil-Anschluss"
@@ -236,6 +237,7 @@ level_5:
     check: "wall_foundation_gap_mm <= 10"
     severity: ERROR
     reference: "Allgemeine konstruktive Anforderung"
+    applies_to: ["wall_stem", "foundation"]
 
 # =============================================================================
 # Level 6 — Terrain-Kontext
@@ -256,6 +258,7 @@ level_6:
     severity: WARNING
     reference: "FHB T/G 24 001-15101, Kap. 3"
     quote: "Die Mauerkrone ist 3 %, in der Regel gegen den Hang, geneigt [...]"
+    applies_to: ["wall_stem", "parapet"]
 
 # =============================================================================
 # Level 7 — Distanzberechnungen
@@ -269,6 +272,7 @@ level_7:
     severity: WARNING
     reference: "FHB T/G, Kap. 3 — Frostfreie Gründung"
     note: "0.8m Frosttiefe gilt für Mittelland, in Berglagen bis 1.5m"
+    applies_to: ["wall_stem", "foundation"]
 
   - id: FHB-L7-002
     name: "Einbindetiefe positiv"
@@ -276,3 +280,4 @@ level_7:
     check: "foundation_embedment_m >= 0.0"
     severity: ERROR
     reference: "FHB T/G, Konstruktive Anforderung"
+    applies_to: ["wall_stem", "foundation"]
