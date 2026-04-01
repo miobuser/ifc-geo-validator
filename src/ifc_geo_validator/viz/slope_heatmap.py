@@ -40,33 +40,45 @@ except ImportError:
 
 # ── Slope computation ─────────────────────────────────────────────
 
-def compute_triangle_slopes(mesh_data: dict, axis: np.ndarray = None) -> dict:
+def compute_triangle_slopes(mesh_data: dict, axis: np.ndarray = None,
+                            centerline=None) -> dict:
     """Compute per-triangle slope values for a mesh.
+
+    For curved roads/walls, uses LOCAL tangent directions from the
+    centerline at each triangle's position. This gives correct
+    cross-slope (Quergefälle) decomposition even on curves — the
+    "perpendicular to road" direction rotates with the curve.
+
+    For straight roads or when no centerline is provided, uses a
+    single global axis (PCA or provided).
 
     Args:
         mesh_data: dict with vertices, faces, normals, areas.
         axis: optional road/wall axis direction (3D unit vector).
               If None, determined via PCA on the mesh vertices.
+        centerline: optional WallCenterline for local frame lookup.
 
     Returns:
         dict with:
             total_slope_pct:  np.array (M,) — total slope in percent per triangle
             cross_slope_pct:  np.array (M,) — cross-slope in percent (Quergefälle)
             long_slope_pct:   np.array (M,) — longitudinal slope in percent (Längsgefälle)
-            axis:             np.array (3,) — road/wall axis used
-            perp:             np.array (3,) — perpendicular direction used
+            axis:             np.array (3,) — global road/wall axis
+            perp:             np.array (3,) — global perpendicular direction
+            uses_local_frame: bool — True if local centerline frames were used
     """
     normals = mesh_data["normals"]
+    vertices = mesh_data["vertices"]
+    faces = mesh_data["faces"]
     n_faces = len(normals)
 
-    # Determine axis from PCA if not provided
+    # Determine global axis from PCA if not provided
     if axis is None:
-        vertices = mesh_data["vertices"]
         xy = vertices[:, :2]
         centered = xy - xy.mean(axis=0)
         cov = np.cov(centered.T)
         _, eigvecs = np.linalg.eigh(cov)
-        ax_2d = eigvecs[:, -1]  # largest eigenvalue = longest direction
+        ax_2d = eigvecs[:, -1]
         axis = np.array([ax_2d[0], ax_2d[1], 0.0])
 
     # Ensure unit vector in XY
@@ -78,10 +90,19 @@ def compute_triangle_slopes(mesh_data: dict, axis: np.ndarray = None) -> dict:
     else:
         axis = np.array([1.0, 0.0, 0.0])
 
-    # Perpendicular direction (cross-slope direction)
     perp = np.array([-axis[1], axis[0], 0.0])
 
-    z_axis = np.array([0.0, 0.0, 1.0])
+    # Decide whether to use local frames (only for curved centerlines)
+    use_local = (centerline is not None
+                 and hasattr(centerline, "use_local_measurement")
+                 and centerline.use_local_measurement)
+
+    # Precompute face centroids for local frame lookups
+    if use_local:
+        v0 = vertices[faces[:, 0]]
+        v1 = vertices[faces[:, 1]]
+        v2 = vertices[faces[:, 2]]
+        face_centroids_xy = ((v0 + v1 + v2) / 3.0)[:, :2]
 
     total_slope = np.zeros(n_faces)
     cross_slope = np.zeros(n_faces)
@@ -92,21 +113,35 @@ def compute_triangle_slopes(mesh_data: dict, axis: np.ndarray = None) -> dict:
         nz = abs(n[2])
 
         if nz < 1e-10:
-            # Near-vertical face → slope is undefined (treat as 90°)
-            total_slope[i] = 9000.0  # 90° → 9000% (clamped later)
+            total_slope[i] = 9000.0
             cross_slope[i] = 9000.0
             long_slope[i] = 9000.0
             continue
 
-        # Horizontal component magnitude
         n_horiz = np.sqrt(n[0]**2 + n[1]**2)
-
-        # Total slope: tan(angle_from_horizontal) * 100
         total_slope[i] = (n_horiz / nz) * 100.0
 
-        # Decompose horizontal component along axis and perpendicular
-        cross_comp = abs(n[0] * perp[0] + n[1] * perp[1])
-        long_comp = abs(n[0] * axis[0] + n[1] * axis[1])
+        # Get local axis/perp for this triangle
+        if use_local:
+            local_tang, local_norm, _ = centerline.get_local_frame(
+                face_centroids_xy[i]
+            )
+            # local_tang = tangent along road, local_norm = perpendicular
+            local_perp_2d = np.array([local_norm[0], local_norm[1]])
+            local_axis_2d = np.array([local_tang[0], local_tang[1]])
+            # Normalize (may be needed if tangent has Z component)
+            pm = np.linalg.norm(local_perp_2d)
+            am = np.linalg.norm(local_axis_2d)
+            if pm > 1e-12:
+                local_perp_2d /= pm
+            if am > 1e-12:
+                local_axis_2d /= am
+        else:
+            local_perp_2d = perp[:2]
+            local_axis_2d = axis[:2]
+
+        cross_comp = abs(n[0] * local_perp_2d[0] + n[1] * local_perp_2d[1])
+        long_comp = abs(n[0] * local_axis_2d[0] + n[1] * local_axis_2d[1])
 
         cross_slope[i] = (cross_comp / nz) * 100.0
         long_slope[i] = (long_comp / nz) * 100.0
@@ -117,6 +152,7 @@ def compute_triangle_slopes(mesh_data: dict, axis: np.ndarray = None) -> dict:
         "long_slope_pct": long_slope,
         "axis": axis,
         "perp": perp,
+        "uses_local_frame": use_local,
     }
 
 
@@ -125,6 +161,7 @@ def compute_surface_slopes(
     face_groups: list,
     categories: list[str] = None,
     axis: np.ndarray = None,
+    centerline=None,
 ) -> dict:
     """Compute slopes only for faces in specified categories.
 
@@ -133,6 +170,7 @@ def compute_surface_slopes(
         face_groups: list of face group dicts (from L2).
         categories: list of categories to include (default: ["crown"]).
         axis: optional road/wall axis.
+        centerline: optional WallCenterline for local frame on curves.
 
     Returns:
         Same as compute_triangle_slopes, but only for selected faces.
@@ -155,8 +193,8 @@ def compute_surface_slopes(
     mask = np.zeros(n_faces, dtype=bool)
     mask[selected_indices] = True
 
-    # Compute slopes for all faces
-    slopes = compute_triangle_slopes(mesh_data, axis)
+    # Compute slopes for all faces (with local frames for curves)
+    slopes = compute_triangle_slopes(mesh_data, axis, centerline=centerline)
 
     # Add mask and statistics for selected faces only
     slopes["face_mask"] = mask

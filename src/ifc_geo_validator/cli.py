@@ -270,6 +270,7 @@ def main():
                     mesh_data, l2["face_groups"],
                     categories=hm_cats,
                     axis=np.array(l2["wall_axis"]) if l2 else None,
+                    centerline=l2.get("centerline"),
                 )
                 if slopes is not None:
                     n_sel = int(slopes["face_mask"].sum())
