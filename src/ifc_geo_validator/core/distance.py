@@ -63,44 +63,99 @@ def min_vertex_distance(verts_a, verts_b) -> float:
         return min_dist
 
 
+class _TerrainGrid:
+    """Spatial hash grid for fast terrain triangle lookups.
+
+    Partitions the terrain's XY bounding box into a regular grid of cells.
+    Each cell stores indices of triangles whose XY AABB overlaps that cell.
+    Point queries then only test triangles in the query point's cell.
+
+    Complexity: O(1) amortized per query (vs O(M) for linear scan).
+    Construction: O(M) where M = number of terrain triangles.
+    """
+    __slots__ = ("verts", "faces", "grid", "ox", "oy", "cell_size", "nx", "ny")
+
+    def __init__(self, verts, faces, target_cells_per_axis=50):
+        self.verts = verts
+        self.faces = faces
+
+        # Compute terrain XY bounds
+        xy_min = verts[:, :2].min(axis=0)
+        xy_max = verts[:, :2].max(axis=0)
+        extent = xy_max - xy_min
+        max_extent = float(max(extent[0], extent[1], 1e-6))
+
+        self.cell_size = max_extent / target_cells_per_axis
+        self.ox = float(xy_min[0])
+        self.oy = float(xy_min[1])
+        self.nx = int(np.ceil(extent[0] / self.cell_size)) + 1
+        self.ny = int(np.ceil(extent[1] / self.cell_size)) + 1
+
+        # Build grid: dict[cell_key] → list of face indices
+        self.grid: dict[tuple[int, int], list[int]] = {}
+        for fi in range(len(faces)):
+            tri = faces[fi]
+            v0, v1, v2 = verts[tri[0]], verts[tri[1]], verts[tri[2]]
+            # Triangle AABB in grid coordinates
+            tri_min_x = min(v0[0], v1[0], v2[0])
+            tri_max_x = max(v0[0], v1[0], v2[0])
+            tri_min_y = min(v0[1], v1[1], v2[1])
+            tri_max_y = max(v0[1], v1[1], v2[1])
+
+            ci_min = max(0, int((tri_min_x - self.ox) / self.cell_size))
+            ci_max = min(self.nx - 1, int((tri_max_x - self.ox) / self.cell_size))
+            cj_min = max(0, int((tri_min_y - self.oy) / self.cell_size))
+            cj_max = min(self.ny - 1, int((tri_max_y - self.oy) / self.cell_size))
+
+            for ci in range(ci_min, ci_max + 1):
+                for cj in range(cj_min, cj_max + 1):
+                    key = (ci, cj)
+                    if key not in self.grid:
+                        self.grid[key] = []
+                    self.grid[key].append(fi)
+
+    def query(self, px, py) -> float | None:
+        """Query terrain height at (px, py). Returns None if outside footprint."""
+        ci = int((px - self.ox) / self.cell_size)
+        cj = int((py - self.oy) / self.cell_size)
+        candidates = self.grid.get((ci, cj))
+        if candidates is None:
+            return None
+
+        for fi in candidates:
+            tri = self.faces[fi]
+            v0 = self.verts[tri[0]]
+            v1 = self.verts[tri[1]]
+            v2 = self.verts[tri[2]]
+            bary = _barycentric_2d(px, py, v0[0], v0[1], v1[0], v1[1], v2[0], v2[1])
+            if bary is not None:
+                u, v, w = bary
+                return float(u * v0[2] + v * v1[2] + w * v2[2])
+        return None
+
+
+# Module-level cache for terrain grids (avoids rebuilding per query)
+_terrain_grid_cache: dict[int, _TerrainGrid] = {}
+
+
 def terrain_height_at_xy(terrain_verts, terrain_faces, x, y) -> float | None:
     """Query terrain height at (x, y) via barycentric interpolation.
 
-    Projects terrain triangles onto the XY plane, finds the triangle
-    containing (x, y), then interpolates z using barycentric coordinates.
-
-    Uses AABB pre-filtering: only tests triangles whose XY bounding box
-    contains the query point. This reduces O(M) to O(M/k) for k grid cells.
+    Uses a spatial hash grid for O(1) amortized lookups instead of
+    O(M) linear scan. The grid is built lazily on first query and
+    cached by terrain identity (id of the vertex array).
 
     Returns None if (x, y) is outside the terrain mesh footprint.
 
     Mathematical basis: Barycentric coordinates (de Berg et al. 2008).
     """
-    px, py = float(x), float(y)
+    # Build or retrieve spatial grid
+    cache_key = id(terrain_verts)
+    if cache_key not in _terrain_grid_cache:
+        _terrain_grid_cache[cache_key] = _TerrainGrid(terrain_verts, terrain_faces)
+    grid = _terrain_grid_cache[cache_key]
 
-    for tri in terrain_faces:
-        v0 = terrain_verts[tri[0]]
-        v1 = terrain_verts[tri[1]]
-        v2 = terrain_verts[tri[2]]
-
-        # Quick AABB rejection
-        min_x = min(v0[0], v1[0], v2[0])
-        max_x = max(v0[0], v1[0], v2[0])
-        min_y = min(v0[1], v1[1], v2[1])
-        max_y = max(v0[1], v1[1], v2[1])
-        if px < min_x or px > max_x or py < min_y or py > max_y:
-            continue
-
-        # Barycentric coordinates in XY
-        bary = _barycentric_2d(px, py, v0[0], v0[1], v1[0], v1[1], v2[0], v2[1])
-        if bary is None:
-            continue
-
-        u, v, w = bary
-        z = u * v0[2] + v * v1[2] + w * v2[2]
-        return float(z)
-
-    return None
+    return grid.query(float(x), float(y))
 
 
 def nearest_terrain_point(terrain_verts, terrain_faces, point_3d):

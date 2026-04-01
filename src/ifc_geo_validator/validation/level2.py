@@ -77,4 +77,5 @@ def validate_level2(mesh_data: dict, thresholds: dict = None) -> dict:
         "has_front": FRONT in summary,
         "has_back": BACK in summary,
         "front_back_asymmetry": result.get("front_back_asymmetry", 0.0),
+        "n_bodies": result.get("n_bodies", 1),
     }

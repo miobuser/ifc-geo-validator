@@ -235,15 +235,35 @@ def _find_proximity_pairs(centroids_a, centroids_b, epsilon):
     """Find face pairs with centroid distance < ε.
 
     Returns list of (idx_a, idx_b, distance) tuples.
-    Complexity: O(M_A × M_B) — trivial for retaining wall meshes.
+
+    Uses fully vectorized numpy when the distance matrix fits in memory
+    (M_A × M_B < 2M entries ≈ 48 MB for float64). Falls back to chunked
+    computation for larger meshes.
+
+    Complexity: O(M_A × M_B), but vectorized (no Python loop).
     """
-    pairs = []
-    for i, ca in enumerate(centroids_a):
-        dists = np.linalg.norm(centroids_b - ca, axis=1)
-        close = np.where(dists < epsilon)[0]
-        for j in close:
-            pairs.append((i, int(j), float(dists[j])))
-    return pairs
+    m_a, m_b = len(centroids_a), len(centroids_b)
+
+    if m_a * m_b < 2_000_000:
+        # Full vectorized distance matrix
+        diff = centroids_a[:, np.newaxis, :] - centroids_b[np.newaxis, :, :]
+        dist_matrix = np.linalg.norm(diff, axis=2)  # (M_A, M_B)
+        close_i, close_j = np.where(dist_matrix < epsilon)
+        return [(int(i), int(j), float(dist_matrix[i, j]))
+                for i, j in zip(close_i, close_j)]
+    else:
+        # Chunked: process rows in batches to limit memory
+        pairs = []
+        chunk_size = max(1, 2_000_000 // m_b)
+        for start in range(0, m_a, chunk_size):
+            end = min(start + chunk_size, m_a)
+            chunk = centroids_a[start:end]
+            diff = chunk[:, np.newaxis, :] - centroids_b[np.newaxis, :, :]
+            dists = np.linalg.norm(diff, axis=2)
+            ci, cj = np.where(dists < epsilon)
+            for i, j in zip(ci, cj):
+                pairs.append((int(start + i), int(j), float(dists[i, j])))
+        return pairs
 
 
 def _compute_contact_kappa(proximity_pairs, normals_a, areas_a,

@@ -154,6 +154,14 @@ def main():
                 print(f"  Watertight:  {l1['is_watertight']}")
                 print(f"  Triangles:   {l1['num_triangles']}")
 
+                # Mesh quality warnings
+                n_degen = l1.get("n_degenerate_filtered", 0)
+                if n_degen > 0:
+                    print(f"  WARNING: {n_degen} degenerate triangles filtered")
+                q = l1.get("mesh_quality", {})
+                if q.get("non_manifold_edges", 0) > 0:
+                    print(f"  WARNING: {q['non_manifold_edges']} non-manifold edges")
+
             # ── Level 2 ──
             if 2 in levels:
                 # Use classification thresholds from ruleset if available
@@ -161,7 +169,10 @@ def main():
                 l2 = validate_level2(mesh_data, thresholds=cl_thresh)
                 elem_result["level2"] = l2
 
+                n_bodies = l2.get("n_bodies", 1)
                 print(f"\n  Face Classification ({l2['num_groups']} groups):")
+                if n_bodies > 1:
+                    print(f"  WARNING: {n_bodies} disconnected bodies — using largest")
                 axis = l2["wall_axis"]
                 print(f"  Wall axis:   ({axis[0]:.3f}, {axis[1]:.3f}, {axis[2]:.3f})")
                 cinfo = l2.get("centerline_info")
