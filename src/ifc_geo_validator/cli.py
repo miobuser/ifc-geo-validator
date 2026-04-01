@@ -277,7 +277,29 @@ def main():
                 if "crown_width_cv" in l3:
                     print(f"    Profile CV:       {l3['crown_width_cv']:.4f}")
 
-            # ── Slope heatmap ──────────────────────────────────────
+            # ── Slope analysis (always computed for crown) ───────
+            if l2 is not None:
+                try:
+                    from ifc_geo_validator.viz.slope_heatmap import compute_surface_slopes as _css
+                    _sl = _css(
+                        mesh_data, l2["face_groups"], categories=["crown"],
+                        axis=np.array(l2["wall_axis"]),
+                        centerline=l2.get("centerline"),
+                    )
+                    if _sl is not None:
+                        elem_result["slope_analysis"] = {
+                            "area_weighted_cross_pct": _sl["area_weighted_cross_pct"],
+                            "max_cross_pct": _sl["max_cross_pct"],
+                            "min_cross_pct": _sl["min_cross_pct"],
+                            "area_weighted_long_pct": _sl["area_weighted_long_pct"],
+                            "max_long_pct": _sl["max_long_pct"],
+                            "min_long_pct": _sl["min_long_pct"],
+                            "uses_local_frame": _sl.get("uses_local_frame", False),
+                        }
+                except Exception:
+                    pass
+
+            # ── Slope heatmap (interactive, only if requested) ─────
             if args.heatmap and l2 is not None:
                 from ifc_geo_validator.viz.slope_heatmap import (
                     compute_surface_slopes,

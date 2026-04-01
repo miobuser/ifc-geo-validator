@@ -131,6 +131,14 @@ def _collect_properties(elem_result: dict) -> dict:
         if "crown_width_cv" in l3:
             props["CrownWidthCV"] = round(l3["crown_width_cv"], 6)
 
+    # Slope analysis (if computed)
+    slope_data = elem_result.get("slope_analysis")
+    if slope_data:
+        props["CrossSlope_avg_pct"] = round(slope_data["area_weighted_cross_pct"], 2)
+        props["CrossSlope_max_pct"] = round(slope_data["max_cross_pct"], 2)
+        props["LongSlope_avg_pct"] = round(slope_data["area_weighted_long_pct"], 2)
+        props["LongSlope_max_pct"] = round(slope_data["max_long_pct"], 2)
+
     # Level 5: inter-element context
     l5 = elem_result.get("level5_context")
     if l5:

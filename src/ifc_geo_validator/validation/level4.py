@@ -165,6 +165,12 @@ def _build_context(level1_result: dict, level3_result: dict) -> dict:
     ctx["foundation_width_mm"] = level3_result.get("foundation_width_mm")
     ctx["foundation_width_ratio"] = level3_result.get("foundation_width_ratio")
 
+    # Slope analysis (if computed upstream)
+    ctx["cross_slope_avg_pct"] = level3_result.get("cross_slope_avg_pct")
+    ctx["cross_slope_max_pct"] = level3_result.get("cross_slope_max_pct")
+    ctx["long_slope_avg_pct"] = level3_result.get("long_slope_avg_pct")
+    ctx["long_slope_max_pct"] = level3_result.get("long_slope_max_pct")
+
     return ctx
 
 

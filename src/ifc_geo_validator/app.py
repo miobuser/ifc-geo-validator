@@ -441,6 +441,58 @@ if run_button or uploaded_file:
                           delta="uniform" if cv <= 0.1 else "variable",
                           delta_color="normal" if cv <= 0.1 else "inverse")
 
+            # ── Slope Analysis ────────────────────────────────
+            try:
+                import numpy as np_app
+                from ifc_geo_validator.viz.slope_heatmap import compute_surface_slopes
+
+                centerline_obj = l2.get("centerline")
+                wall_axis = l2.get("wall_axis")
+                slope_cats = st.multiselect(
+                    "Slope analysis categories",
+                    ["crown", "foundation", "front", "back"],
+                    default=["crown"],
+                    key=f"slope_cats_{eid}",
+                )
+                if slope_cats:
+                    slopes = compute_surface_slopes(
+                        r.get("mesh_data") or {},
+                        l2["face_groups"],
+                        categories=slope_cats,
+                        axis=np_app.array(wall_axis) if wall_axis else None,
+                        centerline=centerline_obj,
+                    )
+                    if slopes is not None:
+                        st.subheader("Slope Analysis")
+                        local_label = "local" if slopes.get("uses_local_frame") else "global"
+                        st.caption(f"Centerline: {local_label} frame, {int(slopes['face_mask'].sum())} faces")
+
+                        sc1, sc2, sc3, sc4 = st.columns(4)
+                        sc1.metric("Cross-slope (avg)", f"{slopes['area_weighted_cross_pct']:.2f} %")
+                        sc2.metric("Cross-slope (max)", f"{slopes['max_cross_pct']:.2f} %")
+                        sc3.metric("Long. slope (avg)", f"{slopes['area_weighted_long_pct']:.2f} %")
+                        sc4.metric("Long. slope (max)", f"{slopes['max_long_pct']:.2f} %")
+
+                        # ASTRA threshold warning
+                        if slopes["max_cross_pct"] > 5.0:
+                            st.warning(
+                                f"Cross-slope {slopes['max_cross_pct']:.1f}% exceeds "
+                                f"ASTRA maximum of 5%"
+                            )
+
+                        # Per-triangle slope table (downloadable)
+                        sel_cross = slopes["selected_cross_pct"]
+                        sel_long = slopes["selected_long_pct"]
+                        if len(sel_cross) > 0:
+                            slope_df = {
+                                "Cross-slope (%)": [round(v, 2) for v in sel_cross],
+                                "Long. slope (%)": [round(v, 2) for v in sel_long],
+                            }
+                            with st.expander("Per-triangle slope data"):
+                                st.dataframe(slope_df, use_container_width=True, hide_index=True)
+            except Exception:
+                pass  # Slope analysis is optional
+
             # ── L4: Rule checks ──────────────────────────────
             if l4:
                 st.subheader("Rule Checks (L4)")
