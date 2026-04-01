@@ -34,7 +34,8 @@ dev = [
 ]
 viz = [
     "pyvista>=0.40",
-    "trimesh>=3.20",
+    "matplotlib>=3.7",
+    "scipy>=1.10",
 ]
 web = [
     "streamlit>=1.30",
