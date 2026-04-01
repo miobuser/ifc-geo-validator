@@ -85,11 +85,11 @@ def validate_level4(
 
     # Determine if element is wall-like (for smart rule filtering)
     is_wall_like = True
-    confidence = 1.0
+    element_role = "unknown"
     if level2_result:
         geo_check = level2_result.get("geometry_check", {})
         is_wall_like = geo_check.get("is_wall_like", True)
-        confidence = level2_result.get("confidence", 1.0)
+        element_role = level2_result.get("element_role", "unknown")
 
     checks = []
 
@@ -98,14 +98,19 @@ def validate_level4(
         checks.append(_evaluate_rule(rule, context))
 
     # Evaluate Level 3 rules (skip wall-specific for non-wall elements)
+    # Wall-specific rules only apply to wall_stem and parapet roles.
+    # Foundation, slab, column, unknown → skip wall measurement rules.
+    wall_roles = {"wall_stem", "parapet", "unknown"}
+    skip_l3 = not is_wall_like or (element_role not in wall_roles and element_role != "unknown")
+
     for rule in ruleset.get("level_3", []):
-        if not is_wall_like:
-            # Element is not wall-like → skip wall-specific measurement rules
-            rule_id = rule["id"]
+        if skip_l3:
+            role_label = {"foundation": "Fundament", "slab": "Platte",
+                          "column": "Stütze"}.get(element_role, element_role)
             checks.append(_make_result(
-                rule_id, rule["name"], SKIP, rule.get("severity", INFO),
+                rule["id"], rule["name"], SKIP, rule.get("severity", INFO),
                 None, rule.get("check", ""), rule.get("reference", ""),
-                f"Skipped: element is not wall-like ({level2_result.get('geometry_check', {}).get('reason', '?')})"
+                f"Skipped: element is {role_label} (wall-specific rule)"
             ))
         else:
             checks.append(_evaluate_rule(rule, context))

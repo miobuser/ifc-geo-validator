@@ -126,9 +126,10 @@ class TestSmartRuleFiltering:
         l3_skipped = [c for c in skipped if "L3" in c["rule_id"]]
 
         assert len(l3_skipped) > 0, "Slab should have L3 rules skipped"
-        # Check skip message mentions geometry
+        # Check skip message mentions element role or geometry
         for c in l3_skipped:
-            assert "not wall-like" in c["message"]
+            msg = c["message"].lower()
+            assert "platte" in msg or "not wall-like" in msg or "wall-specific" in msg
 
     def test_wall_does_not_skip(self):
         """A standard wall should NOT have L3 rules skipped."""
@@ -141,7 +142,8 @@ class TestSmartRuleFiltering:
         l4 = validate_level4(l1, l3, ruleset, level2_result=l2)
         l3_checks = [c for c in l4["checks"] if "L3" in c["rule_id"]]
         l3_skipped = [c for c in l3_checks if c["status"] == "SKIP"
-                      and "not wall-like" in c.get("message", "")]
+                      and ("not wall-like" in c.get("message", "")
+                           or "wall-specific" in c.get("message", ""))]
 
         assert len(l3_skipped) == 0, "Wall should not have L3 rules skipped for geometry"
 
