@@ -6,18 +6,20 @@ Geometric validation of IFC infrastructure models against configurable requireme
 
 ## Overview
 
-`ifc-geo-validator` analyses the geometry of IFC building elements (focused on retaining walls per ASTRA FHB T/G) and validates them against configurable YAML rulesets. It extracts triangulated meshes from IFC geometry via IfcOpenShell/OpenCASCADE, classifies faces by surface normal direction, computes geometric properties per face group, and checks them against normative requirements.
+`ifc-geo-validator` analyses the geometry of IFC building elements and validates them against configurable YAML rulesets. It extracts triangulated meshes from IFC geometry via IfcOpenShell/OpenCASCADE, classifies faces by surface normal direction, computes geometric properties per face group, and checks them against normative requirements.
+
+Designed for retaining walls per ASTRA FHB T/G, but extensible to any element type (tunnel components, bridge elements, structural members) via custom rulesets.
 
 ## Validation Levels
 
 | Level | Description | Status |
 |-------|-------------|--------|
-| L1 | Geometric properties (volume, area, bbox, centroid, watertight) | Done |
+| L1 | Geometric properties (volume, area, bbox, centroid, watertight, mesh quality) | Done |
 | L2 | Face classification (crown, foundation, front, back, ends) with curved wall support | Done |
 | L3 | Face-specific measurements (crown width, slope, thickness, inclination, height) | Done |
-| L4 | YAML rule evaluation (L1-L7 rules, composite checks) | Done |
+| L4 | YAML rule evaluation (L1–L7 rules, composite checks, bbox dimensions) | Done |
 | L5 | Inter-element context (Contact Surface Normal Analysis: stacked/side-by-side) | Done |
-| L6 | Terrain context + distance checks (IfcSite geometry, clearance, element distances) | Done |
+| L6 | Terrain context + distance checks (IfcSite geometry, clearance, embedment) | Done |
 | L7 | Distance calculations (YAML-configurable, evaluated via L4 engine) | Done |
 
 ## Installation
@@ -45,6 +47,9 @@ ifc-geo-validator model.ifc --ruleset rulesets/astra_fhb_stuetzmauer.yaml
 # Filter for retaining walls only
 ifc-geo-validator model.ifc --filter-type IfcWall --filter-predefined RETAININGWALL
 
+# Multiple entity types (wall + foundation for L5 inter-element checks)
+ifc-geo-validator model.ifc --filter-type IfcWall,IfcSlab,IfcFooting
+
 # Run specific levels
 ifc-geo-validator model.ifc --levels 1,2,3
 
@@ -67,14 +72,23 @@ streamlit run src/ifc_geo_validator/app.py
 
 Upload an IFC file in the browser, configure filters, and view interactive validation results. Download options: JSON report, enriched IFC (with Pset_GeoValidation), and BCF 2.1 issue file.
 
+### Browser Viewer
+
+```bash
+python viewer/server.py
+```
+
+Interactive 3D viewer with centerline rendering, face classification highlighting, measurement annotations, and screenshot export.
+
 ## Rulesets
 
-Validation rules are defined in YAML and fully configurable. Two bundled rulesets demonstrate different normative requirements:
+Validation rules are defined in YAML and fully configurable. Three bundled rulesets:
 
-| Ruleset | Standard | Crown min | Thickness min | Inclination |
-|---------|----------|-----------|---------------|-------------|
-| `astra_fhb_stuetzmauer.yaml` | ASTRA FHB T/G 24 001-15101 | 300 mm | 300 mm | 10:1 recommended |
-| `sia_262_stuetzmauer.yaml` | SIA 262 / SIA 267 | 200 mm | 200 mm | — |
+| Ruleset | Standard | Scope | Key Checks |
+|---------|----------|-------|------------|
+| `astra_fhb_stuetzmauer.yaml` | ASTRA FHB T/G 24 001-15101 | Retaining walls | Crown ≥ 300mm, thickness ≥ 300mm, slope 3%, inclination 10:1 |
+| `sia_262_stuetzmauer.yaml` | SIA 262 / SIA 267 | Retaining walls | Crown ≥ 200mm, thickness ≥ 200mm, height ≤ 3m |
+| `astra_fhb_tunnel.yaml` | ASTRA FHB T/G 24 001-10xxx | Tunnel components | Volume, mesh validity, min thickness, bbox dimensions |
 
 ```yaml
 level_3:
@@ -85,24 +99,27 @@ level_3:
     reference: "FHB T/G 24 001-15101, Kap. 3"
 ```
 
-Custom rulesets can define rules for any computed variable (L1–L7).
+Custom rulesets can define rules for any computed variable (L1–L7), including bounding box dimensions (`bbox_dim_min_m`, `bbox_height_m`) for non-wall elements.
 
 ## Key Features
 
 - **Curved wall support**: Centerline extraction with local coordinate frames for accurate measurements on arcs, S-curves, and polygonal walls
-- **Multi-element validation**: Separate IFC elements for wall stem, foundation, buttresses — each validated independently
-- **Contact Surface Normal Analysis** (L5): Mathematically founded pair classification using the contact surface orientation (no heuristics)
-- **Terrain context** (L6): Automatic earth/air side determination from IfcSite geometry, crown-terrain clearance measurement
-- **No heuristics**: All 17 algorithms are mathematically derived (cos(pi/4) thresholds, 3-sigma significance tests, CDR, natural-gap clustering)
-- **Foundation embedment depth** (L7): Automatic depth computation from terrain surface via barycentric interpolation
+- **Multi-entity-type validation**: `--filter-type IfcWall,IfcSlab,IfcFooting` in a single run for inter-element checks
+- **Contact Surface Normal Analysis** (L5): Mathematically founded pair classification using contact surface orientation
+- **Terrain context** (L6): Automatic earth/air side determination from IfcSite geometry, crown-terrain clearance, foundation embedment
+- **No heuristics**: All algorithms are mathematically derived (cos(π/4) thresholds, 3-σ significance tests, CDR, natural-gap clustering)
+- **Robustness**: Degenerate triangle filtering, multi-body detection, scale-invariant tolerances (mm/m/km/LV95 coordinates)
+- **Mesh quality diagnostics**: Degenerate count, aspect ratio, non-manifold edges, edge length statistics
 - **Profile consistency** (L3): Coefficient of variation of crown width along curved walls
-- **26 test models** (T1–T27) covering: simple boxes, inclined walls, L/T-profiles, curved arcs (90/180/S-curve), polygonal walls, stepped profiles, variable height, buttresses, different IFC geometry types, terrain, and real-world scenarios (ASTRA-compliant, highway+terrain, multi-failure)
-- **340 automated tests** across 10 test suites
+- **6 output formats**: CLI, JSON, enriched IFC (Pset_GeoValidation), BCF 2.1, Streamlit web app, browser viewer
+- **26 test models** (T1–T27): simple boxes, inclined walls, L/T-profiles, curved arcs, polygonal walls, stepped profiles, variable height, buttresses, terrain context, ASTRA-compliant, multi-failure scenarios
+- **348 automated tests** across 10 test suites (edge cases, scale invariance, multi-body detection)
+- **Tested on real IFC models**: IFC4 bridge model (46 elements, 7 entity types), IFC4 tunnel model (102 elements, 2.5M triangles)
 
 ## Testing
 
 ```bash
-pytest                                    # Run all 340 tests
+pytest                                    # Run all 348 tests
 python validate_all_models.py             # Batch validate all 26 models
 python sensitivity_analysis.py            # Threshold sensitivity sweep
 python generate_thesis_figures.py         # Generate 3D classification figures

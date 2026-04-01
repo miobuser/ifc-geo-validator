@@ -43,7 +43,8 @@ def main():
     )
     parser.add_argument(
         "--filter-type",
-        help="IFC entity type to filter (default: IfcWall)",
+        help="IFC entity types, comma-separated (default: IfcWall). "
+             "Example: IfcWall,IfcSlab,IfcFooting",
         default="IfcWall",
     )
     parser.add_argument(
@@ -74,6 +75,7 @@ def main():
 
     args = parser.parse_args()
     levels = [int(x) for x in args.levels.split(",")]
+    entity_types = [t.strip() for t in args.filter_type.split(",")]
 
     from ifc_geo_validator.core.ifc_parser import load_model, get_elements, get_terrain_mesh
     from ifc_geo_validator.core.mesh_converter import extract_mesh
@@ -87,7 +89,7 @@ def main():
     version = _get_version()
     print(f"IFC Geometry Validator v{version}")
     print(f"File: {args.ifc_file}")
-    print(f"Filter: {args.filter_type}"
+    print(f"Filter: {', '.join(entity_types)}"
           + (f" ({args.filter_predefined})" if args.filter_predefined else ""))
     print(f"Levels: {args.levels}")
     print()
@@ -105,9 +107,17 @@ def main():
 
     # Load model
     model = load_model(args.ifc_file)
-    elements = get_elements(model, args.filter_type, args.filter_predefined)
-    print(f"Found {len(elements)} {args.filter_type} elements"
-          + (f" (PredefinedType={args.filter_predefined})" if args.filter_predefined else ""))
+
+    # Collect elements from all specified entity types
+    elements = []
+    for etype in entity_types:
+        found = get_elements(model, etype, args.filter_predefined)
+        if found:
+            print(f"Found {len(found)} {etype} elements"
+                  + (f" (PredefinedType={args.filter_predefined})" if args.filter_predefined else ""))
+            elements.extend(found)
+    if len(entity_types) > 1:
+        print(f"Total: {len(elements)} elements")
 
     # Terrain detection (print early so user knows)
     terrain = None
@@ -118,9 +128,9 @@ def main():
     if not elements:
         print("\nNo elements to validate.")
         print(f"  Hint: Try a different --filter-type (current: {args.filter_type}).")
+        print(f"  Hint: Use comma-separated types: --filter-type IfcWall,IfcSlab,IfcFooting")
         if args.filter_predefined:
             print(f"  Hint: Remove --filter-predefined {args.filter_predefined} to widen the search.")
-        print(f"  Available entity types in this model can be checked with IfcOpenShell.")
         return
 
     all_results = []
