@@ -58,6 +58,7 @@ def validate_level4(
     ruleset: dict,
     level5_context: dict = None,
     level6_context: dict = None,
+    level2_result: dict = None,
 ) -> dict:
     """Evaluate rules from the ruleset against computed values.
 
@@ -82,15 +83,32 @@ def validate_level4(
     if level6_context:
         context.update(level6_context)
 
+    # Determine if element is wall-like (for smart rule filtering)
+    is_wall_like = True
+    confidence = 1.0
+    if level2_result:
+        geo_check = level2_result.get("geometry_check", {})
+        is_wall_like = geo_check.get("is_wall_like", True)
+        confidence = level2_result.get("confidence", 1.0)
+
     checks = []
 
-    # Evaluate Level 1 rules
+    # Evaluate Level 1 rules (always apply)
     for rule in ruleset.get("level_1", []):
         checks.append(_evaluate_rule(rule, context))
 
-    # Evaluate Level 3 rules
+    # Evaluate Level 3 rules (skip wall-specific for non-wall elements)
     for rule in ruleset.get("level_3", []):
-        checks.append(_evaluate_rule(rule, context))
+        if not is_wall_like:
+            # Element is not wall-like → skip wall-specific measurement rules
+            rule_id = rule["id"]
+            checks.append(_make_result(
+                rule_id, rule["name"], SKIP, rule.get("severity", INFO),
+                None, rule.get("check", ""), rule.get("reference", ""),
+                f"Skipped: element is not wall-like ({level2_result.get('geometry_check', {}).get('reason', '?')})"
+            ))
+        else:
+            checks.append(_evaluate_rule(rule, context))
 
     # Evaluate Level 5 rules (inter-element context)
     for rule in ruleset.get("level_5", []):

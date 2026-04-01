@@ -515,7 +515,9 @@ def main():
             if l6_ctx:
                 elem_result["level6_context"] = l6_ctx
 
-            l4 = validate_level4(l1, l3, ruleset, level5_context=l5_ctx, level6_context=l6_ctx)
+            l2_for_l4 = elem_result.get("level2")
+            l4 = validate_level4(l1, l3, ruleset, level5_context=l5_ctx,
+                                  level6_context=l6_ctx, level2_result=l2_for_l4)
             elem_result["level4"] = l4
 
             name = elem_result.get("element_name", "?")

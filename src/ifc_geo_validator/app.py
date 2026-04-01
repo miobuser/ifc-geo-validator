@@ -222,7 +222,8 @@ def run_validation(_file_bytes, file_name, entity_types_str, predefined_type, _r
                     r["level5_context"] = l5_ctx
                 if l6_ctx:
                     r["level6_context"] = l6_ctx
-                r["level4"] = validate_level4(l1, l3, ruleset, level5_context=l5_ctx, level6_context=l6_ctx)
+                r["level4"] = validate_level4(l1, l3, ruleset, level5_context=l5_ctx,
+                                              level6_context=l6_ctx, level2_result=r.get("level2"))
 
     report = generate_report(file_name, all_results, ruleset)
     return all_results, report, ruleset, l5_result, l6_result, terrain is not None
