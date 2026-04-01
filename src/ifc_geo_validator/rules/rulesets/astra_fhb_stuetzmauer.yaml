@@ -101,6 +101,14 @@ level_3:
     severity: WARNING
     reference: "FHB T/G, Konstruktive Anforderung"
 
+  - id: ASTRA-SM-L3-007
+    name: "Kronenneigung Quergefälle"
+    description: "Maximales Quergefälle der Mauerkrone (lokal gemessen)"
+    check: "cross_slope_max_pct <= 10.0"
+    severity: WARNING
+    reference: "FHB T/G 24 001-15101, Kap. 3 — Konstruktive Anforderung"
+    note: "Kronenneigung sollte 3% betragen, max. 10% toleriert"
+
 # =============================================================================
 # Level 4 — Anforderungsabgleich (zusammengesetzte Prüfungen)
 # =============================================================================

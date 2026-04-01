@@ -62,7 +62,7 @@ class TestLoadRuleset:
         rs = load_ruleset(RULESET_PATH)
         assert rs["metadata"]["name"] == "ASTRA FHB T/G — Stützmauern"
         assert len(rs["level_1"]) == 2
-        assert len(rs["level_3"]) == 6
+        assert len(rs["level_3"]) == 7
 
 
 class TestT1Validation:
@@ -115,7 +115,7 @@ class TestT1Validation:
 
     def test_summary_counts(self):
         s = self.result["summary"]
-        assert s["total"] == 17  # 2 L1 + 5 L3 + 2 L5 + 2 L6 + 2 L7 + 4 L4
+        assert s["total"] == 18  # 2 L1 + 7 L3 + 2 L5 + 2 L6 + 1 L7 + 4 L4
         assert s["passed"] >= 4
         assert s["failed"] >= 2
 

@@ -150,8 +150,8 @@ class TestInjectAll:
             assert len(walls2) >= 1
             props = _read_pset(walls2[0])
             assert props is not None
-            assert props["RulesPassed"] == 11   # L1+L3(6)+L4 all pass (T7 compliant)
-            assert props["RulesTotal"] == 17   # +4 L5/L6 + 2 L7 (skipped) + 1 L3
+            assert props["RulesPassed"] == 11   # L1+L3(6)+L4 pass; L3-007 cross_slope SKIP (no slope data)
+            assert props["RulesTotal"] == 18   # 2 L1 + 7 L3 + 4 L4 + 2 L5 + 2 L6 + 1 L7
         finally:
             os.unlink(tmp_path)
 

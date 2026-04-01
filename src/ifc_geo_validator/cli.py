@@ -287,7 +287,7 @@ def main():
                         centerline=l2.get("centerline"),
                     )
                     if _sl is not None:
-                        elem_result["slope_analysis"] = {
+                        slope_data = {
                             "area_weighted_cross_pct": _sl["area_weighted_cross_pct"],
                             "max_cross_pct": _sl["max_cross_pct"],
                             "min_cross_pct": _sl["min_cross_pct"],
@@ -296,6 +296,13 @@ def main():
                             "min_long_pct": _sl["min_long_pct"],
                             "uses_local_frame": _sl.get("uses_local_frame", False),
                         }
+                        elem_result["slope_analysis"] = slope_data
+                        # Inject into L3 so L4 rule context can see them
+                        if l3 is not None:
+                            l3["cross_slope_avg_pct"] = slope_data["area_weighted_cross_pct"]
+                            l3["cross_slope_max_pct"] = slope_data["max_cross_pct"]
+                            l3["long_slope_avg_pct"] = slope_data["area_weighted_long_pct"]
+                            l3["long_slope_max_pct"] = slope_data["max_long_pct"]
                 except Exception:
                     pass
 

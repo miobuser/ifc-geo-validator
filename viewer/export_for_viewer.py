@@ -124,6 +124,15 @@ def export_model(ifc_path: str, output_path: str = None):
                 "length": round(cl.length, 2),
             }
 
+        # Compute per-triangle slope data for heatmap overlay
+        from ifc_geo_validator.viz.slope_heatmap import compute_triangle_slopes
+        slope_result = compute_triangle_slopes(mesh, centerline=cl)
+        slope_data = {
+            "cross": [round(float(v), 2) for v in slope_result["cross_slope_pct"]],
+            "long": [round(float(v), 2) for v in slope_result["long_slope_pct"]],
+            "total": [round(float(v), 2) for v in np.clip(slope_result["total_slope_pct"], 0, 100)],
+        }
+
         elements.append({
             "name": name,
             "id": wall.id(),
@@ -131,6 +140,7 @@ def export_model(ifc_path: str, output_path: str = None):
             "faces": faces,
             "face_data": face_data,
             "vertex_colors": vert_colors,
+            "slope_per_face": slope_data,
             "groups": [
                 {
                     "category": g["category"],

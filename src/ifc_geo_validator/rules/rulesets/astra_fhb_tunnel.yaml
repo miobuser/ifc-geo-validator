@@ -90,6 +90,21 @@ level_3:
     severity: INFO
     reference: "Konstruktive Empfehlung — gleichmässiges Querschnittsprofil"
 
+  - id: ASTRA-TN-L3-003
+    name: "Quergefälle Maximum"
+    description: "Quergefälle im Tunnel max. 5%"
+    check: "cross_slope_max_pct <= 5.0"
+    severity: ERROR
+    reference: "FHB T/G 24 001-10101 — Quergefälle"
+    quote: "Das Quergefälle beträgt im Tunnel maximal 5%."
+
+  - id: ASTRA-TN-L3-004
+    name: "Längsgefälle Maximum"
+    description: "Längsgefälle im Tunnel max. 5% (empfohlen max. 3%)"
+    check: "long_slope_max_pct <= 5.0"
+    severity: WARNING
+    reference: "FHB T/G 24 001-10101 — Längsgefälle"
+
 # =============================================================================
 # Level 4 — Zusammengesetzte Prüfungen
 # =============================================================================

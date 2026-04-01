@@ -85,7 +85,7 @@ class TestGenerateReport:
         report = generate_report("T1_simple_box.ifc", results, ruleset)
         elem = report["elements"][0]
         assert "rule_checks" in elem
-        assert elem["rule_checks"]["summary"]["total"] == 17
+        assert elem["rule_checks"]["summary"]["total"] == 18
 
 
 class TestWriteReport:

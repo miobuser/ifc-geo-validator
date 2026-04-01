@@ -84,7 +84,7 @@ class TestInfraBridge:
             assert l2["has_front"] or l2["has_back"]
             assert "crown_width_mm" in l3
             assert l3["crown_width_mm"] > 100  # at least 10cm
-            assert l4["summary"]["total"] == 17  # all 17 ASTRA rules evaluated
+            assert l4["summary"]["total"] == 18  # all 18 ASTRA rules evaluated
 
     def test_multi_body_element_survives(self, model):
         """Elements with multiple bodies (e.g. name signs) don't crash."""
