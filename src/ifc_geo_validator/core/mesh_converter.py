@@ -81,6 +81,20 @@ def extract_mesh(element) -> dict:
     norms[norms == 0] = 1  # avoid div-by-zero for degenerate triangles
     normals = cross / norms
 
+    # Filter degenerate triangles: area < ε² where ε is derived from the
+    # mesh's characteristic length (bbox diagonal). This is scale-invariant:
+    # a triangle is degenerate if its area is negligible relative to the
+    # model size, not relative to an absolute threshold.
+    bbox_diag = float(np.linalg.norm(vertices.max(axis=0) - vertices.min(axis=0)))
+    area_threshold = (bbox_diag * 1e-8) ** 2 if bbox_diag > 0 else 1e-30
+    valid_mask = areas > area_threshold
+    n_degenerate = int((~valid_mask).sum())
+
+    if n_degenerate > 0 and valid_mask.sum() >= 4:
+        faces = faces[valid_mask]
+        normals = normals[valid_mask]
+        areas = areas[valid_mask]
+
     watertight = _check_watertight(faces)
 
     return {
@@ -89,6 +103,7 @@ def extract_mesh(element) -> dict:
         "normals": normals,
         "areas": areas,
         "is_watertight": watertight,
+        "n_degenerate_filtered": n_degenerate,
     }
 
 

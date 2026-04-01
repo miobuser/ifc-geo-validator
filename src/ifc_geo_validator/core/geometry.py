@@ -44,6 +44,59 @@ def compute_bbox(vertices: np.ndarray) -> dict:
     }
 
 
+def compute_mesh_quality(vertices: np.ndarray, faces: np.ndarray, areas: np.ndarray) -> dict:
+    """Compute mesh quality metrics for diagnostics.
+
+    Returns:
+        dict with:
+            n_degenerate:    int — triangles with area < 1e-10 × median_area
+            min_area:        float — smallest triangle area
+            max_area:        float — largest triangle area
+            area_ratio:      float — max_area / min_area (condition number)
+            edge_length_min: float — shortest edge
+            edge_length_max: float — longest edge
+            edge_length_median: float — median edge length
+            non_manifold_edges: int — edges shared by ≠ 2 faces
+    """
+    # Area statistics
+    median_area = float(np.median(areas)) if len(areas) > 0 else 0.0
+    area_thresh = median_area * 1e-10 if median_area > 0 else 1e-30
+    n_degenerate = int((areas < area_thresh).sum())
+
+    valid_areas = areas[areas > area_thresh] if n_degenerate < len(areas) else areas
+    min_area = float(valid_areas.min()) if len(valid_areas) > 0 else 0.0
+    max_area = float(valid_areas.max()) if len(valid_areas) > 0 else 0.0
+    area_ratio = max_area / min_area if min_area > 0 else float("inf")
+
+    # Edge length statistics
+    edge_lengths = []
+    for tri in faces:
+        for k in range(3):
+            a_idx, b_idx = int(tri[k]), int(tri[(k + 1) % 3])
+            edge_lengths.append(float(np.linalg.norm(vertices[a_idx] - vertices[b_idx])))
+    edge_arr = np.array(edge_lengths) if edge_lengths else np.array([0.0])
+
+    # Non-manifold edges (shared by ≠ 2 faces)
+    edge_count: dict[tuple[int, int], int] = {}
+    for tri in faces:
+        for k in range(3):
+            a_idx, b_idx = int(tri[k]), int(tri[(k + 1) % 3])
+            edge = (min(a_idx, b_idx), max(a_idx, b_idx))
+            edge_count[edge] = edge_count.get(edge, 0) + 1
+    non_manifold = sum(1 for c in edge_count.values() if c != 2)
+
+    return {
+        "n_degenerate": n_degenerate,
+        "min_area": round(min_area, 10),
+        "max_area": round(max_area, 6),
+        "area_ratio": round(area_ratio, 1) if area_ratio != float("inf") else None,
+        "edge_length_min": round(float(edge_arr.min()), 6),
+        "edge_length_max": round(float(edge_arr.max()), 4),
+        "edge_length_median": round(float(np.median(edge_arr)), 4),
+        "non_manifold_edges": non_manifold,
+    }
+
+
 def compute_centroid(vertices: np.ndarray, faces: np.ndarray, areas: np.ndarray) -> np.ndarray:
     """Area-weighted centroid of the mesh surface.
 

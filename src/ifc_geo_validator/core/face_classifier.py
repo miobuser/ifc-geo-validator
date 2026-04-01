@@ -175,9 +175,34 @@ def classify_faces(mesh_data: dict, thresholds: dict = None) -> dict:
     normals = mesh_data["normals"]
     areas = mesh_data["areas"]
 
-    # Step 1: Weld vertices → adjacency → coplanar clustering
+    # Step 0: Detect connected components (multi-body elements)
+    # Real IFC elements may contain disconnected volumes (e.g. wall +
+    # separate cap, or boolean operation artifacts). Processing all bodies
+    # as one corrupts PCA and centerline extraction. We identify the
+    # largest connected component by total face area and classify only that.
     _, welded_faces = _weld_vertices(vertices, faces)
     adj_pairs = _build_face_adjacency(welded_faces)
+    body_mask, n_bodies = _largest_connected_component(
+        len(faces), adj_pairs, areas
+    )
+
+    if n_bodies > 1 and body_mask is not None:
+        # Re-index to largest body only
+        old_to_new_face = np.full(len(faces), -1, dtype=int)
+        new_idx = 0
+        for i in range(len(faces)):
+            if body_mask[i]:
+                old_to_new_face[i] = new_idx
+                new_idx += 1
+
+        faces = faces[body_mask]
+        normals = normals[body_mask]
+        areas = areas[body_mask]
+        # Re-weld on filtered faces (indices changed)
+        _, welded_faces = _weld_vertices(vertices, faces)
+        adj_pairs = _build_face_adjacency(welded_faces)
+
+    # Step 1: Coplanar clustering
     clusters = _cluster_coplanar(len(faces), adj_pairs, normals, coplanar_rad)
 
     # Step 2: Compute properties per cluster
@@ -201,17 +226,29 @@ def classify_faces(mesh_data: dict, thresholds: dict = None) -> dict:
         "num_groups": len(classified),
         "thresholds_used": t,
         "front_back_asymmetry": round(asymmetry_index, 4),
+        "n_bodies": n_bodies,
     }
 
 
 # ── Step 1: Vertex welding ──────────────────────────────────────────
 
-def _weld_vertices(vertices, faces, precision=6):
+def _weld_vertices(vertices, faces, precision=None):
     """Merge duplicate vertices by position, remap face indices.
 
     IfcOpenShell with weld-vertices=False produces separate vertex buffers
-    per BRep face.  We merge by rounding to `precision` decimals (~µm).
+    per BRep face.  We merge by rounding to `precision` decimals.
+
+    Precision is derived from the mesh scale if not specified:
+      precision = max(6, -floor(log10(bbox_diag)) + 8)
+    This ensures ~0.01% of the model size as the welding tolerance,
+    working correctly for models in mm, m, or km coordinates.
     """
+    if precision is None:
+        bbox_diag = float(np.linalg.norm(vertices.max(axis=0) - vertices.min(axis=0)))
+        if bbox_diag > 1e-10:
+            precision = max(6, int(-np.floor(np.log10(bbox_diag))) + 8)
+        else:
+            precision = 6
     n = len(vertices)
     pos_to_idx = {}
     old_to_new = np.empty(n, dtype=int)
@@ -257,6 +294,60 @@ def _build_face_adjacency(faces):
         if len(face_list) == 2:
             pairs.append((face_list[0], face_list[1]))
     return pairs
+
+
+# ── Step 0: Connected component detection ─────────────────────
+
+def _largest_connected_component(n_faces, adj_pairs, areas):
+    """Find the largest connected component by total face area.
+
+    Uses Union-Find to identify connected components of the face
+    adjacency graph.  Returns (mask, n_components) where mask is a
+    boolean array selecting faces of the largest component.
+
+    If there is only one component, returns (None, 1) to skip
+    unnecessary re-indexing.
+
+    Mathematical basis: connected-component labeling on an undirected
+    graph via disjoint-set forest with path compression.
+    """
+    parent = list(range(n_faces))
+    rank = [0] * n_faces
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(x, y):
+        rx, ry = find(x), find(y)
+        if rx == ry:
+            return
+        if rank[rx] < rank[ry]:
+            rx, ry = ry, rx
+        parent[ry] = rx
+        if rank[rx] == rank[ry]:
+            rank[rx] += 1
+
+    for fi, fj in adj_pairs:
+        union(fi, fj)
+
+    # Collect components and their total areas
+    comp_area: dict[int, float] = {}
+    for i in range(n_faces):
+        root = find(i)
+        comp_area[root] = comp_area.get(root, 0.0) + float(areas[i])
+
+    n_components = len(comp_area)
+    if n_components <= 1:
+        return None, 1
+
+    # Select largest component by area
+    largest_root = max(comp_area, key=comp_area.get)
+    mask = np.array([find(i) == largest_root for i in range(n_faces)])
+
+    return mask, n_components
 
 
 # ── Step 1: Coplanar clustering (Union-Find) ───────────────────────

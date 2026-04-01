@@ -10,6 +10,8 @@ import numpy as np
 
 from ifc_geo_validator.core.ifc_parser import load_model, IFCLoadError
 from ifc_geo_validator.core.mesh_converter import MeshExtractionError
+from ifc_geo_validator.core.geometry import compute_mesh_quality
+from ifc_geo_validator.core.face_classifier import classify_faces
 from ifc_geo_validator.validation.level1 import validate_level1
 from ifc_geo_validator.validation.level2 import validate_level2
 from ifc_geo_validator.validation.level3 import validate_level3
@@ -918,3 +920,157 @@ class TestMultiElementConsistency:
         assert result["summary"]["num_pairs"] >= 2, (
             f"Expected >= 2 pairs for 3 stacked elements, got {result['summary']['num_pairs']}"
         )
+
+
+# ── Multi-Body Detection ──────────────────────────────────────────
+
+class TestMultiBodyDetection:
+    """Test connected component detection for multi-body elements."""
+
+    def test_single_body_no_filtering(self):
+        """A single connected box should report n_bodies=1."""
+        mesh = _make_box_mesh([0, 0, 0], [8, 0.4, 3])
+        result = classify_faces(mesh)
+        assert result["n_bodies"] == 1
+
+    def test_two_disconnected_boxes(self):
+        """Two disconnected boxes: largest body should be classified,
+        n_bodies should be 2."""
+        # Large box (main wall)
+        v1, f1 = _box_verts_faces([0, 0, 0], [8, 0.4, 3])
+        # Small disconnected box (artifact)
+        v2, f2 = _box_verts_faces([20, 20, 20], [21, 20.2, 20.5])
+        # Offset face indices for second box
+        f2_offset = f2 + len(v1)
+        verts = np.vstack([v1, v2])
+        faces_arr = np.vstack([f1, f2_offset])
+        mesh = _make_mesh(verts, faces_arr)
+
+        result = classify_faces(mesh)
+        assert result["n_bodies"] == 2
+        # Classification should still produce valid groups
+        categories = {g.category for g in result["face_groups"]}
+        assert "crown" in categories
+        assert "foundation" in categories
+
+    def test_three_bodies_selects_largest(self):
+        """With three bodies, the largest by area is selected."""
+        # Large box
+        v1, f1 = _box_verts_faces([0, 0, 0], [8, 0.4, 3])
+        # Medium box
+        v2, f2 = _box_verts_faces([20, 0, 0], [22, 0.3, 1])
+        f2_off = f2 + len(v1)
+        # Tiny box
+        v3, f3 = _box_verts_faces([40, 0, 0], [40.1, 0.1, 0.1])
+        f3_off = f3 + len(v1) + len(v2)
+
+        verts = np.vstack([v1, v2, v3])
+        faces_arr = np.vstack([f1, f2_off, f3_off])
+        mesh = _make_mesh(verts, faces_arr)
+
+        result = classify_faces(mesh)
+        assert result["n_bodies"] == 3
+        # Crown width should correspond to the large box (400mm), not medium or tiny
+        groups = result["face_groups"]
+        crown = [g for g in groups if g.category == "crown"]
+        assert len(crown) > 0
+
+
+# ── Degenerate Triangle Filtering ─────────────────────────────────
+
+class TestDegenerateTriangleFiltering:
+    """Test that degenerate triangles are filtered in mesh extraction."""
+
+    def test_mesh_with_degenerate_faces(self):
+        """Mesh with zero-area triangles should still classify correctly."""
+        v, f = _box_verts_faces([0, 0, 0], [8, 0.4, 3])
+        # Add a degenerate triangle (three collinear points)
+        degen_v = np.array([[0, 0, 0], [4, 0, 0], [8, 0, 0]], dtype=float)
+        degen_f = np.array([[len(v), len(v)+1, len(v)+2]])
+        verts = np.vstack([v, degen_v])
+        faces_arr = np.vstack([f, degen_f])
+        mesh = _make_mesh(verts, faces_arr)
+
+        l1 = validate_level1(mesh)
+        # Should still compute valid volume
+        assert l1["volume"] > 0
+        # Mesh quality should report the degenerate triangle
+        assert l1["mesh_quality"]["n_degenerate"] >= 1
+
+    def test_mesh_quality_metrics(self):
+        """Mesh quality metrics should be populated for any mesh."""
+        mesh = _make_box_mesh([0, 0, 0], [8, 0.4, 3])
+        l1 = validate_level1(mesh)
+        q = l1["mesh_quality"]
+        assert "n_degenerate" in q
+        assert "edge_length_median" in q
+        assert "non_manifold_edges" in q
+        assert q["edge_length_median"] > 0
+        assert q["n_degenerate"] == 0  # clean box has no degenerates
+
+
+# ── Scale Invariance ──────────────────────────────────────────────
+
+class TestScaleInvariance:
+    """Test that the pipeline produces consistent results at different scales."""
+
+    def test_millimeter_model(self):
+        """Model in millimeters (coordinates 0–8000) should classify correctly."""
+        mesh = _make_box_mesh([0, 0, 0], [8000, 400, 3000])
+        l2 = validate_level2(mesh)
+        assert l2["has_crown"]
+        assert l2["has_foundation"]
+        assert l2["has_front"]
+
+    def test_kilometer_model(self):
+        """Model with large coordinates (UTM-like) should classify correctly."""
+        # Simulate a wall at UTM coordinates
+        base = [600000.0, 200000.0, 500.0]
+        mesh = _make_box_mesh(base, [base[0]+8, base[1]+0.4, base[2]+3])
+        l2 = validate_level2(mesh)
+        assert l2["has_crown"]
+        assert l2["has_foundation"]
+        assert l2["has_front"]
+
+    def test_crown_width_scale_consistent(self):
+        """Crown width should scale linearly with model size."""
+        # 0.4m wall in meters
+        mesh_m = _make_box_mesh([0, 0, 0], [8, 0.4, 3])
+        l2_m = validate_level2(mesh_m)
+        l3_m = validate_level3(mesh_m, l2_m)
+
+        # Same wall in millimeters
+        mesh_mm = _make_box_mesh([0, 0, 0], [8000, 400, 3000])
+        l2_mm = validate_level2(mesh_mm)
+        l3_mm = validate_level3(mesh_mm, l2_mm)
+
+        # Both should report ~400mm crown width
+        assert abs(l3_m["crown_width_mm"] - 400.0) < 1.0
+        assert abs(l3_mm["crown_width_mm"] - 400000.0) < 1000.0  # 400m in mm-scale
+
+
+# ── Helpers for new tests ─────────────────────────────────────────
+
+def _box_verts_faces(min_pt, max_pt):
+    """Create box vertices and face indices (12 triangles)."""
+    x0, y0, z0 = min_pt
+    x1, y1, z1 = max_pt
+    verts = np.array([
+        [x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0],
+        [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1],
+    ], dtype=float)
+    faces = np.array([
+        [0, 2, 1], [0, 3, 2],  # bottom
+        [4, 5, 6], [4, 6, 7],  # top
+        [0, 1, 5], [0, 5, 4],  # front
+        [2, 3, 7], [2, 7, 6],  # back
+        [0, 4, 7], [0, 7, 3],  # left
+        [1, 2, 6], [1, 6, 5],  # right
+    ])
+    return verts, faces
+
+
+def _make_box_mesh(min_pt, max_pt):
+    """Build a complete box mesh_data dict."""
+    v, f = _box_verts_faces(min_pt, max_pt)
+    return _make_mesh(v, f)

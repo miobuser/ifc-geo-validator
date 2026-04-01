@@ -46,6 +46,11 @@ def validate_level3(mesh_data: dict, level2_result: dict) -> dict:
     wall_axis = np.array(level2_result["wall_axis"])
     centerline = level2_result.get("centerline")
 
+    # Scale-relative zero threshold: derived from bbox diagonal.
+    # A measurement is considered zero if it is < 1e-8 × model size.
+    bbox_diag = float(np.linalg.norm(vertices.max(axis=0) - vertices.min(axis=0)))
+    eps = bbox_diag * 1e-8 if bbox_diag > 0 else 1e-12
+
     results = {}
 
     # ── Centerline metadata ──────────────────────────────────────────
@@ -60,7 +65,7 @@ def validate_level3(mesh_data: dict, level2_result: dict) -> dict:
         crown_groups = _filter_topmost_crown(crown_groups)
 
     if crown_groups:  # Re-check after filtering (may be empty)
-        cw = _compute_crown_width(vertices, faces, crown_groups, wall_axis, centerline)
+        cw = _compute_crown_width(vertices, faces, crown_groups, wall_axis, centerline, eps)
         results["crown_width_mm"] = cw["width_mm"]
         results["crown_width_method"] = cw["method"]
         if "width_min_mm" in cw:
@@ -78,7 +83,7 @@ def validate_level3(mesh_data: dict, level2_result: dict) -> dict:
     back_groups = [g for g in groups if g["category"] == BACK]
     if front_groups and back_groups:
         wt = _compute_wall_thickness(
-            vertices, faces, front_groups, back_groups, wall_axis, centerline
+            vertices, faces, front_groups, back_groups, wall_axis, centerline, eps
         )
         results["min_wall_thickness_mm"] = wt["min_thickness_mm"]
         results["avg_wall_thickness_mm"] = wt["avg_thickness_mm"]
@@ -86,7 +91,7 @@ def validate_level3(mesh_data: dict, level2_result: dict) -> dict:
     # ── Foundation width ─────────────────────────────────────────────
     foundation_groups = [g for g in groups if g["category"] == FOUNDATION]
     if foundation_groups:
-        fw = _compute_foundation_width(vertices, faces, foundation_groups, wall_axis, centerline)
+        fw = _compute_foundation_width(vertices, faces, foundation_groups, wall_axis, centerline, eps)
         results["foundation_width_mm"] = fw["width_mm"]
         results["foundation_width_method"] = fw["method"]
         if "width_cv" in fw:
@@ -165,7 +170,7 @@ def _filter_topmost_crown(crown_groups):
 
 # ── Crown width ─────────────────────────────────────────────────────
 
-def _compute_crown_width(vertices, faces, crown_groups, wall_axis, centerline=None):
+def _compute_crown_width(vertices, faces, crown_groups, wall_axis, centerline=None, eps=1e-12):
     """Compute crown width perpendicular to wall axis.
 
     For simple straight walls: uses global perpendicular projection.
@@ -176,7 +181,7 @@ def _compute_crown_width(vertices, faces, crown_groups, wall_axis, centerline=No
                  and centerline.use_local_measurement)
 
     if use_local:
-        return _compute_crown_width_sliced(vertices, faces, crown_groups, centerline)
+        return _compute_crown_width_sliced(vertices, faces, crown_groups, centerline, eps)
 
     # Global approach for simple straight walls
     z_axis = np.array([0.0, 0.0, 1.0])
@@ -214,7 +219,7 @@ def _slice_tolerance(centerline):
     return 0.5
 
 
-def _compute_crown_width_sliced(vertices, faces, crown_groups, centerline):
+def _compute_crown_width_sliced(vertices, faces, crown_groups, centerline, eps=1e-12):
     """Compute crown width using per-slice local frames along the centerline."""
     crown_verts = _collect_vertices(vertices, faces, crown_groups)
     crown_xy = crown_verts[:, :2]
@@ -230,7 +235,7 @@ def _compute_crown_width_sliced(vertices, faces, crown_groups, centerline):
 
         tang_2d = tangent[:2]
         tang_mag = np.linalg.norm(tang_2d)
-        if tang_mag < 1e-12:
+        if tang_mag < eps:
             continue
         tang_2d = tang_2d / tang_mag
 
@@ -242,18 +247,18 @@ def _compute_crown_width_sliced(vertices, faces, crown_groups, centerline):
         local_verts = crown_verts[mask]
         n_proj = local_verts @ normal
         local_width = float(n_proj.max() - n_proj.min())
-        if local_width > 1e-6:
+        if local_width > eps:
             local_widths.append(local_width)
 
     if not local_widths:
         return _compute_crown_width(vertices, faces, crown_groups,
-                                     centerline.wall_axis, centerline=None)
+                                     centerline.wall_axis, centerline=None, eps=eps)
 
     widths_mm = [w * 1000.0 for w in local_widths]
     widths_arr = np.array(widths_mm)
     mean_w = float(widths_arr.mean())
     std_w = float(widths_arr.std())
-    cv = std_w / mean_w if mean_w > 1e-6 else 0.0
+    cv = std_w / mean_w if mean_w > eps else 0.0
 
     return {
         "width_mm": min(widths_mm),
@@ -266,7 +271,7 @@ def _compute_crown_width_sliced(vertices, faces, crown_groups, centerline):
 
 # ── Foundation width ────────────────────────────────────────────────
 
-def _compute_foundation_width(vertices, faces, foundation_groups, wall_axis, centerline=None):
+def _compute_foundation_width(vertices, faces, foundation_groups, wall_axis, centerline=None, eps=1e-12):
     """Compute foundation width perpendicular to wall axis.
 
     Same approach as crown width but using foundation face groups.
@@ -278,7 +283,7 @@ def _compute_foundation_width(vertices, faces, foundation_groups, wall_axis, cen
                  and centerline.use_local_measurement)
 
     if use_local:
-        return _compute_foundation_width_sliced(vertices, faces, foundation_groups, centerline)
+        return _compute_foundation_width_sliced(vertices, faces, foundation_groups, centerline, eps)
 
     # Global approach for simple straight walls
     z_axis = np.array([0.0, 0.0, 1.0])
@@ -301,7 +306,7 @@ def _compute_foundation_width(vertices, faces, foundation_groups, wall_axis, cen
     }
 
 
-def _compute_foundation_width_sliced(vertices, faces, foundation_groups, centerline):
+def _compute_foundation_width_sliced(vertices, faces, foundation_groups, centerline, eps=1e-12):
     """Compute foundation width using per-slice local frames along the centerline."""
     foundation_verts = _collect_vertices(vertices, faces, foundation_groups)
     foundation_xy = foundation_verts[:, :2]
@@ -317,7 +322,7 @@ def _compute_foundation_width_sliced(vertices, faces, foundation_groups, centerl
 
         tang_2d = tangent[:2]
         tang_mag = np.linalg.norm(tang_2d)
-        if tang_mag < 1e-12:
+        if tang_mag < eps:
             continue
         tang_2d = tang_2d / tang_mag
 
@@ -329,18 +334,18 @@ def _compute_foundation_width_sliced(vertices, faces, foundation_groups, centerl
         local_verts = foundation_verts[mask]
         n_proj = local_verts @ normal
         local_width = float(n_proj.max() - n_proj.min())
-        if local_width > 1e-6:
+        if local_width > eps:
             local_widths.append(local_width)
 
     if not local_widths:
         return _compute_foundation_width(vertices, faces, foundation_groups,
-                                          centerline.wall_axis, centerline=None)
+                                          centerline.wall_axis, centerline=None, eps=eps)
 
     widths_mm = [w * 1000.0 for w in local_widths]
     widths_arr = np.array(widths_mm)
     mean_w = float(widths_arr.mean())
     std_w = float(widths_arr.std())
-    cv = std_w / mean_w if mean_w > 1e-6 else 0.0
+    cv = std_w / mean_w if mean_w > eps else 0.0
 
     return {
         "width_mm": min(widths_mm),
@@ -415,7 +420,7 @@ def _compute_crown_slope(crown_groups, mesh_data=None):
 # ── Wall thickness ──────────────────────────────────────────────────
 
 def _compute_wall_thickness(vertices, faces, front_groups, back_groups,
-                            wall_axis, centerline=None):
+                            wall_axis, centerline=None, eps=1e-12):
     """Compute wall thickness as distance between front and back faces.
 
     For simple straight walls: uses global perpendicular projection.
@@ -427,7 +432,7 @@ def _compute_wall_thickness(vertices, faces, front_groups, back_groups,
 
     if use_local:
         return _compute_wall_thickness_sliced(
-            vertices, faces, front_groups, back_groups, centerline
+            vertices, faces, front_groups, back_groups, centerline, eps
         )
 
     # Global approach for simple straight walls
@@ -472,7 +477,7 @@ def _compute_wall_thickness(vertices, faces, front_groups, back_groups,
 
 
 def _compute_wall_thickness_sliced(vertices, faces, front_groups, back_groups,
-                                   centerline):
+                                   centerline, eps=1e-12):
     """Compute wall thickness using per-slice local frames along the centerline."""
     front_verts = _collect_vertices(vertices, faces, front_groups)
     back_verts = _collect_vertices(vertices, faces, back_groups)
@@ -491,7 +496,7 @@ def _compute_wall_thickness_sliced(vertices, faces, front_groups, back_groups,
 
         tang_2d = tangent[:2]
         tang_mag = np.linalg.norm(tang_2d)
-        if tang_mag < 1e-12:
+        if tang_mag < eps:
             continue
         tang_2d = tang_2d / tang_mag
 
@@ -506,17 +511,19 @@ def _compute_wall_thickness_sliced(vertices, faces, front_groups, back_groups,
         front_n = front_verts[front_mask] @ normal
         back_n = back_verts[back_mask] @ normal
 
-        front_mean = float((front_n.max() + front_n.min()) / 2.0)
-        back_mean = float((back_n.max() + back_n.min()) / 2.0)
-        thickness = abs(front_mean - back_mean)
+        # Use median instead of midpoint for robustness against outlier
+        # vertices from tessellation artifacts or boolean operations.
+        front_median = float(np.median(front_n))
+        back_median = float(np.median(back_n))
+        thickness = abs(front_median - back_median)
 
-        if thickness > 1e-6:
+        if thickness > eps:
             local_thicknesses.append(thickness)
 
     if not local_thicknesses:
         return _compute_wall_thickness(
             vertices, faces, front_groups, back_groups,
-            centerline.wall_axis, centerline=None
+            centerline.wall_axis, centerline=None, eps=eps
         )
 
     thicknesses_mm = [t * 1000.0 for t in local_thicknesses]

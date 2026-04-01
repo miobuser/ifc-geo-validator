@@ -7,6 +7,7 @@ from ifc_geo_validator.core.geometry import (
     compute_total_area,
     compute_bbox,
     compute_centroid,
+    compute_mesh_quality,
 )
 
 
@@ -29,6 +30,8 @@ def validate_level1(mesh_data: dict) -> dict:
     bbox = compute_bbox(vertices)
     centroid = compute_centroid(vertices, faces, areas)
 
+    quality = compute_mesh_quality(vertices, faces, areas)
+
     return {
         "volume": volume,
         "total_area": total_area,
@@ -37,4 +40,6 @@ def validate_level1(mesh_data: dict) -> dict:
         "is_watertight": mesh_data["is_watertight"],
         "num_triangles": len(faces),
         "num_vertices": len(vertices),
+        "n_degenerate_filtered": mesh_data.get("n_degenerate_filtered", 0),
+        "mesh_quality": quality,
     }
