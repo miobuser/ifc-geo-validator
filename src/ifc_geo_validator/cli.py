@@ -83,6 +83,11 @@ def main():
         default=None,
     )
     parser.add_argument(
+        "--html",
+        help="Generate HTML validation report to this path",
+        default=None,
+    )
+    parser.add_argument(
         "-v", "--verbose",
         action="store_true",
         help="Verbose output",
@@ -620,6 +625,18 @@ def main():
         from ifc_geo_validator.report.ifc_property_writer import inject_all
         inject_all(model, elements, all_results, args.enrich)
         print(f"\nEnriched IFC written to: {args.enrich}")
+
+    # Write HTML report if requested
+    if args.html:
+        from ifc_geo_validator.report.html_report import generate_html_report
+        rs_name = ruleset["metadata"]["name"] if ruleset else "—"
+        html = generate_html_report(
+            all_results, ifc_filename=Path(args.ifc_file).name,
+            ruleset_name=rs_name,
+        )
+        with open(args.html, "w", encoding="utf-8") as f:
+            f.write(html)
+        print(f"\nHTML report written to: {args.html}")
 
     # Write JSON report if requested
     if args.output:
