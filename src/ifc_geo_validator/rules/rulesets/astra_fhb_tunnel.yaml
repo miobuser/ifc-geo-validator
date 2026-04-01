@@ -1,0 +1,105 @@
+# =============================================================================
+# ASTRA FHB T/G — Prüfregeln für Tunnelbauteile
+# Basierend auf: ASTRA 24 001-10xxx (Tunnel/Geotechnik) V3.02, Jan. 2026
+# =============================================================================
+#
+# Dieses Ruleset demonstriert die Erweiterbarkeit des Validators auf
+# Tunnelbauteile. Die Prüfungen nutzen L1-Kenngrössen (Volumen, BBox)
+# und L3-Messungen, soweit die Flächenklassifikation greift.
+#
+# Limitierung: Die Crown/Foundation/Front/Back-Klassifikation ist für
+# wandartige Bauteile konzipiert. Für volle Tunnelvalidierung wäre eine
+# querschnittbasierte Analyse entlang der Tunnelachse erforderlich.
+#
+# Severity-Stufen:
+#   ERROR   — Normverstoss, muss korrigiert werden
+#   WARNING — Empfehlung, sollte geprüft werden
+#   INFO    — Hinweis, optional
+# =============================================================================
+
+metadata:
+  name: "ASTRA FHB T/G — Tunnelbauteile"
+  version: "1.0.0"
+  source: "ASTRA 24 001-10xxx V3.02, 01.01.2025"
+  scope: "Geometrische Plausibilitätsprüfung von Tunnelbauteilen"
+  ifc_filter:
+    entity: "IfcBuildingElementProxy"
+
+classification_thresholds:
+  horizontal_deg: 45.0
+  coplanar_deg: 5.0
+  lateral_deg: 45.0
+
+# =============================================================================
+# Level 1 — Geometrische Plausibilität
+# =============================================================================
+#
+# BBox-Dimensionen (sortiert nach Grösse):
+#   bbox_dim_max_m  = längste Achse  (≈ Elementlänge / Tunnelachse)
+#   bbox_dim_mid_m  = mittlere Achse (≈ Breite oder Höhe)
+#   bbox_dim_min_m  = kürzeste Achse (≈ Bauteilstärke)
+#   bbox_height_m   = Z-Ausdehnung   (vertikale Höhe)
+# =============================================================================
+
+level_1:
+  - id: ASTRA-TN-L1-001
+    name: "Volumen Plausibilität"
+    description: "Volumen muss positiv und plausibel sein"
+    check: "volume > 0.001"
+    severity: ERROR
+    reference: "Allgemeine Plausibilitätsprüfung"
+
+  - id: ASTRA-TN-L1-002
+    name: "Mesh-Validität"
+    description: "Mesh muss geschlossen sein für korrekte Volumenberechnung"
+    check: "mesh_is_watertight == true"
+    severity: WARNING
+    reference: "Voraussetzung für zuverlässige Geometrieanalyse"
+
+  - id: ASTRA-TN-L1-003
+    name: "Bauteilstärke Minimum"
+    description: "Dünnste BBox-Dimension >= 100 mm (konstruktive Mindestdicke)"
+    check: "bbox_dim_min_m >= 0.1"
+    severity: WARNING
+    reference: "FHB T/G 24 001-10301 — Konstruktive Mindestdicke Ausbauteile"
+
+  - id: ASTRA-TN-L1-004
+    name: "Lichte Höhe Plausibilität"
+    description: "Vertikale Ausdehnung plausibel für Tunnelbauteil (> 0.5 m)"
+    check: "bbox_height_m > 0.5"
+    severity: INFO
+    reference: "FHB T/G 24 001-10201 — Tunnelquerschnitt"
+
+# =============================================================================
+# Level 3 — Querschnittsmessungen (wo Klassifikation greift)
+# =============================================================================
+
+level_3:
+  - id: ASTRA-TN-L3-001
+    name: "Mindestbauteilstärke"
+    description: "Konstruktive Mindestbauteilstärke 200 mm"
+    check: "min_wall_thickness_mm >= 200"
+    severity: ERROR
+    reference: "FHB T/G 24 001-10301, Kap. 3 — Tübbingauskleidung"
+    quote: "Ausbauteile min. 200 mm Wandstärke"
+
+  - id: ASTRA-TN-L3-002
+    name: "Profilkonsistenz"
+    description: "Querschnitt soll entlang der Achse konstant sein"
+    check: "crown_width_cv <= 0.15"
+    severity: INFO
+    reference: "Konstruktive Empfehlung — gleichmässiges Querschnittsprofil"
+
+# =============================================================================
+# Level 4 — Zusammengesetzte Prüfungen
+# =============================================================================
+
+level_4:
+  - id: ASTRA-TN-L4-001
+    name: "Gesamtbewertung Bauteil"
+    description: "Alle Pflichtanforderungen erfüllt"
+    depends_on:
+      - ASTRA-TN-L1-001
+      - ASTRA-TN-L1-003
+    severity: ERROR
+    reference: "FHB T/G, Kap. 3"

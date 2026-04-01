@@ -134,6 +134,16 @@ def _build_context(level1_result: dict, level3_result: dict) -> dict:
     ctx["volume"] = level1_result.get("volume", 0.0)
     ctx["total_area"] = level1_result.get("total_area", 0.0)
     ctx["mesh_is_watertight"] = level1_result.get("is_watertight", False)
+    ctx["num_triangles"] = level1_result.get("num_triangles", 0)
+
+    # Level 1 — Bounding box dimensions (sorted: largest to smallest)
+    bbox = level1_result.get("bbox", {})
+    bbox_size = bbox.get("size", [0, 0, 0])
+    sorted_dims = sorted(bbox_size, reverse=True)
+    ctx["bbox_dim_max_m"] = sorted_dims[0]   # longest axis (≈ element length)
+    ctx["bbox_dim_mid_m"] = sorted_dims[1]   # middle axis (≈ width or height)
+    ctx["bbox_dim_min_m"] = sorted_dims[2]   # shortest axis (≈ thickness)
+    ctx["bbox_height_m"] = bbox_size[2]      # Z-extent (vertical height)
 
     # Level 3
     ctx["crown_width_mm"] = level3_result.get("crown_width_mm")
