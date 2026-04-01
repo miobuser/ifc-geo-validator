@@ -88,6 +88,14 @@ input[type=file]{display:none}
       <button id="btn-explode">Explode</button>
     </div>
     <div class="tb-sep"></div>
+    <span class="tg-label">Heatmap</span>
+    <div class="tg-btns">
+      <button id="btn-hm-off" class="on">Klassifikation</button>
+      <button id="btn-hm-cross">Quergefälle</button>
+      <button id="btn-hm-long">Längsgefälle</button>
+      <button id="btn-hm-total">Gesamt</button>
+    </div>
+    <div class="tb-sep"></div>
     <div class="tg-btns">
       <button id="btn-screenshot" title="Screenshot exportieren">&#128247; Screenshot</button>
     </div>
@@ -1238,6 +1246,105 @@ document.getElementById('btn-explode').addEventListener('click', () => {
     }
   });
   needsRender = true;
+});
+
+// ── Heatmap Toggle ───────────────────────────────────────────
+let heatmapMode = 'off'; // 'off', 'cross', 'long', 'total'
+const hmBtns = {
+  off: document.getElementById('btn-hm-off'),
+  cross: document.getElementById('btn-hm-cross'),
+  long: document.getElementById('btn-hm-long'),
+  total: document.getElementById('btn-hm-total'),
+};
+
+function slopeToColor(pct) {
+  // Green (0%) → Yellow (3%) → Red (≥6%)
+  const t = Math.min(pct / 6.0, 1.0);
+  if (t < 0.5) {
+    // Green → Yellow
+    const u = t * 2;
+    return new THREE.Color(u, 0.8, 0.2 * (1 - u));
+  } else {
+    // Yellow → Red
+    const u = (t - 0.5) * 2;
+    return new THREE.Color(1.0, 0.8 * (1 - u), 0);
+  }
+}
+
+function setHeatmapMode(mode) {
+  heatmapMode = mode;
+  Object.entries(hmBtns).forEach(([k, btn]) => {
+    if (btn) btn.classList.toggle('on', k === mode);
+  });
+
+  if (!data) return;
+
+  data.elements.forEach((elem, ei) => {
+    const group = elemGroups[ei];
+    if (!group) return;
+
+    const slopeData = elem.slope_per_face;
+    let meshIdx = 0;
+
+    elem.groups.forEach((grp) => {
+      if (!grp.face_indices || !grp.face_indices.length) return;
+      const mesh = group.children[meshIdx];
+      meshIdx++;
+      if (!mesh || !mesh.isMesh) return;
+
+      if (mode === 'off') {
+        // Restore classification color
+        const CC = {crown:[33,150,243],foundation:[121,85,72],front:[244,67,54],back:[255,152,0],end_left:[76,175,80],end_right:[139,195,74],unclassified:[158,158,158]};
+        const rgb = CC[grp.category] || [158,158,158];
+        mesh.material.color.setRGB(rgb[0]/255, rgb[1]/255, rgb[2]/255);
+        mesh.material.vertexColors = false;
+        mesh.material.needsUpdate = true;
+        const geo = mesh.geometry;
+        if (geo.hasAttribute('color')) geo.deleteAttribute('color');
+      } else if (slopeData) {
+        // Apply per-vertex heatmap colors
+        const key = mode;
+        const values = slopeData[key];
+        if (!values) return;
+
+        const geo = mesh.geometry;
+        const posAttr = geo.getAttribute('position');
+        const nVerts = posAttr.count;
+
+        // Build face→local vertex mapping from index buffer
+        const indexAttr = geo.getIndex();
+        const colors = new Float32Array(nVerts * 3);
+
+        // Each face group's face_indices maps to triangles in the original mesh.
+        // We need to set colors per local vertex based on the face's slope value.
+        let triOffset = 0;
+        for (const fi of grp.face_indices) {
+          const slopeVal = Math.min(values[fi] || 0, 100);
+          const col = slopeToColor(slopeVal);
+          // 3 vertices per triangle
+          if (indexAttr) {
+            for (let k = 0; k < 3; k++) {
+              const li = indexAttr.getX(triOffset * 3 + k);
+              colors[li * 3] = col.r;
+              colors[li * 3 + 1] = col.g;
+              colors[li * 3 + 2] = col.b;
+            }
+          }
+          triOffset++;
+        }
+
+        geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        mesh.material.vertexColors = true;
+        mesh.material.color.setRGB(1, 1, 1);
+        mesh.material.needsUpdate = true;
+      }
+    });
+  });
+  needsRender = true;
+}
+
+Object.entries(hmBtns).forEach(([mode, btn]) => {
+  if (btn) btn.addEventListener('click', () => setHeatmapMode(mode));
 });
 
 document.getElementById('btn-fit').addEventListener('click', () => {
