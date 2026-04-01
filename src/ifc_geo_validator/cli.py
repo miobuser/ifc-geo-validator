@@ -6,6 +6,8 @@ import math
 import sys
 from pathlib import Path
 
+import numpy as np
+
 
 def _get_version() -> str:
     """Read version from pyproject.toml (avoids hardcoding)."""
@@ -76,6 +78,18 @@ def main():
         "--scan",
         action="store_true",
         help="Scan model for all entity types with geometry and exit",
+    )
+    parser.add_argument(
+        "--heatmap",
+        choices=["cross", "long", "total"],
+        default=None,
+        help="Show slope heatmap: cross (Quergefälle), long (Längsgefälle), total",
+    )
+    parser.add_argument(
+        "--heatmap-categories",
+        default="crown",
+        help="Face categories for heatmap, comma-separated (default: crown). "
+             "Use 'all' for entire mesh.",
     )
 
     args = parser.parse_args()
@@ -239,6 +253,42 @@ def main():
                     print(f"    Foundation width:  {l3['foundation_width_mm']:.1f} mm")
                 if "crown_width_cv" in l3:
                     print(f"    Profile CV:       {l3['crown_width_cv']:.4f}")
+
+            # ── Slope heatmap ──────────────────────────────────────
+            if args.heatmap and l2 is not None:
+                from ifc_geo_validator.viz.slope_heatmap import (
+                    compute_surface_slopes,
+                    plot_slope_heatmap,
+                    plot_slope_profile,
+                )
+
+                hm_cats = (
+                    None if args.heatmap_categories == "all"
+                    else [c.strip() for c in args.heatmap_categories.split(",")]
+                )
+                slopes = compute_surface_slopes(
+                    mesh_data, l2["face_groups"],
+                    categories=hm_cats,
+                    axis=np.array(l2["wall_axis"]) if l2 else None,
+                )
+                if slopes is not None:
+                    n_sel = int(slopes["face_mask"].sum())
+                    print(f"\n  Slope Heatmap ({args.heatmap}, {n_sel} faces):")
+                    print(f"    Cross-slope:  avg={slopes['area_weighted_cross_pct']:.2f}%  "
+                          f"min={slopes['min_cross_pct']:.2f}%  max={slopes['max_cross_pct']:.2f}%")
+                    print(f"    Long. slope:  avg={slopes['area_weighted_long_pct']:.2f}%  "
+                          f"min={slopes['min_long_pct']:.2f}%  max={slopes['max_long_pct']:.2f}%")
+
+                    hm_title = f"{name} — {args.heatmap} slope"
+                    try:
+                        plot_slope_heatmap(
+                            mesh_data, slopes, mode=args.heatmap,
+                            title=hm_title, show=True,
+                        )
+                    except ImportError:
+                        print("    (PyVista not installed — skipping 3D view)")
+                else:
+                    print(f"\n  Slope Heatmap: no faces in category '{args.heatmap_categories}'")
 
             # Store mesh_data for L5/L6 (needed after the per-element loop)
             elem_result["mesh_data"] = mesh_data
