@@ -2,7 +2,13 @@
 
 Orchestrates the face classifier and produces a structured result dict
 suitable for downstream Level 3 (face-specific measurements) and reporting.
+
+Includes a geometry pre-check and classification confidence score to detect
+elements that are not wall-like (slabs, columns, irregular shapes) and
+report the reliability of the classification.
 """
+
+import numpy as np
 
 from ifc_geo_validator.core.face_classifier import (
     classify_faces,
@@ -34,7 +40,23 @@ def validate_level2(mesh_data: dict, thresholds: dict = None) -> dict:
             has_foundation: bool
             has_front:    bool
             has_back:     bool
+            geometry_check: dict — pre-classification geometry assessment
+            confidence:     float — classification confidence 0.0–1.0
+            diagnostics:    list[str] — actionable messages for issues
     """
+    vertices = mesh_data["vertices"]
+    diagnostics = []
+
+    # ── Geometry pre-check ──────────────────────────────────────
+    geo_check = _check_wall_geometry(vertices, mesh_data["areas"])
+
+    if not geo_check["is_wall_like"]:
+        diagnostics.append(
+            f"Geometry does not appear wall-like: {geo_check['reason']}. "
+            f"Classification results may be unreliable."
+        )
+
+    # ── Face classification ──────────────────────────────────────
     result = classify_faces(mesh_data, thresholds)
 
     groups = result["face_groups"]
@@ -60,6 +82,34 @@ def validate_level2(mesh_data: dict, thresholds: dict = None) -> dict:
             "num_triangles": g.num_triangles,
         })
 
+    has_crown = CROWN in summary
+    has_foundation = FOUNDATION in summary
+    has_front = FRONT in summary
+    has_back = BACK in summary
+    asymmetry = result.get("front_back_asymmetry", 0.0)
+
+    # If classification found all expected wall categories despite bbox
+    # being non-wall-like (e.g. curved walls with square bbox), check the
+    # vertical/horizontal face area ratio to confirm it's actually wall-like.
+    # A wall has vertical area (front+back) >> horizontal area (crown+foundation).
+    # A slab has horizontal area >> vertical area.
+    if not geo_check["is_wall_like"] and has_crown and has_foundation and (has_front or has_back):
+        vert_area = summary.get(FRONT, {}).get("total_area", 0) + summary.get(BACK, {}).get("total_area", 0)
+        horiz_area = summary.get(CROWN, {}).get("total_area", 0) + summary.get(FOUNDATION, {}).get("total_area", 0)
+        # Wall: vertical faces dominate. Slab: horizontal faces dominate.
+        # Threshold: vertical > 30% of horizontal → wall-like classification is credible.
+        if horiz_area <= 0 or vert_area / horiz_area > 0.3:
+            geo_check = {**geo_check, "is_wall_like": True,
+                         "reason": "classified as wall (overrides bbox shape)"}
+            diagnostics = []  # Clear the non-wall-like warning
+
+    # ── Classification confidence ─────────────────────────────────
+    confidence, conf_diagnostics = _compute_confidence(
+        summary, has_crown, has_foundation, has_front, has_back,
+        asymmetry, geo_check,
+    )
+    diagnostics.extend(conf_diagnostics)
+
     # Extract centerline metadata
     centerline = result.get("centerline")
     centerline_dict = centerline.to_dict() if centerline else None
@@ -67,15 +117,147 @@ def validate_level2(mesh_data: dict, thresholds: dict = None) -> dict:
     return {
         "face_groups": group_dicts,
         "wall_axis": result["wall_axis"],
-        "centerline": centerline,            # WallCenterline object (for level3)
-        "centerline_info": centerline_dict,   # serialized metadata (for JSON)
+        "centerline": centerline,
+        "centerline_info": centerline_dict,
         "num_groups": result["num_groups"],
         "thresholds_used": result["thresholds_used"],
         "summary": summary,
-        "has_crown": CROWN in summary,
-        "has_foundation": FOUNDATION in summary,
-        "has_front": FRONT in summary,
-        "has_back": BACK in summary,
-        "front_back_asymmetry": result.get("front_back_asymmetry", 0.0),
+        "has_crown": has_crown,
+        "has_foundation": has_foundation,
+        "has_front": has_front,
+        "has_back": has_back,
+        "front_back_asymmetry": asymmetry,
         "n_bodies": result.get("n_bodies", 1),
+        "geometry_check": geo_check,
+        "confidence": confidence,
+        "diagnostics": diagnostics,
     }
+
+
+# ── Geometry pre-check ────────────────────────────────────────────
+
+def _check_wall_geometry(vertices: np.ndarray, areas: np.ndarray) -> dict:
+    """Assess whether the element geometry is wall-like.
+
+    A wall-like element has:
+      1. Elongation: one horizontal dimension >> the other (plan aspect ratio > 2)
+      2. Verticality: height (Z-extent) > min horizontal dimension
+      3. Not a slab: height > 0.1 × max horizontal dimension
+
+    Returns dict with is_wall_like (bool), reason (str), and metrics.
+
+    These are soft checks — classification runs regardless, but confidence
+    is reduced for non-wall-like elements.
+    """
+    if len(vertices) < 4:
+        return {"is_wall_like": False, "reason": "too few vertices", "plan_aspect": 0, "vert_ratio": 0}
+
+    bbox_size = vertices.max(axis=0) - vertices.min(axis=0)
+    dx, dy, dz = float(bbox_size[0]), float(bbox_size[1]), float(bbox_size[2])
+
+    # Sort horizontal dimensions
+    h_dims = sorted([dx, dy], reverse=True)
+    h_max, h_min = h_dims[0], h_dims[1]
+
+    # Prevent division by zero
+    eps = max(h_max * 1e-10, 1e-12)
+    plan_aspect = h_max / max(h_min, eps)
+    vert_ratio = dz / max(h_min, eps)
+
+    reasons = []
+
+    # Check 1: Plan elongation — a wall is longer than it is wide
+    # Threshold: plan_aspect > 2.0 (wall is at least 2× longer than thick)
+    # Relaxed: also accept square plan if tall (column-like still works)
+    if plan_aspect < 1.5 and dz < h_max * 0.5:
+        reasons.append(f"plan nearly square ({plan_aspect:.1f}:1) and flat")
+
+    # Check 2: Not a slab — height should be significant
+    if dz < h_max * 0.05 and dz < h_min * 0.5:
+        reasons.append(f"very flat (Z={dz:.3f}m vs XY={h_max:.1f}×{h_min:.1f}m)")
+
+    is_wall = len(reasons) == 0
+    reason = "; ".join(reasons) if reasons else "wall-like geometry"
+
+    return {
+        "is_wall_like": is_wall,
+        "reason": reason,
+        "plan_aspect": round(plan_aspect, 2),
+        "vert_ratio": round(vert_ratio, 2),
+        "bbox_dims_m": [round(dx, 3), round(dy, 3), round(dz, 3)],
+    }
+
+
+# ── Classification confidence ─────────────────────────────────────
+
+def _compute_confidence(
+    summary, has_crown, has_foundation, has_front, has_back,
+    asymmetry, geo_check,
+) -> tuple[float, list[str]]:
+    """Compute a classification confidence score between 0.0 and 1.0.
+
+    Factors (each contributes to the score):
+      1. Has crown AND foundation (essential for a wall)        → 0.25
+      2. Has front AND back (essential for a wall)              → 0.25
+      3. Low unclassified area fraction                         → 0.20
+      4. Geometry is wall-like                                  → 0.15
+      5. Front/back asymmetry > 0 (distinguishable sides)      → 0.15
+
+    Returns (confidence, diagnostics).
+    """
+    score = 0.0
+    diag = []
+
+    # Factor 1: Crown + Foundation
+    if has_crown and has_foundation:
+        score += 0.25
+    elif has_crown or has_foundation:
+        score += 0.10
+        missing = "foundation" if has_crown else "crown"
+        diag.append(f"No {missing} face detected — element may not be a complete wall.")
+    else:
+        diag.append("Neither crown nor foundation detected — element is likely not a wall.")
+
+    # Factor 2: Front + Back
+    if has_front and has_back:
+        score += 0.25
+    elif has_front or has_back:
+        score += 0.10
+        diag.append("Only one vertical face side detected (front or back, not both).")
+    else:
+        diag.append("No front/back faces detected — vertical face classification failed.")
+
+    # Factor 3: Classified area coverage
+    total_area = sum(s["total_area"] for s in summary.values())
+    unclass_area = summary.get(UNCLASSIFIED, {}).get("total_area", 0.0)
+    if total_area > 0:
+        classified_ratio = 1.0 - (unclass_area / total_area)
+        score += 0.20 * classified_ratio
+        if classified_ratio < 0.8:
+            diag.append(
+                f"{unclass_area / total_area * 100:.0f}% of surface area is unclassified."
+            )
+    else:
+        score += 0.20
+
+    # Factor 4: Geometry check
+    if geo_check.get("is_wall_like", False):
+        score += 0.15
+    # (diagnostic already added in main function)
+
+    # Factor 5: Front/back asymmetry
+    if asymmetry > 0.05:
+        score += 0.15
+    elif asymmetry > 0.01:
+        score += 0.08
+        diag.append(
+            f"Front/back asymmetry very low ({asymmetry:.3f}) — "
+            f"side assignment has low confidence. Use terrain (L6) for definitive result."
+        )
+    else:
+        diag.append(
+            f"Front/back faces are symmetric (asymmetry={asymmetry:.3f}) — "
+            f"assignment is arbitrary without terrain context."
+        )
+
+    return round(min(score, 1.0), 3), diag

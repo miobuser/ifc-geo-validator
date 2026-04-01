@@ -190,9 +190,15 @@ def main():
                 elem_result["level2"] = l2
 
                 n_bodies = l2.get("n_bodies", 1)
-                print(f"\n  Face Classification ({l2['num_groups']} groups):")
+                confidence = l2.get("confidence", 0)
+                print(f"\n  Face Classification ({l2['num_groups']} groups, confidence={confidence:.0%}):")
                 if n_bodies > 1:
                     print(f"  WARNING: {n_bodies} disconnected bodies — using largest")
+                geo = l2.get("geometry_check", {})
+                if not geo.get("is_wall_like", True):
+                    print(f"  WARNING: {geo.get('reason', 'not wall-like')}")
+                for diag in l2.get("diagnostics", []):
+                    print(f"  NOTE: {diag}")
                 axis = l2["wall_axis"]
                 print(f"  Wall axis:   ({axis[0]:.3f}, {axis[1]:.3f}, {axis[2]:.3f})")
                 cinfo = l2.get("centerline_info")

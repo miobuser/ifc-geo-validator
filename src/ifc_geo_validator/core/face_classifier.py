@@ -898,10 +898,31 @@ def _classify_groups(raw_groups, centerline, horiz_rad, lateral_rad):
     # 0 = symmetric wall (assignment arbitrary), 1 = fully asymmetric.
     asymmetry_index = abs(pos_area - neg_area) / total_fb_area if total_fb_area > 0 else 0.0
 
-    if pos_area >= neg_area:
-        front_list, back_list = pos, neg
+    if abs(pos_area - neg_area) > 1e-6 * total_fb_area:
+        # Asymmetric: larger-area side = front (assumption)
+        if pos_area >= neg_area:
+            front_list, back_list = pos, neg
+        else:
+            front_list, back_list = neg, pos
     else:
-        front_list, back_list = neg, pos
+        # Symmetric wall: use deterministic convention.
+        # The side whose area-weighted centroid has the smaller
+        # perpendicular coordinate (relative to wall axis) = FRONT.
+        # This makes the assignment reproducible for the same model
+        # and follows the convention that Ansichtsfläche (front) is
+        # on the lower/outer side of a slope.
+        def _perp_centroid(groups):
+            total_a = sum(g["area"] for g in groups)
+            if total_a < 1e-30:
+                return 0.0
+            wc = sum(g["_perp_dot"] * g["area"] for g in groups) / total_a
+            return wc
+        pos_c = _perp_centroid(pos)
+        neg_c = _perp_centroid(neg)
+        if pos_c <= neg_c:
+            front_list, back_list = pos, neg
+        else:
+            front_list, back_list = neg, pos
 
     for g in front_list:
         g["category"] = FRONT
