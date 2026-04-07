@@ -108,12 +108,24 @@ def extract_mesh(element) -> dict:
 
 
 def _check_watertight(faces: np.ndarray) -> bool:
-    """Check if the mesh is watertight (every edge shared by exactly 2 faces)."""
-    edge_count: dict[tuple[int, int], int] = {}
-    for tri in faces:
-        for i in range(3):
-            a, b = int(tri[i]), int(tri[(i + 1) % 3])
-            edge = (min(a, b), max(a, b))
-            edge_count[edge] = edge_count.get(edge, 0) + 1
+    """Check if the mesh is watertight (every edge shared by exactly 2 faces).
 
-    return all(c == 2 for c in edge_count.values())
+    A closed (watertight) mesh satisfies the Euler characteristic for
+    orientable 2-manifolds: every edge is shared by exactly 2 triangles.
+
+    Uses vectorized edge counting via numpy unique — no Python loops.
+
+    Reference: Ericson, C. (2004). Real-Time Collision Detection, §12.3.
+    """
+    # Build all 3M directed half-edges as (min(a,b), max(a,b))
+    fa = np.concatenate([faces[:, 0], faces[:, 1], faces[:, 2]])
+    fb = np.concatenate([faces[:, 1], faces[:, 2], faces[:, 0]])
+    edge_lo = np.minimum(fa, fb)
+    edge_hi = np.maximum(fa, fb)
+
+    # Unique edge key via linear combination
+    max_v = int(edge_hi.max()) + 1 if len(edge_hi) > 0 else 1
+    edge_keys = edge_lo.astype(np.int64) * max_v + edge_hi.astype(np.int64)
+
+    _, counts = np.unique(edge_keys, return_counts=True)
+    return bool(np.all(counts == 2))

@@ -53,6 +53,22 @@ def validate_level3(mesh_data: dict, level2_result: dict) -> dict:
 
     results = {}
 
+    # ── Measurement uncertainty ─────────────────────────────────────
+    # Every measurement on a tessellated mesh has an inherent uncertainty
+    # proportional to the tessellation resolution (median edge length).
+    # For a vertex-based extent measurement (e.g. crown width), the
+    # true boundary lies within ±(median_edge_length/2) of a vertex.
+    #
+    # This is the Nyquist-Shannon analog for spatial sampling:
+    # features smaller than the sampling interval cannot be resolved.
+    #
+    # Reference: Botsch et al. (2010). Polygon Mesh Processing, §1.3.
+    edge_lengths = np.linalg.norm(
+        vertices[faces[:, 1]] - vertices[faces[:, 0]], axis=1
+    )
+    median_edge = float(np.median(edge_lengths)) if len(edge_lengths) > 0 else 0.0
+    results["measurement_uncertainty_mm"] = round(median_edge * 1000.0 / 2.0, 1)
+
     # ── Centerline metadata ──────────────────────────────────────────
     if centerline is not None and isinstance(centerline, WallCenterline):
         results["is_curved"] = centerline.is_curved
