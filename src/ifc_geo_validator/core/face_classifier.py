@@ -327,6 +327,10 @@ def _weld_vertices(vertices, faces, precision=None):
       precision = max(6, -floor(log10(bbox_diag)) + 8)
     This ensures ~0.01% of the model size as the welding tolerance,
     working correctly for models in mm, m, or km coordinates.
+
+    Uses numpy vectorized rounding and lexicographic sorting for O(N log N)
+    performance instead of O(N) dict lookup with high Python overhead.
+    For N>1000 vertices, the vectorized version is significantly faster.
     """
     if precision is None:
         bbox_diag = float(np.linalg.norm(vertices.max(axis=0) - vertices.min(axis=0)))
@@ -334,23 +338,29 @@ def _weld_vertices(vertices, faces, precision=None):
             precision = max(6, int(-np.floor(np.log10(bbox_diag))) + 8)
         else:
             precision = 6
-    n = len(vertices)
-    pos_to_idx = {}
-    old_to_new = np.empty(n, dtype=int)
 
-    for i in range(n):
-        key = (
-            round(float(vertices[i, 0]), precision),
-            round(float(vertices[i, 1]), precision),
-            round(float(vertices[i, 2]), precision),
-        )
-        if key not in pos_to_idx:
-            pos_to_idx[key] = len(pos_to_idx)
-        old_to_new[i] = pos_to_idx[key]
+    # Round coordinates for welding tolerance
+    rounded = np.round(vertices, decimals=precision)
 
-    welded_verts = np.zeros((len(pos_to_idx), 3))
-    for i in range(n):
-        welded_verts[old_to_new[i]] = vertices[i]
+    # Lexicographic sort to group identical positions
+    # np.unique with axis=0 returns unique rows and inverse mapping
+    _, inverse, counts = np.unique(
+        rounded, axis=0, return_inverse=True, return_counts=True,
+    )
+
+    # inverse[i] = index of vertex i in the unique array
+    old_to_new = inverse
+
+    # Build welded vertex array (use first occurrence of each unique position)
+    n_unique = int(old_to_new.max()) + 1
+    welded_verts = np.zeros((n_unique, 3))
+    # Fill with actual (non-rounded) positions from first occurrence
+    seen = np.zeros(n_unique, dtype=bool)
+    for i in range(len(vertices)):
+        idx = old_to_new[i]
+        if not seen[idx]:
+            welded_verts[idx] = vertices[i]
+            seen[idx] = True
 
     return welded_verts, old_to_new[faces]
 
