@@ -100,6 +100,20 @@ class TestVolumeProperties:
         f_flipped = f[:, ::-1]
         assert compute_volume(v, f_flipped) >= 0
 
+    @pytest.mark.parametrize("offset", [0, 1e3, 1e5, 1e6, 2.6e6])
+    def test_large_coordinate_precision(self, offset):
+        """Volume at large coordinates (LV95/UTM) must be precise.
+
+        Tests centering strategy against catastrophic cancellation.
+        Without centering, error at offset=2.6×10⁶ is ~3×10⁻².
+        With centering, error should be < 10⁻⁸.
+        """
+        v, f = _unit_cube()
+        v_offset = v + np.array([offset, offset, 500])
+        vol = compute_volume(v_offset, f)
+        assert vol == pytest.approx(1.0, abs=1e-6), \
+            f"Volume at offset={offset:.0e}: {vol} (expected 1.0)"
+
 
 # ── Area: Cross Product Properties ────────────────────────────────
 

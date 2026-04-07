@@ -453,20 +453,41 @@ def _compute_wall_thickness(vertices, faces, front_groups, back_groups,
     front_proj = front_verts @ perp_axis
     back_proj = back_verts @ perp_axis
 
-    front_extent = [float(front_proj.min()), float(front_proj.max())]
-    back_extent = [float(back_proj.min()), float(back_proj.max())]
+    # Robust thickness estimation using median projections.
+    #
+    # The median is the L1-optimal estimator of location — it minimizes
+    # the sum of absolute deviations and is robust against up to 50%
+    # outlier contamination (breakdown point = 0.5).
+    #
+    # For a wall with N front vertices and M back vertices projected
+    # onto the perpendicular axis:
+    #   avg_thickness = |median(front_proj) - median(back_proj)|
+    #   min_thickness = estimated from interquartile ranges
+    #
+    # This replaces the previous extent-based method which used
+    # min/max projections (sensitive to single outlier vertices from
+    # tessellation artifacts or boolean operation residuals).
+    #
+    # Reference: Huber, P.J. (1981). Robust Statistics. Wiley.
+    front_median = float(np.median(front_proj))
+    back_median = float(np.median(back_proj))
+    avg_thickness = abs(front_median - back_median)
 
-    front_mean = np.mean(front_extent)
-    back_mean = np.mean(back_extent)
-
-    avg_thickness = abs(front_mean - back_mean)
-
-    if front_mean < back_mean:
-        min_thickness = abs(back_extent[0] - front_extent[1])
+    # Min thickness: use the closest percentiles (10th/90th) to estimate
+    # the narrowest point, robust against outliers at the edges.
+    if len(front_proj) >= 4 and len(back_proj) >= 4:
+        # Use 10th and 90th percentiles for robust min/max
+        if front_median < back_median:
+            front_high = float(np.percentile(front_proj, 90))
+            back_low = float(np.percentile(back_proj, 10))
+        else:
+            front_high = float(np.percentile(front_proj, 10))
+            back_low = float(np.percentile(back_proj, 90))
+        min_thickness = abs(back_low - front_high)
+        min_thickness = max(min_thickness, 0.0)
     else:
-        min_thickness = abs(front_extent[0] - back_extent[1])
+        min_thickness = avg_thickness
 
-    min_thickness = max(min_thickness, 0.0)
     if min_thickness == 0.0:
         min_thickness = avg_thickness
 

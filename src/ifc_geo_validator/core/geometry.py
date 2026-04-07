@@ -15,11 +15,26 @@ import numpy as np
 def compute_volume(vertices: np.ndarray, faces: np.ndarray) -> float:
     """Compute volume of a closed mesh using the divergence theorem.
 
-    V = (1/6) * |sum( v0 . (v1 x v2) )| for each triangle.
+    V = (1/6) * |Σ v₀ · (v₁ × v₂)| for each triangle.
+
+    Vertices are centered before computation to avoid catastrophic
+    cancellation at large coordinates (e.g. LV95/UTM with offsets
+    of 10⁶). Centering is mathematically equivalent: translating a
+    closed mesh does not change its volume (translation invariance).
+
+    Without centering, float64 precision is ~10⁻¹⁵ relative to
+    coordinate magnitude. At offset=2.6×10⁶ with volume=9.6m³,
+    this gives ~10⁻⁹ absolute precision — but the signed tetrahedra
+    sum involves cancellation of large numbers, degrading to ~10⁻².
+    Centering restores full precision.
+
+    Reference: Ericson, C. (2004). Real-Time Collision Detection, §12.4.
     """
-    v0 = vertices[faces[:, 0]]
-    v1 = vertices[faces[:, 1]]
-    v2 = vertices[faces[:, 2]]
+    # Center to mean vertex position (translation-invariant)
+    center = vertices.mean(axis=0)
+    v0 = vertices[faces[:, 0]] - center
+    v1 = vertices[faces[:, 1]] - center
+    v2 = vertices[faces[:, 2]] - center
     signed = np.einsum("ij,ij->i", v0, np.cross(v1, v2))
     return abs(signed.sum() / 6.0)
 

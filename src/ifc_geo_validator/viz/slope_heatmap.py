@@ -97,54 +97,64 @@ def compute_triangle_slopes(mesh_data: dict, axis: np.ndarray = None,
                  and hasattr(centerline, "use_local_measurement")
                  and centerline.use_local_measurement)
 
-    # Precompute face centroids for local frame lookups
+    # ── Fully vectorized slope computation ─────────────────────────
+    # Mathematical basis:
+    #   For triangle normal n = (nx, ny, nz):
+    #     total_slope = tan(α) × 100  where α = arctan(‖n_horiz‖ / |nz|)
+    #                 = (‖n_horiz‖ / |nz|) × 100
+    #     cross_slope = (|n · perp| / |nz|) × 100
+    #     long_slope  = (|n · axis| / |nz|) × 100
+    #
+    #   Property: cross² + long² = total²  (Pythagorean, verified in tests)
+    #
+    # For curved walls with local frames, perp/axis vary per triangle.
+    # We batch-compute using the nearest centerline frame per face centroid.
+
+    nz = np.abs(normals[:, 2])
+    n_horiz = np.sqrt(normals[:, 0]**2 + normals[:, 1]**2)
+
+    # Guard against near-vertical faces (nz ≈ 0 → slope undefined)
+    vertical_mask = nz < 1e-10
+    safe_nz = np.where(vertical_mask, 1.0, nz)  # avoid division by zero
+
+    total_slope = np.where(vertical_mask, 9000.0, (n_horiz / safe_nz) * 100.0)
+
     if use_local:
+        # Per-face local frames from centerline
         v0 = vertices[faces[:, 0]]
         v1 = vertices[faces[:, 1]]
         v2 = vertices[faces[:, 2]]
         face_centroids_xy = ((v0 + v1 + v2) / 3.0)[:, :2]
 
-    total_slope = np.zeros(n_faces)
-    cross_slope = np.zeros(n_faces)
-    long_slope = np.zeros(n_faces)
+        # Batch lookup: for each face, find nearest centerline point
+        # and get the local tangent/normal frame
+        dists = np.linalg.norm(
+            face_centroids_xy[:, np.newaxis, :] - centerline.points_2d[np.newaxis, :, :],
+            axis=2,
+        )  # (n_faces, n_centerline_pts)
+        nearest_idx = np.argmin(dists, axis=1)  # (n_faces,)
 
-    for i in range(n_faces):
-        n = normals[i]
-        nz = abs(n[2])
+        # Extract per-face local axes (tangent XY = longitudinal, normal XY = cross)
+        local_tang_xy = centerline.tangents[nearest_idx, :2]  # (n_faces, 2)
+        local_norm_xy = centerline.normals[nearest_idx, :2]   # (n_faces, 2)
 
-        if nz < 1e-10:
-            total_slope[i] = 9000.0
-            cross_slope[i] = 9000.0
-            long_slope[i] = 9000.0
-            continue
+        # Normalize (tangents/normals should already be unit, but guard)
+        tang_mag = np.linalg.norm(local_tang_xy, axis=1, keepdims=True).clip(1e-12)
+        norm_mag = np.linalg.norm(local_norm_xy, axis=1, keepdims=True).clip(1e-12)
+        local_tang_xy = local_tang_xy / tang_mag
+        local_norm_xy = local_norm_xy / norm_mag
 
-        n_horiz = np.sqrt(n[0]**2 + n[1]**2)
-        total_slope[i] = (n_horiz / nz) * 100.0
+        # Dot products: project face normal's horizontal component
+        n_xy = normals[:, :2]  # (n_faces, 2)
+        cross_comp = np.abs(np.sum(n_xy * local_norm_xy, axis=1))
+        long_comp = np.abs(np.sum(n_xy * local_tang_xy, axis=1))
+    else:
+        # Global axis: single perp/axis for all faces (vectorized trivially)
+        cross_comp = np.abs(normals[:, 0] * perp[0] + normals[:, 1] * perp[1])
+        long_comp = np.abs(normals[:, 0] * axis[0] + normals[:, 1] * axis[1])
 
-        # Get local axis/perp for this triangle
-        if use_local:
-            local_tang, local_norm, _ = centerline.get_local_frame(
-                face_centroids_xy[i]
-            )
-            # local_tang = tangent along road, local_norm = perpendicular
-            local_perp_2d = np.array([local_norm[0], local_norm[1]])
-            local_axis_2d = np.array([local_tang[0], local_tang[1]])
-            # Normalize (may be needed if tangent has Z component)
-            pm = np.linalg.norm(local_perp_2d)
-            am = np.linalg.norm(local_axis_2d)
-            if pm > 1e-12:
-                local_perp_2d /= pm
-            if am > 1e-12:
-                local_axis_2d /= am
-        else:
-            local_perp_2d = perp[:2]
-            local_axis_2d = axis[:2]
-
-        cross_comp = abs(n[0] * local_perp_2d[0] + n[1] * local_perp_2d[1])
-        long_comp = abs(n[0] * local_axis_2d[0] + n[1] * local_axis_2d[1])
-
-        cross_slope[i] = (cross_comp / nz) * 100.0
-        long_slope[i] = (long_comp / nz) * 100.0
+    cross_slope = np.where(vertical_mask, 9000.0, (cross_comp / safe_nz) * 100.0)
+    long_slope = np.where(vertical_mask, 9000.0, (long_comp / safe_nz) * 100.0)
 
     return {
         "total_slope_pct": total_slope,
