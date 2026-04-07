@@ -556,20 +556,49 @@ def _compute_group_properties(clusters, vertices, faces, normals, areas):
 
 # ── Step 3a: Wall axis via PCA (kept for backward compat) ──────────
 
-def _determine_wall_axis(vertices):
-    """Determine wall longitudinal axis via PCA on horizontal projection.
+def _determine_wall_axis(vertices, faces=None, areas=None):
+    """Determine wall longitudinal axis via area-weighted PCA.
 
-    Projects all vertices onto the XY plane, computes the covariance
-    matrix, and returns the eigenvector with the largest eigenvalue
-    (= direction of greatest horizontal spread = wall length direction).
+    Projects triangle centroids onto the XY plane, weighted by triangle
+    area. The eigenvector with the largest eigenvalue gives the wall
+    length direction.
+
+    Area-weighting is crucial for meshes with non-uniform tessellation
+    (e.g. denser vertices at curves, coarser at flat segments). Without
+    weighting, a single densely tessellated curve segment can bias the
+    PCA axis away from the true wall direction.
+
+    The weighted covariance matrix is:
+        C = Σᵢ wᵢ (pᵢ - μ)(pᵢ - μ)ᵀ  where wᵢ = Aᵢ / Σ Aᵢ
 
     Falls back to bbox longest horizontal dimension if PCA is ambiguous
-    (eigenvalue ratio < 2).
-    """
-    xy = vertices[:, :2]
-    centered = xy - xy.mean(axis=0)
+    (eigenvalue ratio < 2) or if no face data is provided.
 
-    cov = np.cov(centered.T)
+    Reference: Jolliffe, I.T. (2002). Principal Component Analysis, §3.
+    """
+    if faces is not None and areas is not None and len(faces) > 0:
+        # Area-weighted PCA on triangle centroids
+        v0 = vertices[faces[:, 0]]
+        v1 = vertices[faces[:, 1]]
+        v2 = vertices[faces[:, 2]]
+        centroids_xy = ((v0 + v1 + v2) / 3.0)[:, :2]
+
+        total_area = float(areas.sum())
+        if total_area > 0:
+            weights = areas / total_area
+            mean_xy = (centroids_xy * weights[:, np.newaxis]).sum(axis=0)
+            centered = centroids_xy - mean_xy
+            # Weighted covariance: C = Σ wᵢ (cᵢ - μ)(cᵢ - μ)ᵀ
+            cov = (centered * weights[:, np.newaxis]).T @ centered
+        else:
+            centered = centroids_xy - centroids_xy.mean(axis=0)
+            cov = np.cov(centered.T)
+    else:
+        # Fallback: unweighted vertex PCA
+        xy = vertices[:, :2]
+        centered = xy - xy.mean(axis=0)
+        cov = np.cov(centered.T)
+
     eigenvalues, eigenvectors = np.linalg.eigh(cov)
 
     # eigh returns eigenvalues in ascending order; last = largest
@@ -827,7 +856,7 @@ def _extract_centerline(vertices, faces, normals, areas, clusters,
     total_length = float(np.linalg.norm(diffs, axis=1).sum())
 
     # Step J: Global wall axis (backward compat)
-    wall_axis = _determine_wall_axis(vertices)
+    wall_axis = _determine_wall_axis(vertices, faces, areas)
 
     return WallCenterline(
         points_2d=centerline_pts,
@@ -852,7 +881,7 @@ def _fallback_straight_centerline(vertices):
             widths=np.array([0.0, 0.0]),
             is_curved=False, length=1.0, wall_axis=wall_axis,
         )
-    wall_axis = _determine_wall_axis(vertices)
+    wall_axis = _determine_wall_axis(vertices)  # fallback: unweighted (no faces)
     z_axis = np.array([0.0, 0.0, 1.0])
     perp_3d = np.cross(wall_axis, z_axis)
     perp_norm = np.linalg.norm(perp_3d)

@@ -209,6 +209,9 @@ def _build_context(level1_result: dict, level3_result: dict) -> dict:
     ctx["long_slope_avg_pct"] = level3_result.get("long_slope_avg_pct")
     ctx["long_slope_max_pct"] = level3_result.get("long_slope_max_pct")
 
+    # Measurement uncertainty (for uncertainty-aware rule checking)
+    ctx["measurement_uncertainty_mm"] = level3_result.get("measurement_uncertainty_mm", 0)
+
     return ctx
 
 
@@ -243,13 +246,25 @@ def _evaluate_rule(rule: dict, context: dict) -> dict:
     actual = _get_actual_value(check_expr, context)
 
     if bool(result):
+        # Check if the result is within measurement uncertainty
+        uncertainty_mm = context.get("measurement_uncertainty_mm", 0)
+        margin_note = ""
+        if uncertainty_mm > 0 and actual is not None and isinstance(actual, (int, float)):
+            margin_note = _check_uncertainty_margin(check_expr, actual, uncertainty_mm, context)
+        msg = "Check passed" + (f" ({margin_note})" if margin_note else "")
         return _make_result(
             rule_id, name, PASS, severity,
-            actual, check_expr, reference, "Check passed"
+            actual, check_expr, reference, msg
         )
     else:
         # Build actionable failure message
         msg = _build_fail_message(rule, actual, check_expr)
+        # Add uncertainty context if available
+        uncertainty_mm = context.get("measurement_uncertainty_mm", 0)
+        if uncertainty_mm > 0 and actual is not None and isinstance(actual, (int, float)):
+            margin = _check_uncertainty_margin(check_expr, actual, uncertainty_mm, context)
+            if margin:
+                msg += f" | {margin}"
         return _make_result(
             rule_id, name, FAIL, severity,
             actual, check_expr, reference, msg
@@ -326,6 +341,40 @@ def _safe_eval(expr: str, context: dict) -> bool:
         # Extract variable name from NameError message
         var = str(e).split("'")[1] if "'" in str(e) else str(e)
         raise _MissingVariable(var)
+
+
+def _check_uncertainty_margin(check_expr: str, actual: float, uncertainty_mm: float,
+                              context: dict) -> str:
+    """Check if a PASS/FAIL result is within measurement uncertainty.
+
+    For a check like "crown_width_mm >= 300", if actual=302 and
+    uncertainty=±5mm, the true value could be 297–307mm.
+    Reports whether the result is definitive or marginal.
+
+    Returns a note string, or "" if not applicable.
+    """
+    # Extract threshold from expression
+    for op in [">=", "<=", ">", "<"]:
+        if op in check_expr:
+            parts = check_expr.split(op, 1)
+            var_name = parts[0].strip()
+            try:
+                threshold = float(parts[1].strip().split()[0])
+            except (ValueError, IndexError):
+                return ""
+
+            # Only apply to mm-based measurements
+            if "_mm" not in var_name and "_pct" not in var_name:
+                return ""
+
+            # Determine uncertainty for this variable
+            unc = uncertainty_mm if "_mm" in var_name else uncertainty_mm * 0.01
+
+            margin = abs(actual - threshold)
+            if margin < unc:
+                return f"Messunsicherheit: ±{unc:.1f}, Abstand zum Grenzwert: {margin:.1f} (marginal)"
+            return ""
+    return ""
 
 
 def _build_fail_message(rule: dict, actual, check_expr: str) -> str:
