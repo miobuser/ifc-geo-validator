@@ -324,3 +324,59 @@ class TestClassificationProperties:
         for g in result["face_groups"]:
             all_indices.extend(g.face_indices)
         assert sorted(all_indices) == list(range(len(mesh["faces"])))
+
+
+# ── Measurement Uncertainty ───────────────────────────────────────
+
+class TestMeasurementUncertainty:
+    """Measurement uncertainty must follow physical laws."""
+
+    def test_straight_wall_zero_uncertainty(self):
+        """Planar walls have exact measurements (uncertainty = 0)."""
+        from ifc_geo_validator.validation.level2 import validate_level2
+        from ifc_geo_validator.validation.level3 import validate_level3
+        v, f = _unit_cube()
+        # Scale to wall proportions: 8m × 0.4m × 3m
+        v = v * np.array([8, 0.4, 3])
+        mesh = _make_mesh(v, f)
+        l2 = validate_level2(mesh)
+        l3 = validate_level3(mesh, l2)
+        assert l3["measurement_uncertainty_mm"] == 0.0
+
+    def test_curved_wall_positive_uncertainty(self):
+        """Curved walls have positive measurement uncertainty."""
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+        from ifc_geo_validator.validation.level2 import validate_level2
+        from ifc_geo_validator.validation.level3 import validate_level3
+        model = load_model("tests/test_models/T8_curved_wall.ifc")
+        elem = get_elements(model, "IfcWall")[0]
+        mesh = extract_mesh(elem)
+        l2 = validate_level2(mesh)
+        l3 = validate_level3(mesh, l2)
+        unc = l3["measurement_uncertainty_mm"]
+        assert unc > 0, "Curved wall must have positive uncertainty"
+        assert unc < 50, f"Uncertainty {unc}mm seems too high for R≈10m"
+
+    def test_uncertainty_proportional_to_curvature(self):
+        """Higher curvature → higher uncertainty (δ ∝ κ for fixed L)."""
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+        from ifc_geo_validator.validation.level2 import validate_level2
+        from ifc_geo_validator.validation.level3 import validate_level3
+
+        # T8 (R≈10m, 90° arc) vs T12 (R≈5m, 180° arc)
+        uncertainties = {}
+        for mf in ["T8_curved_wall.ifc", "T12_semicircle.ifc"]:
+            model = load_model(f"tests/test_models/{mf}")
+            elem = get_elements(model, "IfcWall")[0]
+            mesh = extract_mesh(elem)
+            l2 = validate_level2(mesh)
+            l3 = validate_level3(mesh, l2)
+            uncertainties[mf] = l3["measurement_uncertainty_mm"]
+
+        # T12 has smaller radius → higher curvature → higher uncertainty
+        assert uncertainties["T12_semicircle.ifc"] > uncertainties["T8_curved_wall.ifc"], (
+            f"T12 (higher curvature) should have higher uncertainty: "
+            f"T12={uncertainties['T12_semicircle.ifc']}mm vs T8={uncertainties['T8_curved_wall.ifc']}mm"
+        )
