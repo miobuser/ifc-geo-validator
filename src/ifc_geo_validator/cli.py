@@ -122,6 +122,12 @@ def main():
         help="Show cross-section at position (0.0=start, 0.5=middle, 1.0=end)",
     )
     parser.add_argument(
+        "--clearance",
+        type=float, nargs=2, default=None,
+        metavar=("WIDTH", "HEIGHT"),
+        help="Check clearance profile (width height in meters, e.g. --clearance 8.0 4.5)",
+    )
+    parser.add_argument(
         "--heatmap-categories",
         default="crown",
         help="Face categories for heatmap, comma-separated (default: crown). "
@@ -448,6 +454,29 @@ def main():
                         print("    (Matplotlib not installed — skipping plot)")
                 else:
                     print(f"\n  Cross-Section: not enough vertices at position {args.cross_section:.0%}")
+
+            # ── Clearance check (if requested) ──────────────────────
+            if args.clearance and l2 is not None:
+                from ifc_geo_validator.validation.clearance import (
+                    check_clearance, astra_road_clearance,
+                )
+                cl_obj = alignment_centerline or l2.get("centerline")
+                cl_width, cl_height = args.clearance
+                profile = astra_road_clearance(cl_width, cl_height)
+                cl_result = check_clearance(
+                    mesh_data, cl_obj, profile, n_slices=20,
+                )
+                elem_result["clearance"] = cl_result
+                if cl_result["clear"]:
+                    print(f"\n  Clearance ({cl_width}×{cl_height}m): {_green('CLEAR')} "
+                          f"({cl_result['n_slices_checked']} slices checked)")
+                else:
+                    print(f"\n  Clearance ({cl_width}×{cl_height}m): {_red('VIOLATION')}")
+                    print(f"    {cl_result['n_violations']} vertices inside envelope")
+                    print(f"    Max penetration: {cl_result['max_penetration_mm']:.0f} mm")
+                    for v in cl_result["violations"][:5]:
+                        print(f"    At {v['position_m']:.1f}m: "
+                              f"{v['n_vertices']} vertices, {v['max_penetration_mm']:.0f}mm")
 
             # Store mesh_data for L5/L6 (needed after the per-element loop)
             elem_result["mesh_data"] = mesh_data
