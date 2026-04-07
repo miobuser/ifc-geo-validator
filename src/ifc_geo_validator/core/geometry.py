@@ -83,22 +83,30 @@ def compute_mesh_quality(vertices: np.ndarray, faces: np.ndarray, areas: np.ndar
     max_area = float(valid_areas.max()) if len(valid_areas) > 0 else 0.0
     area_ratio = max_area / min_area if min_area > 0 else float("inf")
 
-    # Edge length statistics
-    edge_lengths = []
-    for tri in faces:
-        for k in range(3):
-            a_idx, b_idx = int(tri[k]), int(tri[(k + 1) % 3])
-            edge_lengths.append(float(np.linalg.norm(vertices[a_idx] - vertices[b_idx])))
-    edge_arr = np.array(edge_lengths) if edge_lengths else np.array([0.0])
+    # Edge length statistics (fully vectorized, no Python loop).
+    # For M triangles with vertex indices (a, b, c), the 3 edges are:
+    #   e0 = v[b] - v[a],  e1 = v[c] - v[b],  e2 = v[a] - v[c]
+    # Vectorized via array slicing — O(M) with no Python overhead.
+    e0 = vertices[faces[:, 1]] - vertices[faces[:, 0]]
+    e1 = vertices[faces[:, 2]] - vertices[faces[:, 1]]
+    e2 = vertices[faces[:, 0]] - vertices[faces[:, 2]]
+    edge_arr = np.concatenate([
+        np.linalg.norm(e0, axis=1),
+        np.linalg.norm(e1, axis=1),
+        np.linalg.norm(e2, axis=1),
+    ])
 
-    # Non-manifold edges (shared by ≠ 2 faces)
-    edge_count: dict[tuple[int, int], int] = {}
-    for tri in faces:
-        for k in range(3):
-            a_idx, b_idx = int(tri[k]), int(tri[(k + 1) % 3])
-            edge = (min(a_idx, b_idx), max(a_idx, b_idx))
-            edge_count[edge] = edge_count.get(edge, 0) + 1
-    non_manifold = sum(1 for c in edge_count.values() if c != 2)
+    # Non-manifold edges (shared by ≠ 2 faces).
+    # Vectorized edge hashing: represent each edge as (min(a,b), max(a,b)),
+    # count occurrences using numpy bincount on a Cantor pairing function.
+    all_edges_a = np.concatenate([faces[:, 0], faces[:, 1], faces[:, 2]])
+    all_edges_b = np.concatenate([faces[:, 1], faces[:, 2], faces[:, 0]])
+    edge_lo = np.minimum(all_edges_a, all_edges_b)
+    edge_hi = np.maximum(all_edges_a, all_edges_b)
+    # Cantor pairing: unique integer per edge pair
+    edge_keys = edge_lo.astype(np.int64) * (edge_hi.max() + 1) + edge_hi.astype(np.int64)
+    unique_keys, counts = np.unique(edge_keys, return_counts=True)
+    non_manifold = int((counts != 2).sum())
 
     return {
         "n_degenerate": n_degenerate,
