@@ -180,6 +180,17 @@ level_3:
     reference: "FHB T/G 24 001-10701 — Sicherheit, Notausgänge"
     note: "Gilt nur für Rampenelemente bei Notausgängen"
 
+  # ── Trassierungsgeometrie ───────────────────────────────────────
+
+  - id: FHB-TN-L3-005
+    name: "Mindestradius Horizontaltrassierung"
+    description: "Minimaler Krümmungsradius der Elementachse"
+    check: "min_radius_m >= 125"
+    severity: INFO
+    reference: "VSS SN 640 198a — Projektierungsgeschwindigkeit 60 km/h"
+    note: "R_min variiert je nach Projektierungsgeschwindigkeit (50-120 km/h)"
+    applies_to: ["wall_stem"]
+
 # =============================================================================
 # Level 4 — Zusammengesetzte Prüfungen
 # =============================================================================

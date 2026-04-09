@@ -145,7 +145,31 @@ def generate_html_report(
             _add_metric(parts, "Quergefälle", f'{slope.get("area_weighted_cross_pct", 0):.2f} %')
             _add_metric(parts, "Längsgefälle", f'{slope.get("area_weighted_long_pct", 0):.2f} %')
 
+        # Curvature
+        import math
+        min_r = l3.get("min_radius_m")
+        if min_r is not None and not math.isinf(min_r):
+            _add_metric(parts, "Min. Radius", f'{min_r:.1f} m')
+
+        # Measurement uncertainty
+        unc = l3.get("measurement_uncertainty_mm", 0)
+        if unc > 0:
+            _add_metric(parts, "Messunsicherheit", f'±{unc:.1f} mm')
+
         parts.append('</div>')
+
+        # Clearance result
+        clearance = r.get("clearance")
+        if clearance:
+            if clearance.get("clear"):
+                parts.append('<div class="diag" style="border-color:#4CAF50;background:#E8F5E9">'
+                             'Lichtraumprofil: KEIN VERSTOSS</div>')
+            else:
+                pen = clearance.get("max_penetration_mm", 0)
+                n_v = clearance.get("n_violations", 0)
+                parts.append(f'<div class="diag" style="border-color:#F44336;background:#FFEBEE">'
+                             f'Lichtraumprofil: VERSTOSS — {n_v} Vertices, '
+                             f'max. Eindringtiefe {pen:.0f} mm</div>')
 
         # Rule checks
         if l4 and l4.get("checks"):

@@ -131,6 +131,20 @@ def _collect_properties(elem_result: dict) -> dict:
         if "crown_width_cv" in l3:
             props["CrownWidthCV"] = round(l3["crown_width_cv"], 6)
 
+    # Curvature (if available)
+    if l3:
+        min_r = l3.get("min_radius_m")
+        if min_r is not None and min_r != float("inf"):
+            props["MinRadius_m"] = round(min_r, 2)
+
+    # Clearance (if computed)
+    clearance = elem_result.get("clearance")
+    if clearance:
+        props["ClearanceClear"] = clearance.get("clear", True)
+        pen = clearance.get("max_penetration_mm", 0)
+        if pen > 0:
+            props["ClearancePenetration_mm"] = round(pen, 1)
+
     # Slope analysis (if computed)
     slope_data = elem_result.get("slope_analysis")
     if slope_data:

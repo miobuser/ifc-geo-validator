@@ -212,6 +212,10 @@ def _build_context(level1_result: dict, level3_result: dict) -> dict:
     # Measurement uncertainty (for uncertainty-aware rule checking)
     ctx["measurement_uncertainty_mm"] = level3_result.get("measurement_uncertainty_mm", 0)
 
+    # Curvature (from centerline, if available)
+    ctx["min_radius_m"] = level3_result.get("min_radius_m")
+    ctx["max_curvature"] = level3_result.get("max_curvature")
+
     return ctx
 
 

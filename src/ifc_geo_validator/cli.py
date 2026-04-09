@@ -367,6 +367,14 @@ def main():
                 if "crown_width_cv" in l3:
                     print(f"    Profile CV:       {l3['crown_width_cv']:.4f}")
 
+            # ── Curvature data (inject into L3 for rule context) ──
+            if l2 is not None:
+                cl_obj = l2.get("centerline")
+                if cl_obj and hasattr(cl_obj, "curvature_profile"):
+                    curv = cl_obj.curvature_profile()
+                    l3["min_radius_m"] = curv["min_radius_m"]
+                    l3["max_curvature"] = curv["max_kappa"]
+
             # ── Slope analysis (always computed for crown) ───────
             if l2 is not None:
                 try:
