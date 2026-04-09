@@ -180,7 +180,8 @@ def validate_level6(
                     "element_name": ename,
                     "foundation_min_z": round(foundation_min_z, 4),
                     "terrain_z": round(terrain_z, 4),
-                    "foundation_embedment_m": round(embedment_vertical, 4),
+                    # Primary: surface distance (correct for frost depth)
+                    "foundation_embedment_m": round(min_surface_dist, 4),
                     "foundation_embedment_vertical_m": round(embedment_vertical, 4),
                     "foundation_embedment_surface_m": round(min_surface_dist, 4),
                 })
