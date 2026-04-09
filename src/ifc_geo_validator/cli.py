@@ -164,6 +164,11 @@ def main():
         help="Author/validator name for report signature",
     )
     parser.add_argument(
+        "--init",
+        action="store_true",
+        help="Create a default .igv.yaml config file in the current directory",
+    )
+    parser.add_argument(
         "--quick",
         action="store_true",
         help="Quick summary: one line per element with key metrics and PASS/FAIL",
@@ -178,6 +183,35 @@ def main():
     args = parser.parse_args()
     levels = [int(x) for x in args.levels.split(",")]
     entity_types = [t.strip() for t in args.filter_type.split(",")]
+
+    # --init: create default config and exit
+    if args.init:
+        from ifc_geo_validator.core.project_config import create_default_config
+        path = create_default_config()
+        print(f"Created {path}")
+        print("Edit this file to configure your project settings.")
+        return
+
+    # Load project config if available
+    from ifc_geo_validator.core.project_config import find_config, load_config
+    config_path = find_config()
+    if config_path:
+        config = load_config(config_path)
+        print(f"Config: {config_path}")
+        # Apply config as defaults (CLI flags override)
+        if not args.project and config.get("project"):
+            args.project = config["project"]
+        if not args.author and config.get("author"):
+            args.author = config["author"]
+        if args.filter_type == "IfcWall" and config.get("filter_type"):
+            ft = config["filter_type"]
+            if isinstance(ft, list):
+                args.filter_type = ",".join(ft)
+            entity_types = [t.strip() for t in args.filter_type.split(",")]
+        if config.get("auto") and not args.auto:
+            args.auto = True
+        if config.get("distances") and not args.distances:
+            args.distances = True
 
     # Resolve input files (support directories and globs)
     import glob as globmod
