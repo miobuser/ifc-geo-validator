@@ -128,6 +128,11 @@ def main():
         help="Check clearance profile (width height in meters, e.g. --clearance 8.0 4.5)",
     )
     parser.add_argument(
+        "--distances",
+        action="store_true",
+        help="Compute pairwise distances between ALL elements (min vertex, horizontal, vertical)",
+    )
+    parser.add_argument(
         "--heatmap-categories",
         default="crown",
         help="Face categories for heatmap, comma-separated (default: crown). "
@@ -593,6 +598,27 @@ def main():
             terrain = get_terrain_mesh(model)
         if terrain:
             l6_global = validate_level6(all_results, terrain_mesh=terrain)
+
+    # ── Pairwise element distances (if requested) ──────────
+    if args.distances and len(all_results) >= 2:
+        from itertools import combinations
+        from ifc_geo_validator.core.advanced_geometry import compute_element_distances
+
+        valid = [r for r in all_results if "error" not in r and "mesh_data" in r]
+        if len(valid) >= 2:
+            print(f"\n{'='*60}")
+            print(f"Pairwise Element Distances ({len(valid)} elements)")
+            print(f"{'='*60}")
+
+            for i, j in combinations(range(len(valid)), 2):
+                a, b = valid[i], valid[j]
+                d = compute_element_distances(a["mesh_data"], b["mesh_data"])
+                a_name = a.get("element_name", "?")[:25]
+                b_name = b.get("element_name", "?")[:25]
+                print(f"\n  {a_name} <-> {b_name}:")
+                print(f"    Min vertex:  {d['min_vertex_mm']:>8.0f} mm")
+                print(f"    Horizontal:  {d['horizontal_mm']:>8.0f} mm")
+                print(f"    Vertical:    {d['vertical_mm']:>8.0f} mm")
 
     if 4 in levels and ruleset:
         for elem_result in all_results:
