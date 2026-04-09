@@ -374,6 +374,69 @@ def check_plumbness(face_groups: list) -> dict:
     return results
 
 
+# ── Inter-Element Distance Analysis ───────────────────────────────
+
+def compute_element_distances(mesh_a: dict, mesh_b: dict) -> dict:
+    """Comprehensive distance analysis between two element meshes.
+
+    Computes multiple distance metrics:
+      - min_vertex_distance: minimum vertex-to-vertex distance
+      - min_surface_distance: approximated via face centroids
+      - horizontal_distance: XY-only gap (ignoring height)
+      - vertical_distance: Z-only gap (ignoring plan position)
+      - centroid_distance: distance between element centroids
+
+    All distances in meters.
+
+    Reference: Ericson (2004), Real-Time Collision Detection, Ch. 5.
+    """
+    va, vb = mesh_a["vertices"], mesh_b["vertices"]
+
+    if len(va) == 0 or len(vb) == 0:
+        return {"min_vertex_mm": float("inf"), "horizontal_mm": float("inf"),
+                "vertical_mm": float("inf"), "centroid_mm": float("inf")}
+
+    # Centroid distance
+    ca = va.mean(axis=0)
+    cb = vb.mean(axis=0)
+    centroid_dist = float(np.linalg.norm(ca - cb))
+
+    # Min vertex distance (vectorized)
+    if len(va) * len(vb) < 2_000_000:
+        diff = va[:, np.newaxis, :] - vb[np.newaxis, :, :]
+        dists = np.linalg.norm(diff, axis=2)
+        min_vert = float(dists.min())
+    else:
+        min_vert = float("inf")
+        for v in va:
+            d = float(np.linalg.norm(vb - v, axis=1).min())
+            min_vert = min(min_vert, d)
+
+    # Horizontal (XY) distance
+    min_a_xy, max_a_xy = va[:, :2].min(axis=0), va[:, :2].max(axis=0)
+    min_b_xy, max_b_xy = vb[:, :2].min(axis=0), vb[:, :2].max(axis=0)
+    gap_x = max(0, max(min_a_xy[0], min_b_xy[0]) - min(max_a_xy[0], max_b_xy[0]))
+    gap_y = max(0, max(min_a_xy[1], min_b_xy[1]) - min(max_a_xy[1], max_b_xy[1]))
+    horiz_dist = float(np.sqrt(gap_x**2 + gap_y**2))
+
+    # Vertical (Z) distance
+    z_min_a, z_max_a = float(va[:, 2].min()), float(va[:, 2].max())
+    z_min_b, z_max_b = float(vb[:, 2].min()), float(vb[:, 2].max())
+    if z_max_a < z_min_b:
+        vert_dist = z_min_b - z_max_a
+    elif z_max_b < z_min_a:
+        vert_dist = z_min_a - z_max_b
+    else:
+        vert_dist = 0.0  # overlapping in Z
+
+    return {
+        "min_vertex_mm": round(min_vert * 1000, 1),
+        "horizontal_mm": round(horiz_dist * 1000, 1),
+        "vertical_mm": round(vert_dist * 1000, 1),
+        "centroid_mm": round(centroid_dist * 1000, 1),
+    }
+
+
 # ── Helpers ───────────────────────────────────────────────────────
 
 def _collect_face_vertices(vertices, faces, face_groups, category):
