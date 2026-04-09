@@ -150,14 +150,39 @@ def validate_level6(
             )
 
             if terrain_z is not None:
-                # Positive = embedded below terrain, negative = exposed
-                embedment = terrain_z - foundation_min_z
+                # Vertical embedment (ΔZ) — simple but overestimates on slopes
+                embedment_vertical = terrain_z - foundation_min_z
+
+                # Minimum distance to terrain surface (correct for frost depth).
+                # The frost line follows the terrain surface, so the relevant
+                # distance is the shortest path from foundation bottom to the
+                # terrain, NOT the vertical distance.
+                #
+                # For each bottom vertex, find the nearest point on the terrain
+                # and compute the 3D distance.
+                bottom_mask = found_verts[:, 2] < (foundation_min_z + 0.01)
+                bottom_verts = found_verts[bottom_mask] if bottom_mask.any() else found_verts
+
+                min_surface_dist = float("inf")
+                for bv in bottom_verts:
+                    # Find terrain height at this vertex's XY
+                    tz = terrain_height_at_xy(t_verts, t_faces, bv[0], bv[1])
+                    if tz is not None:
+                        terrain_pt = np.array([bv[0], bv[1], tz])
+                        dist = float(np.linalg.norm(terrain_pt - bv))
+                        min_surface_dist = min(min_surface_dist, dist)
+
+                if min_surface_dist == float("inf"):
+                    min_surface_dist = embedment_vertical
+
                 result["embedments"].append({
                     "element_id": eid,
                     "element_name": ename,
                     "foundation_min_z": round(foundation_min_z, 4),
                     "terrain_z": round(terrain_z, 4),
-                    "foundation_embedment_m": round(embedment, 4),
+                    "foundation_embedment_m": round(embedment_vertical, 4),
+                    "foundation_embedment_vertical_m": round(embedment_vertical, 4),
+                    "foundation_embedment_surface_m": round(min_surface_dist, 4),
                 })
 
     # ── Inter-element distances ──────────────────────────────────
