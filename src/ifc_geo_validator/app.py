@@ -29,6 +29,120 @@ BUILTIN_RULESETS = {
 DEFAULT_RULESET = RULESETS_DIR / "astra_fhb_stuetzmauer.yaml"
 
 
+# ── Variable catalog (shared between editor and reference) ──────────
+
+VARIABLE_CATALOG = {
+    "Geometrie (L1)": {
+        "volume": ("float", "m³", "Volumen (Divergenztheorem)"),
+        "total_area": ("float", "m²", "Gesamtoberfläche"),
+        "mesh_is_watertight": ("bool", "—", "Mesh geschlossen"),
+        "bbox_dim_min_m": ("float", "m", "Kürzeste BBox-Achse"),
+        "bbox_height_m": ("float", "m", "Vertikale BBox-Ausdehnung"),
+        "volume_fill_ratio": ("float", "—", "V/V_bbox (1.0 = massiv)"),
+        "slenderness_ratio": ("float", "—", "Höhe/Dicke"),
+    },
+    "Krone": {
+        "crown_width_mm": ("float", "mm", "Kronenbreite (Oberfläche)"),
+        "crown_slope_percent": ("float", "%", "Kronenneigung"),
+        "cross_slope_max_pct": ("float", "%", "Quergefälle (max)"),
+        "long_slope_max_pct": ("float", "%", "Längsgefälle (max)"),
+    },
+    "Wand": {
+        "min_wall_thickness_mm": ("float", "mm", "Wandstärke senkrecht (min)"),
+        "wall_height_m": ("float", "m", "Wandhöhe (max)"),
+        "front_inclination_ratio": ("float", "n:1", "Neigung Ansichtsfläche"),
+        "min_radius_m": ("float", "m", "Min. Krümmungsradius"),
+        "taper_ratio": ("float", "n:1", "Anzug-Verhältnis"),
+        "front_plumbness_deg": ("float", "°", "Lotabweichung"),
+    },
+    "Fundament / Terrain": {
+        "foundation_width_mm": ("float", "mm", "Fundamentbreite"),
+        "foundation_embedment_m": ("float", "m", "Einbindetiefe (Oberfläche)"),
+        "crown_height_above_terrain_m": ("float", "m", "Kronenhöhe über Terrain"),
+        "min_distance_to_nearest_mm": ("float", "mm", "Min. Abstand Nachbar"),
+    },
+}
+
+
+def _run_variable_reference():
+    """Show all available YAML variables."""
+    st.title("📖 Variablen-Referenz")
+    st.caption("Alle verfügbaren Variablen für YAML-Regeln")
+    for category, vars_dict in VARIABLE_CATALOG.items():
+        st.subheader(category)
+        rows = [{"Variable": f"`{v}`", "Typ": t, "Einheit": u, "Beschreibung": d}
+                for v, (t, u, d) in vars_dict.items()]
+        st.dataframe(rows, use_container_width=True, hide_index=True)
+
+
+def _run_ruleset_editor():
+    """Visual ruleset editor."""
+    import yaml as yaml_mod
+    st.title("📐 Ruleset Editor")
+    st.caption("Validierungsregeln visuell erstellen")
+
+    rs_name = st.text_input("Ruleset-Name", "Mein Ruleset")
+
+    if "editor_rules" not in st.session_state:
+        st.session_state.editor_rules = []
+
+    # Variable reference
+    with st.expander("📖 Verfügbare Variablen"):
+        for cat, vars_dict in VARIABLE_CATALOG.items():
+            st.markdown(f"**{cat}**")
+            for v, (t, u, d) in vars_dict.items():
+                st.text(f"  {v} ({t}, {u}) — {d}")
+
+    # Add rule
+    st.subheader("Neue Regel")
+    all_vars = {}
+    for cat, vd in VARIABLE_CATALOG.items():
+        for v, info in vd.items():
+            all_vars[f"{v} — {info[2]}"] = v
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        sel = st.selectbox("Variable", list(all_vars.keys()))
+        var = all_vars[sel]
+    with c2:
+        op = st.selectbox("Operator", [">=", "<=", ">", "<", "=="])
+        val = st.number_input("Schwellwert", value=300.0)
+    with c3:
+        sev = st.selectbox("Severity", ["ERROR", "WARNING", "INFO"])
+        name = st.text_input("Name", f"{var} Check")
+
+    check = f"{var} {op} {val}"
+    st.code(f'check: "{check}"')
+
+    if st.button("Regel hinzufügen", type="primary"):
+        st.session_state.editor_rules.append({
+            "id": f"CUSTOM-{len(st.session_state.editor_rules)+1:03d}",
+            "name": name, "check": check, "severity": sev,
+        })
+
+    # Show rules
+    if st.session_state.editor_rules:
+        st.subheader(f"Regeln ({len(st.session_state.editor_rules)})")
+        for i, r in enumerate(st.session_state.editor_rules):
+            cols = st.columns([8, 1])
+            cols[0].text(f"[{r['severity']}] {r['id']}: {r['check']}")
+            if cols[1].button("🗑", key=f"d{i}"):
+                st.session_state.editor_rules.pop(i)
+                st.rerun()
+
+    # YAML output
+    rs = {
+        "metadata": {"name": rs_name, "version": "1.0.0"},
+        "classification_thresholds": {"horizontal_deg": 45.0, "coplanar_deg": 5.0, "lateral_deg": 45.0},
+        "level_3": st.session_state.editor_rules,
+    }
+    yaml_out = yaml_mod.dump(rs, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    st.code(yaml_out, language="yaml")
+    st.download_button("📥 YAML herunterladen", yaml_out,
+                        f"{rs_name.replace(' ','_')}.yaml", "text/yaml",
+                        use_container_width=True)
+
+
 # ── Page config ──────────────────────────────────────────────────────
 
 st.set_page_config(
@@ -38,7 +152,22 @@ st.set_page_config(
 )
 
 
-# ── Sidebar ──────────────────────────────────────────────────────────
+# ── Navigation ──────────────────────────────────────────────────────
+
+page = st.sidebar.radio(
+    "Navigation",
+    ["🏗️ Validierung", "📐 Ruleset Editor", "📖 Variablen-Referenz"],
+    index=0,
+)
+
+if page == "📐 Ruleset Editor":
+    _run_ruleset_editor()
+    st.stop()
+elif page == "📖 Variablen-Referenz":
+    _run_variable_reference()
+    st.stop()
+
+# ── Sidebar (Validierung) ────────────────────────────────────────────
 
 st.sidebar.title("IFC Geometry Validator")
 def _get_version() -> str:
