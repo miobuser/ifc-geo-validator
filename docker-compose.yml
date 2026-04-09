@@ -1,0 +1,12 @@
+version: "3.8"
+
+services:
+  validator:
+    build: .
+    ports:
+      - "8501:8501"
+    restart: unless-stopped
+    # No volumes mounted = data stays in container only
+    # For persistent config, mount a volume:
+    # volumes:
+    #   - ./rulesets:/app/custom_rulesets
