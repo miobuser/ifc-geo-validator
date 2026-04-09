@@ -367,6 +367,31 @@ def main():
                 if "crown_width_cv" in l3:
                     print(f"    Profile CV:       {l3['crown_width_cv']:.4f}")
 
+            # ── Advanced geometry analysis ────────────────────────
+            if l2 is not None and l3 is not None:
+                from ifc_geo_validator.core.advanced_geometry import (
+                    compute_taper_profile, compute_planarity, check_plumbness,
+                )
+                taper = compute_taper_profile(
+                    mesh_data, l2["face_groups"], np.array(l2["wall_axis"])
+                )
+                if taper.get("is_tapered"):
+                    l3["taper_ratio"] = taper["taper_ratio"]
+                    l3["thickness_min_mm"] = taper["min_thickness_mm"]
+                    l3["thickness_max_mm"] = taper["max_thickness_mm"]
+
+                plumb = check_plumbness(l2["face_groups"])
+                l3["front_plumbness_deg"] = plumb.get("front_plumbness_deg")
+                l3["is_plumb"] = plumb.get("is_plumb", True)
+
+                if args.verbose:
+                    if taper.get("is_tapered"):
+                        print(f"    Taper ratio:      {taper['taper_ratio']:.1f}:1 "
+                              f"({taper['min_thickness_mm']:.0f}–{taper['max_thickness_mm']:.0f}mm)")
+                    front_p = plumb.get("front_plumbness_deg")
+                    if front_p is not None and front_p > 0.1:
+                        print(f"    Plumbness:        {front_p:.1f}° from vertical")
+
             # ── Curvature data (inject into L3 for rule context) ──
             if l2 is not None:
                 cl_obj = l2.get("centerline")

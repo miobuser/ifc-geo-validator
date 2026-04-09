@@ -216,6 +216,13 @@ def _build_context(level1_result: dict, level3_result: dict) -> dict:
     ctx["min_radius_m"] = level3_result.get("min_radius_m")
     ctx["max_curvature"] = level3_result.get("max_curvature")
 
+    # Advanced geometry
+    ctx["taper_ratio"] = level3_result.get("taper_ratio")
+    ctx["thickness_min_mm"] = level3_result.get("thickness_min_mm")
+    ctx["thickness_max_mm"] = level3_result.get("thickness_max_mm")
+    ctx["front_plumbness_deg"] = level3_result.get("front_plumbness_deg")
+    ctx["is_plumb"] = level3_result.get("is_plumb")
+
     return ctx
 
 
