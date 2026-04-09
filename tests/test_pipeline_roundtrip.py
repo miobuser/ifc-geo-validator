@@ -173,6 +173,26 @@ class TestT28RoundTrip:
         assert r["l2"]["confidence"] >= 0.85
 
 
+class TestPerformance:
+    """Performance regression tests."""
+
+    def test_simple_wall_under_50ms(self):
+        """T1 pipeline must complete in under 50ms."""
+        import time
+        t0 = time.perf_counter()
+        _run_pipeline("tests/test_models/T1_simple_box.ifc")
+        dt = time.perf_counter() - t0
+        assert dt < 0.05, f"T1 took {dt*1000:.0f}ms (limit: 50ms)"
+
+    def test_curved_wall_under_200ms(self):
+        """T28 pipeline must complete in under 200ms."""
+        import time
+        t0 = time.perf_counter()
+        _run_pipeline("tests/test_models/T28_showcase.ifc")
+        dt = time.perf_counter() - t0
+        assert dt < 0.2, f"T28 took {dt*1000:.0f}ms (limit: 200ms)"
+
+
 class TestT8RoundTrip:
     """T8: 90° curved wall (R≈10m)."""
 
