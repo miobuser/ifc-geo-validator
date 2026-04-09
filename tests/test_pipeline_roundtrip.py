@@ -173,6 +173,40 @@ class TestT28RoundTrip:
         assert r["l2"]["confidence"] >= 0.85
 
 
+class TestFormalAccuracy:
+    """Verify ALL measurements against analytically known values.
+
+    This is the strongest validation: it proves that every measurement
+    produced by the pipeline matches the design intent within the
+    reported measurement uncertainty.
+    """
+
+    def test_t7_all_measurements_exact(self):
+        """T7 (straight, planar) must have ZERO error on all measurements."""
+        r = _run_pipeline("tests/test_models/T7_compliant.ifc")[0]
+        l1, l3 = r["l1"], r["l3"]
+        # All values must match analytical design values exactly
+        assert l3["crown_width_mm"] == pytest.approx(300.0, abs=0.01)
+        assert l3["crown_slope_percent"] == pytest.approx(3.0, abs=0.001)
+        assert l3["min_wall_thickness_mm"] == pytest.approx(300.0, abs=0.1)
+        assert l3["avg_wall_thickness_mm"] == pytest.approx(450.0, abs=0.1)
+        assert l3["wall_height_m"] == pytest.approx(3.009, abs=0.001)
+        assert l3["front_inclination_ratio"] == pytest.approx(10.0, abs=0.01)
+        assert l3.get("foundation_width_mm") == pytest.approx(600.0, abs=0.1)
+        assert l1["volume"] == pytest.approx(10.811, abs=0.01)
+
+    def test_t28_within_uncertainty(self):
+        """T28 (curved) must be within reported measurement uncertainty."""
+        r = _run_pipeline("tests/test_models/T28_showcase.ifc")[0]
+        l3 = r["l3"]
+        unc = l3.get("measurement_uncertainty_mm", 0)
+        assert unc > 0, "Curved wall must report positive uncertainty"
+        # Crown width: design=350mm, must be within ±unc
+        assert l3["crown_width_mm"] == pytest.approx(350.0, abs=max(unc, 5))
+        assert l3["crown_slope_percent"] == pytest.approx(3.0, abs=0.1)
+        assert l3["wall_height_m"] == pytest.approx(3.5, abs=0.01)
+
+
 class TestPerformance:
     """Performance regression tests."""
 
