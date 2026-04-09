@@ -1,5 +1,2 @@
-ifcopenshell>=0.8.0
-numpy>=1.24
-pyyaml>=6.0
-streamlit>=1.30
+-e .
 bcf-client>=0.8
