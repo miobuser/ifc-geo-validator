@@ -75,7 +75,7 @@ def validate_level4(
             summary:  {total, passed, failed, skipped, errors, warnings}
     """
     # Build the evaluation context from computed values
-    context = _build_context(level1_result, level3_result)
+    context = _build_context(level1_result, level3_result, level2_result)
 
     # Merge L5/L6 context variables if provided
     if level5_context:
@@ -164,7 +164,8 @@ def validate_level4(
 
 # ── Context builder ─────────────────────────────────────────────────
 
-def _build_context(level1_result: dict, level3_result: dict) -> dict:
+def _build_context(level1_result: dict, level3_result: dict,
+                   level2_result: dict = None) -> dict:
     """Build a flat dict of all variables available for rule evaluation."""
     ctx = {}
 
@@ -182,6 +183,23 @@ def _build_context(level1_result: dict, level3_result: dict) -> dict:
     ctx["bbox_dim_mid_m"] = sorted_dims[1]   # middle axis (≈ width or height)
     ctx["bbox_dim_min_m"] = sorted_dims[2]   # shortest axis (≈ thickness)
     ctx["bbox_height_m"] = bbox_size[2]      # Z-extent (vertical height)
+
+    # Aspect ratios (dimensionless, for structural assessment)
+    height = bbox_size[2] if bbox_size[2] > 0 else 1e-6
+    ctx["slenderness_ratio"] = round(height / max(sorted_dims[2], 1e-6), 2)  # height/thickness
+    ctx["length_height_ratio"] = round(sorted_dims[0] / max(height, 1e-6), 2)  # length/height
+
+    # Level 2 — Surface areas per category (from level2 if available)
+    if level2_result:
+        summary = level2_result.get("summary", {})
+        ctx["crown_area_m2"] = summary.get("crown", {}).get("total_area", 0)
+        ctx["foundation_area_m2"] = summary.get("foundation", {}).get("total_area", 0)
+        ctx["front_area_m2"] = summary.get("front", {}).get("total_area", 0)
+        ctx["back_area_m2"] = summary.get("back", {}).get("total_area", 0)
+        # Front/back area ratio (asymmetry indicator)
+        fa = ctx["front_area_m2"]
+        ba = ctx["back_area_m2"]
+        ctx["front_back_area_ratio"] = round(max(fa, ba) / max(min(fa, ba), 1e-6), 3) if (fa + ba) > 0 else 1.0
 
     # Level 3
     ctx["crown_width_mm"] = level3_result.get("crown_width_mm")

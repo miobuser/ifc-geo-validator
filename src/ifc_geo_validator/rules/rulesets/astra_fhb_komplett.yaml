@@ -191,6 +191,25 @@ level_3:
     note: "R_min variiert je nach Projektierungsgeschwindigkeit (50-120 km/h)"
     applies_to: ["wall_stem"]
 
+  # ── Strukturelle Kennzahlen ─────────────────────────────────────
+
+  - id: FHB-AL-L3-002
+    name: "Schlankheit (Höhe/Dicke)"
+    description: "Schlankheitsverhältnis h/t soll ≤ 25 sein"
+    check: "slenderness_ratio <= 25"
+    severity: WARNING
+    reference: "SIA 262:2013, Tab. 14 — Schlankheitsbegrenzung"
+    note: "Unbewehrte Mauern: h/t ≤ 12, bewehrte: ≤ 25"
+    applies_to: ["wall_stem"]
+
+  - id: FHB-SM-L3-008
+    name: "Stützmauer: Fundamentbreite-Verhältnis"
+    description: "Fundamentbreite soll mindestens 40% der Wandhöhe betragen"
+    check: "foundation_width_ratio >= 0.4"
+    severity: INFO
+    reference: "Konstruktive Empfehlung Schwergewichtsmauern"
+    applies_to: ["wall_stem"]
+
 # =============================================================================
 # Level 4 — Zusammengesetzte Prüfungen
 # =============================================================================
