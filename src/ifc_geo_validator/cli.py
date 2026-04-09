@@ -149,6 +149,11 @@ def main():
         help="Compare against reference IFC (as-designed vs as-built)",
     )
     parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Quick summary: one line per element with key metrics and PASS/FAIL",
+    )
+    parser.add_argument(
         "--heatmap-categories",
         default="crown",
         help="Face categories for heatmap, comma-separated (default: crown). "
@@ -777,29 +782,54 @@ def main():
             print(f"\n  Summary: {passed_str}, {failed_str}, {s['skipped']} skipped")
 
     # ── Summary table ─────────────────────────────────────────────
-    print(f"\n{'='*60}")
+    print(f"\n{'='*80}")
     print(f"SUMMARY ({len(all_results)} elements)")
-    print(f"{'='*60}")
-    # Header
-    print(f"  {'Name':<25s} {'ID':>6s}  {'Vol(m3)':>8s}  {'Area(m2)':>8s}  {'WT':>3s}  {'L4':>12s}")
-    print(f"  {'-'*25} {'-'*6}  {'-'*8}  {'-'*8}  {'-'*3}  {'-'*12}")
+    print(f"{'='*80}")
+    if args.quick:
+        # Quick mode: compact one-liner with key metrics
+        print(f"  {'Name':<25s} {'Role':>10s} {'CW mm':>6s} {'Th mm':>6s} {'S%':>5s} {'Conf':>5s} {'Result':>12s}")
+        print(f"  {'-'*25} {'-'*10} {'-'*6} {'-'*6} {'-'*5} {'-'*5} {'-'*12}")
+    else:
+        print(f"  {'Name':<25s} {'ID':>6s}  {'Vol(m3)':>8s}  {'Area(m2)':>8s}  {'WT':>3s}  {'L4':>12s}")
+        print(f"  {'-'*25} {'-'*6}  {'-'*8}  {'-'*8}  {'-'*3}  {'-'*12}")
+
     for r in all_results:
         name = r.get("element_name", "?")[:25]
         eid = r.get("element_id", "?")
         if "error" in r:
-            print(f"  {name:<25s} {eid:>6}  {'ERROR':>8s}  {'':>8s}  {'':>3s}  {'':>12s}")
+            print(f"  {name:<25s} {'ERROR':>12s}")
             continue
+
         l1 = r.get("level1", {})
-        vol = f"{l1.get('volume', 0):.3f}" if l1 else ""
-        area = f"{l1.get('total_area', 0):.3f}" if l1 else ""
-        wt = "Yes" if l1.get("is_watertight") else "No"
+        l2 = r.get("level2", {})
+        l3 = r.get("level3", {})
         l4 = r.get("level4")
-        if l4:
-            s = l4["summary"]
-            l4_str = f"{s['passed']}P/{s['failed']}F/{s['skipped']}S"
+
+        if args.quick:
+            role = l2.get("element_role", "?")[:10]
+            cw = f"{l3.get('crown_width_mm', 0):.0f}" if l3.get("crown_width_mm") else "-"
+            th = f"{l3.get('min_wall_thickness_mm', 0):.0f}" if l3.get("min_wall_thickness_mm") else "-"
+            sl = f"{l3.get('crown_slope_percent', 0):.1f}" if l3.get("crown_slope_percent") is not None else "-"
+            conf = f"{l2.get('confidence', 0):.0%}"
+            if l4:
+                s = l4["summary"]
+                if s.get("failed", 0) == 0:
+                    result = _green(f"{s['passed']}P/{s['skipped']}S")
+                else:
+                    result = _red(f"{s['passed']}P/{s['failed']}F")
+            else:
+                result = "-"
+            print(f"  {name:<25s} {role:>10s} {cw:>6s} {th:>6s} {sl:>5s} {conf:>5s} {result:>12s}")
         else:
-            l4_str = "-"
-        print(f"  {name:<25s} {eid:>6}  {vol:>8s}  {area:>8s}  {wt:>3s}  {l4_str:>12s}")
+            vol = f"{l1.get('volume', 0):.3f}" if l1 else ""
+            area = f"{l1.get('total_area', 0):.3f}" if l1 else ""
+            wt = "Yes" if l1.get("is_watertight") else "No"
+            if l4:
+                s = l4["summary"]
+                l4_str = f"{s['passed']}P/{s['failed']}F/{s['skipped']}S"
+            else:
+                l4_str = "-"
+            print(f"  {name:<25s} {eid:>6}  {vol:>8s}  {area:>8s}  {wt:>3s}  {l4_str:>12s}")
 
     # Overall pass/fail
     has_l4 = any("level4" in r for r in all_results if "error" not in r)
