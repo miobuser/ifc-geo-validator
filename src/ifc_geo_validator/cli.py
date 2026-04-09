@@ -149,6 +149,11 @@ def main():
         help="Compare against reference IFC (as-designed vs as-built)",
     )
     parser.add_argument(
+        "--auto",
+        action="store_true",
+        help="Auto-configure: detect entity types and best ruleset automatically",
+    )
+    parser.add_argument(
         "--quick",
         action="store_true",
         help="Quick summary: one line per element with key metrics and PASS/FAIL",
@@ -240,6 +245,27 @@ def main():
 
     # Load model
     model = load_model(ifc_file)
+
+    # --auto: auto-configure entity types and ruleset
+    if args.auto:
+        from ifc_geo_validator.core.auto_config import auto_configure
+        config = auto_configure(model)
+        print(f"Auto-Config: {config['description']}")
+        print(f"  Schema:     {config['schema']}")
+        print(f"  Elements:   {config['element_count']} ({', '.join(f'{t}:{n}' for t,n in config['found_types'].items())})")
+        print(f"  Types:      {', '.join(config['entity_types'])}")
+        print(f"  Ruleset:    {config['ruleset']}")
+        print(f"  Terrain:    {'Ja' if config['has_terrain'] else 'Nein'}")
+        print(f"  Alignment:  {'Ja' if config['has_alignment'] else 'Nein'}")
+        print()
+
+        # Apply auto-config
+        entity_types = config["entity_types"]
+        if not args.ruleset:
+            rs_path = Path(__file__).parent / "rules" / "rulesets" / config["ruleset"]
+            if rs_path.exists():
+                ruleset = load_ruleset(str(rs_path))
+                print(f"Ruleset: {ruleset['metadata']['name']} v{ruleset['metadata'].get('version', '?')}")
 
     # --compare: compare two models and exit
     if args.compare:
