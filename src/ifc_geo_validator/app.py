@@ -181,6 +181,7 @@ elif t("variable_reference") in page:
 # ── Sidebar (Validierung) ────────────────────────────────────────────
 
 st.sidebar.title("IFC Geometry Validator")
+st.sidebar.caption("Dateien werden nicht gespeichert. Verarbeitung nur im Arbeitsspeicher.")
 def _get_version() -> str:
     pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
     if pyproject.exists():
