@@ -305,9 +305,25 @@ level_7:
     applies_to: ["wall_stem", "foundation"]
 
   - id: FHB-L7-002
+    name: "Mindestabstand zu Nachbarelement"
+    description: "Minimalabstand zum nächsten Element (Kollisionsprüfung)"
+    check: "min_distance_to_nearest_mm >= 0"
+    severity: ERROR
+    reference: "Geometrische Plausibilität — keine Durchdringung"
+    note: "0mm = Elemente berühren sich, <0 wäre Durchdringung"
+
+  - id: FHB-L7-003
     name: "Einbindetiefe positiv"
     description: "Fundament muss im Boden eingebunden sein (nicht freiliegend)"
     check: "foundation_embedment_m >= 0.0"
     severity: ERROR
     reference: "FHB T/G, Konstruktive Anforderung"
     applies_to: ["wall_stem", "foundation"]
+
+  - id: FHB-L7-004
+    name: "Arbeitsraumbreite FZRS"
+    description: "Mindestabstand zwischen Fahrzeugrückhaltesystem und Stützmauer"
+    check: "min_distance_to_nearest_mm >= 500"
+    severity: WARNING
+    reference: "ASTRA FHB T/G — Arbeitsraum, Sicherheitsabstand"
+    note: "Mindestabstand variiert je nach Situation (500-1500mm)"

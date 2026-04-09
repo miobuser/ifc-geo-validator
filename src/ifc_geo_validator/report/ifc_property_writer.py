@@ -131,6 +131,12 @@ def _collect_properties(elem_result: dict) -> dict:
         if "crown_width_cv" in l3:
             props["CrownWidthCV"] = round(l3["crown_width_cv"], 6)
 
+    # Min distance to nearest element
+    if l3:
+        min_d = l3.get("min_distance_to_nearest_mm")
+        if min_d is not None:
+            props["MinDistanceToNearest_mm"] = round(min_d, 1)
+
     # Curvature (if available)
     if l3:
         min_r = l3.get("min_radius_m")

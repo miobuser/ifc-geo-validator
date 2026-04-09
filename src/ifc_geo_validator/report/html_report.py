@@ -156,6 +156,11 @@ def generate_html_report(
         if unc > 0:
             _add_metric(parts, "Messunsicherheit", f'±{unc:.1f} mm')
 
+        # Min distance to nearest element
+        min_d = l3.get("min_distance_to_nearest_mm")
+        if min_d is not None:
+            _add_metric(parts, "Min. Abstand", f'{min_d:.0f} mm')
+
         parts.append('</div>')
 
         # Clearance result

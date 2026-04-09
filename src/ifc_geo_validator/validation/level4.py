@@ -234,6 +234,9 @@ def _build_context(level1_result: dict, level3_result: dict,
     ctx["min_radius_m"] = level3_result.get("min_radius_m")
     ctx["max_curvature"] = level3_result.get("max_curvature")
 
+    # Inter-element distances (injected by CLI after --distances)
+    ctx["min_distance_to_nearest_mm"] = level3_result.get("min_distance_to_nearest_mm")
+
     # Advanced geometry
     ctx["taper_ratio"] = level3_result.get("taper_ratio")
     ctx["thickness_min_mm"] = level3_result.get("thickness_min_mm")

@@ -633,6 +633,12 @@ def main():
                 print(f"    Horizontal:  {d['horizontal_mm']:>8.0f} mm")
                 print(f"    Vertical:    {d['vertical_mm']:>8.0f} mm")
 
+            # Inject min_distance into each element's L3 for L4 rules
+            for r in valid:
+                min_d = r.pop("_min_distance_mm", None)
+                if min_d is not None and "level3" in r:
+                    r["level3"]["min_distance_to_nearest_mm"] = min_d
+
             dt_dist = time.time() - t_dist
             print(f"\n  {_dim(f'Distance analysis: {dt_dist*1000:.0f}ms')}")
 
