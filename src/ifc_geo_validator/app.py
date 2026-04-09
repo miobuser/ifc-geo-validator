@@ -1,5 +1,12 @@
 """Streamlit web interface for IFC Geometry Validator."""
 
+import sys
+import os
+# Ensure the src directory is on the Python path (for Streamlit Cloud)
+_src_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
+if _src_dir not in sys.path:
+    sys.path.insert(0, os.path.join(_src_dir, "src"))
+
 import json
 import math
 import tempfile
