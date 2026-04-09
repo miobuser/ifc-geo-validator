@@ -347,6 +347,102 @@ class TestCurvatureProperties:
 
 # ── Threshold Sensitivity ────────────────────────────────────────
 
+class TestExactCorrections:
+    """Verify that geometric corrections produce physically correct values.
+
+    These tests prove that the tool measures the RIGHT physical quantity,
+    not just a close approximation.
+    """
+
+    def test_thickness_perpendicular_not_horizontal(self):
+        """For inclined wall: t_perp < t_horizontal (physically correct).
+
+        A 10:1 wall with 300mm horizontal thickness has:
+          t_perp = 300 × cos(arctan(1/10)) = 298.511mm
+
+        If the tool reports 300mm, the correction is NOT applied.
+        If it reports ~298.5mm, the perpendicular measurement is correct.
+        """
+        import math
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+        from ifc_geo_validator.validation.level2 import validate_level2
+        from ifc_geo_validator.validation.level3 import validate_level3
+
+        model = load_model("tests/test_models/T7_compliant.ifc")
+        mesh = extract_mesh(get_elements(model, "IfcWall")[0])
+        l2 = validate_level2(mesh)
+        l3 = validate_level3(mesh, l2)
+
+        # Must be LESS than 300mm (perpendicular < horizontal for inclined walls)
+        assert l3["min_wall_thickness_mm"] < 300.0
+        # Must match analytical value
+        expected = 300.0 * math.cos(math.atan(1/10))
+        assert l3["min_wall_thickness_mm"] == pytest.approx(expected, abs=0.1)
+
+    def test_crown_width_surface_not_horizontal(self):
+        """For sloped crown: w_surface > w_horizontal (physically correct).
+
+        A crown with 3% slope and 300mm horizontal width has:
+          w_surface = 300 / cos(arctan(0.03)) = 300.135mm
+
+        If the tool reports 300mm, the correction is NOT applied.
+        If it reports ~300.135mm, the surface measurement is correct.
+        """
+        import math
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+        from ifc_geo_validator.validation.level2 import validate_level2
+        from ifc_geo_validator.validation.level3 import validate_level3
+
+        model = load_model("tests/test_models/T7_compliant.ifc")
+        mesh = extract_mesh(get_elements(model, "IfcWall")[0])
+        l2 = validate_level2(mesh)
+        l3 = validate_level3(mesh, l2)
+
+        # Must be MORE than 300mm (surface > horizontal for sloped crown)
+        assert l3["crown_width_mm"] > 300.0
+        # Must match analytical value
+        expected = 300.0 / math.cos(math.atan(0.03))
+        assert l3["crown_width_mm"] == pytest.approx(expected, abs=0.01)
+
+    def test_vertical_wall_no_correction(self):
+        """For vertical wall (no inclination): t_perp = t_horizontal exactly.
+
+        T1 is a perfect box with no inclination → cos(0°) = 1.0.
+        """
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+        from ifc_geo_validator.validation.level2 import validate_level2
+        from ifc_geo_validator.validation.level3 import validate_level3
+
+        model = load_model("tests/test_models/T1_simple_box.ifc")
+        mesh = extract_mesh(get_elements(model, "IfcWall")[0])
+        l2 = validate_level2(mesh)
+        l3 = validate_level3(mesh, l2)
+
+        # Vertical wall: perpendicular = horizontal exactly
+        assert l3["min_wall_thickness_mm"] == pytest.approx(400.0, abs=0.01)
+
+    def test_flat_crown_no_correction(self):
+        """For flat crown (0% slope): w_surface = w_horizontal exactly.
+
+        T1 has flat crown → cos(0°) = 1.0, no correction needed.
+        """
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+        from ifc_geo_validator.validation.level2 import validate_level2
+        from ifc_geo_validator.validation.level3 import validate_level3
+
+        model = load_model("tests/test_models/T1_simple_box.ifc")
+        mesh = extract_mesh(get_elements(model, "IfcWall")[0])
+        l2 = validate_level2(mesh)
+        l3 = validate_level3(mesh, l2)
+
+        # Flat crown: surface = horizontal exactly
+        assert l3["crown_width_mm"] == pytest.approx(400.0, abs=0.01)
+
+
 class TestComputationalComplexity:
     """Verify that algorithms scale as expected (no accidental O(N²))."""
 
