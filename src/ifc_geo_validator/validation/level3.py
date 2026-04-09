@@ -172,12 +172,41 @@ def validate_level3(mesh_data: dict, level2_result: dict) -> dict:
         results["front_inclination_ratio"] = inc["ratio"]
 
     # ── Wall height ──────────────────────────────────────────────
+    # For walls on sloped terrain, the height varies along the axis.
+    # We report max (overall), and if a centerline is available,
+    # also min and avg height per slice.
     all_vertical = front_groups + back_groups
     if all_vertical:
         vert_verts = _collect_vertices(vertices, faces, all_vertical)
         if len(vert_verts) > 0:
             z_vals = vert_verts[:, 2]
             results["wall_height_m"] = round(float(z_vals.max() - z_vals.min()), 4)
+
+            # Per-slice height for variable-height walls
+            if centerline is not None and isinstance(centerline, WallCenterline) and len(centerline.points_2d) >= 3:
+                n_pts = len(centerline.points_2d)
+                slice_tol = _slice_tolerance(centerline)
+                slice_heights = []
+                vert_xy = vert_verts[:, :2]
+
+                for i in range(n_pts):
+                    pt = centerline.points_2d[i]
+                    tang_2d = centerline.tangents[i][:2]
+                    tang_mag = np.linalg.norm(tang_2d)
+                    if tang_mag < eps:
+                        continue
+                    tang_2d = tang_2d / tang_mag
+                    t_proj = (vert_xy - pt) @ tang_2d
+                    mask = np.abs(t_proj) < slice_tol
+                    if mask.sum() >= 2:
+                        local_z = vert_verts[mask, 2]
+                        slice_heights.append(float(local_z.max() - local_z.min()))
+
+                if slice_heights:
+                    h_arr = np.array(slice_heights)
+                    results["wall_height_min_m"] = round(float(h_arr.min()), 4)
+                    results["wall_height_max_m"] = round(float(h_arr.max()), 4)
+                    results["wall_height_avg_m"] = round(float(h_arr.mean()), 4)
 
     # ── Foundation width ratio ────────────────────────────────────
     if "foundation_width_mm" in results and "wall_height_m" in results:

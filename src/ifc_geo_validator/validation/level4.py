@@ -213,6 +213,9 @@ def _build_context(level1_result: dict, level3_result: dict,
     ctx["is_curved"] = level3_result.get("is_curved", False)
     ctx["wall_length_m"] = level3_result.get("wall_length_m")
     ctx["wall_height_m"] = level3_result.get("wall_height_m")
+    ctx["wall_height_min_m"] = level3_result.get("wall_height_min_m")
+    ctx["wall_height_max_m"] = level3_result.get("wall_height_max_m")
+    ctx["wall_height_avg_m"] = level3_result.get("wall_height_avg_m")
 
     # Level 3 — Profile consistency
     ctx["crown_width_cv"] = level3_result.get("crown_width_cv")
