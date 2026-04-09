@@ -347,6 +347,58 @@ class TestCurvatureProperties:
 
 # ── Threshold Sensitivity ────────────────────────────────────────
 
+class TestComputationalComplexity:
+    """Verify that algorithms scale as expected (no accidental O(N²))."""
+
+    def test_volume_linear_in_faces(self):
+        """Volume computation is O(M) in number of faces."""
+        import time
+        times = []
+        for n in [100, 1000, 10000]:
+            v = np.random.randn(n + 2, 3)
+            f = np.random.randint(0, n + 2, size=(n, 3))
+            t0 = time.perf_counter()
+            for _ in range(10):
+                compute_volume(v, f)
+            dt = (time.perf_counter() - t0) / 10
+            times.append((n, dt))
+        # 100× more faces should take < 200× more time (allowing overhead)
+        ratio = times[2][1] / max(times[0][1], 1e-9)
+        assert ratio < 200, f"Volume scaling: {ratio:.0f}× for 100× faces (expected ~100×)"
+
+    def test_classify_faces_scales_well(self):
+        """Face classification should scale roughly linearly."""
+        import time
+        # Can't easily create valid meshes of varying sizes,
+        # but we can verify the Union-Find is not the bottleneck
+        for n in [100, 1000]:
+            normals = np.random.randn(n, 3)
+            normals /= np.linalg.norm(normals, axis=1, keepdims=True)
+            adj = [(i, i+1) for i in range(n-1)]
+            t0 = time.perf_counter()
+            _cluster_coplanar(n, adj, normals, np.radians(5))
+            dt = time.perf_counter() - t0
+        # Just verify it completes in reasonable time
+        assert dt < 0.1, f"Union-Find for {n} faces took {dt*1000:.0f}ms"
+
+    def test_slope_vectorized_performance(self):
+        """Vectorized slope should handle 10k faces in <10ms."""
+        import time
+        from ifc_geo_validator.viz.slope_heatmap import compute_triangle_slopes
+        n = 10000
+        mesh = {
+            "vertices": np.random.randn(n, 3),
+            "faces": np.random.randint(0, n, (n, 3)),
+            "normals": np.random.randn(n, 3),
+            "areas": np.random.rand(n),
+        }
+        mesh["normals"] /= np.linalg.norm(mesh["normals"], axis=1, keepdims=True)
+        t0 = time.perf_counter()
+        compute_triangle_slopes(mesh, axis=np.array([1, 0, 0]))
+        dt = time.perf_counter() - t0
+        assert dt < 0.01, f"Slope for {n} faces: {dt*1000:.1f}ms (limit 10ms)"
+
+
 class TestThresholdSensitivity:
     """Verify that default thresholds are within their robust ranges."""
 
