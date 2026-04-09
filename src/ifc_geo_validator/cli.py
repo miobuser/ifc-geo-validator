@@ -601,24 +601,40 @@ def main():
 
     # ── Pairwise element distances (if requested) ──────────
     if args.distances and len(all_results) >= 2:
-        from itertools import combinations
-        from ifc_geo_validator.core.advanced_geometry import compute_element_distances
+        from ifc_geo_validator.core.advanced_geometry import (
+            compute_element_distances, find_nearby_pairs,
+        )
 
         valid = [r for r in all_results if "error" not in r and "mesh_data" in r]
         if len(valid) >= 2:
+            # Use spatial grid to find nearby pairs (O(N) instead of O(N²))
+            t_dist = time.time()
+            meshes = [r["mesh_data"] for r in valid]
+            nearby = find_nearby_pairs(meshes, max_gap_m=10.0)
+
             print(f"\n{'='*60}")
-            print(f"Pairwise Element Distances ({len(valid)} elements)")
+            print(f"Element Distances ({len(valid)} elements, "
+                  f"{len(nearby)} nearby pairs of {len(valid)*(len(valid)-1)//2})")
             print(f"{'='*60}")
 
-            for i, j in combinations(range(len(valid)), 2):
+            for i, j in nearby:
                 a, b = valid[i], valid[j]
                 d = compute_element_distances(a["mesh_data"], b["mesh_data"])
                 a_name = a.get("element_name", "?")[:25]
                 b_name = b.get("element_name", "?")[:25]
+
+                # Store min distance for L4 context
+                for elem in [a, b]:
+                    prev = elem.get("_min_distance_mm", float("inf"))
+                    elem["_min_distance_mm"] = min(prev, d["min_vertex_mm"])
+
                 print(f"\n  {a_name} <-> {b_name}:")
                 print(f"    Min vertex:  {d['min_vertex_mm']:>8.0f} mm")
                 print(f"    Horizontal:  {d['horizontal_mm']:>8.0f} mm")
                 print(f"    Vertical:    {d['vertical_mm']:>8.0f} mm")
+
+            dt_dist = time.time() - t_dist
+            print(f"\n  {_dim(f'Distance analysis: {dt_dist*1000:.0f}ms')}")
 
     if 4 in levels and ruleset:
         for elem_result in all_results:
