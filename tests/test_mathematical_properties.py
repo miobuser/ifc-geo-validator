@@ -345,6 +345,53 @@ class TestCurvatureProperties:
         assert np.all(curv["kappa"] >= 0)
 
 
+# ── Threshold Sensitivity ────────────────────────────────────────
+
+class TestThresholdSensitivity:
+    """Verify that default thresholds are within their robust ranges."""
+
+    def _classify_all_models(self, thresholds):
+        """Run classification on key models, return success count."""
+        from ifc_geo_validator.core.ifc_parser import load_model, get_elements
+        from ifc_geo_validator.core.mesh_converter import extract_mesh
+        from ifc_geo_validator.validation.level2 import validate_level2
+
+        models = ["T1_simple_box.ifc", "T7_compliant.ifc", "T8_curved_wall.ifc"]
+        ok = 0
+        for mf in models:
+            model = load_model(f"tests/test_models/{mf}")
+            for e in get_elements(model, "IfcWall")[:1]:
+                mesh = extract_mesh(e)
+                l2 = validate_level2(mesh, thresholds=thresholds)
+                if l2["has_crown"] and (l2["has_front"] or l2["has_back"]):
+                    ok += 1
+        return ok
+
+    def test_default_thresholds_work(self):
+        """Default thresholds classify all reference models correctly."""
+        ok = self._classify_all_models({})
+        assert ok == 3, f"Default thresholds: {ok}/3 models correct"
+
+    def test_horizontal_45_in_robust_range(self):
+        """horizontal_deg=45° must be within the robust range."""
+        # Test boundaries: 20° and 80° should both work
+        for deg in [20, 45, 80]:
+            ok = self._classify_all_models({"horizontal_deg": deg})
+            assert ok == 3, f"horizontal_deg={deg}°: {ok}/3 models"
+
+    def test_coplanar_5_in_robust_range(self):
+        """coplanar_deg=5° must be within the robust range."""
+        for deg in [1, 5, 15]:
+            ok = self._classify_all_models({"coplanar_deg": deg})
+            assert ok == 3, f"coplanar_deg={deg}°: {ok}/3 models"
+
+    def test_lateral_45_in_robust_range(self):
+        """lateral_deg=45° must be within the robust range."""
+        for deg in [30, 45, 60]:
+            ok = self._classify_all_models({"lateral_deg": deg})
+            assert ok == 3, f"lateral_deg={deg}°: {ok}/3 models"
+
+
 # ── Classification: Conservation of Area ──────────────────────────
 
 class TestClassificationProperties:
