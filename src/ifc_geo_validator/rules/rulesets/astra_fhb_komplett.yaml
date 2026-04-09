@@ -327,3 +327,38 @@ level_7:
     severity: WARNING
     reference: "ASTRA FHB T/G — Arbeitsraum, Sicherheitsabstand"
     note: "Mindestabstand variiert je nach Situation (500-1500mm)"
+
+  - id: FHB-L7-005
+    name: "Sichtbare Wandhöhe über Terrain"
+    description: "Kronenhöhe über Geländeoberfläche (sichtbarer Maueranteil)"
+    check: "crown_height_above_terrain_m >= 0.5"
+    severity: INFO
+    reference: "Plausibilitätsprüfung — Mauer muss über Terrain ragen"
+    applies_to: ["wall_stem"]
+
+  - id: FHB-L7-006
+    name: "Frosttiefe Fundament"
+    description: "Fundament-Unterkante muss unterhalb der Frostgrenze liegen"
+    check: "foundation_depth_below_terrain_m >= 0.8"
+    severity: WARNING
+    reference: "FHB T/G — Frostfreie Gründung (0.8m im Schweizer Mittelland)"
+    note: "Berglagen: 1.0-1.5m Frosttiefe"
+    applies_to: ["wall_stem", "foundation"]
+
+  # ── Geometrische Plausibilität ─────────────────────────────────
+
+  - id: FHB-L7-007
+    name: "Volumen-Füllgrad"
+    description: "Verhältnis Volumen/BBox-Volumen (1.0=massiv, <0.5=hohles Profil)"
+    check: "volume_fill_ratio >= 0.03"
+    severity: WARNING
+    reference: "Plausibilitätsprüfung — sehr niedriger Füllgrad deutet auf Modellierungsfehler"
+    note: "Typische Werte: Box=1.0, Winkelstützmauer=0.3-0.5, Gekrümmte Wand=0.05-0.15"
+
+  - id: FHB-SM-L3-009
+    name: "Wanddicke bei Krone"
+    description: "Wanddicke an der Mauerkrone (oberster Querschnitt)"
+    check: "thickness_at_crown_mm >= 250"
+    severity: WARNING
+    reference: "FHB T/G — Mindestdicke am Kopf"
+    applies_to: ["wall_stem"]

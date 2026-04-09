@@ -453,6 +453,8 @@ def main():
                     l3["taper_ratio"] = taper["taper_ratio"]
                     l3["thickness_min_mm"] = taper["min_thickness_mm"]
                     l3["thickness_max_mm"] = taper["max_thickness_mm"]
+                    l3["thickness_at_crown_mm"] = taper["min_thickness_mm"]
+                    l3["thickness_at_base_mm"] = taper["max_thickness_mm"]
 
                 plumb = check_plumbness(l2["face_groups"])
                 l3["front_plumbness_deg"] = plumb.get("front_plumbness_deg")
@@ -744,6 +746,19 @@ def main():
                 for emb in l6_global.get("embedments", []):
                     if emb.get("element_id") == eid:
                         l6_ctx["foundation_embedment_m"] = emb["foundation_embedment_m"]
+                        # Foundation depth below terrain
+                        if l3:
+                            l3["foundation_depth_below_terrain_m"] = emb["foundation_embedment_m"]
+                        break
+
+                # Crown height above terrain from L6 clearances
+                for cl in l6_global.get("clearances", []):
+                    if cl.get("element_id") == eid and cl.get("max_m") is not None:
+                        if l3:
+                            l3["crown_height_above_terrain_m"] = round(cl["max_m"], 3)
+                            # Wall exposure = crown height above terrain
+                            # (how much of the wall is visible above ground)
+                            l3["wall_exposure_height_m"] = round(cl["max_m"], 3)
                         break
 
             # Store context for property writer / report

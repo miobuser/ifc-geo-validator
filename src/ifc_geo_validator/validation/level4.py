@@ -237,6 +237,21 @@ def _build_context(level1_result: dict, level3_result: dict,
     # Inter-element distances (injected by CLI after --distances)
     ctx["min_distance_to_nearest_mm"] = level3_result.get("min_distance_to_nearest_mm")
 
+    # Terrain-derived heights (injected by CLI from L6)
+    ctx["crown_height_above_terrain_m"] = level3_result.get("crown_height_above_terrain_m")
+    ctx["wall_exposure_height_m"] = level3_result.get("wall_exposure_height_m")
+    ctx["foundation_depth_below_terrain_m"] = level3_result.get("foundation_depth_below_terrain_m")
+
+    # Volume fill ratio (actual volume / bbox volume)
+    bbox = level1_result.get("bbox", {})
+    bbox_size = bbox.get("size", [0, 0, 0])
+    bbox_vol = bbox_size[0] * bbox_size[1] * bbox_size[2] if all(s > 0 for s in bbox_size) else 1
+    ctx["volume_fill_ratio"] = round(level1_result.get("volume", 0) / max(bbox_vol, 1e-10), 4)
+
+    # Thickness at crown and base (from taper if available)
+    ctx["thickness_at_crown_mm"] = level3_result.get("thickness_at_crown_mm")
+    ctx["thickness_at_base_mm"] = level3_result.get("thickness_at_base_mm")
+
     # Advanced geometry
     ctx["taper_ratio"] = level3_result.get("taper_ratio")
     ctx["thickness_min_mm"] = level3_result.get("thickness_min_mm")
