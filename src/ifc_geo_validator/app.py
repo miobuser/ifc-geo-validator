@@ -753,6 +753,52 @@ if run_button or uploaded_file:
                 })
             st.dataframe(d_rows, use_container_width=True, hide_index=True)
 
+    # ── Anomaly detection ──────────────────────────────────────
+    try:
+        from ifc_geo_validator.core.anomaly_detection import detect_anomalies
+        for r in [rr for rr in results if "error" not in rr]:
+            anomalies = detect_anomalies(
+                r.get("mesh_data", {}),
+                r.get("level2", {}),
+                r.get("level3", {}),
+            )
+            if anomalies:
+                with st.expander(f"⚠️ Anomalien: {r.get('element_name', '?')} ({len(anomalies)})"):
+                    for a in anomalies:
+                        if a["severity"] == "warning":
+                            st.warning(a["message"])
+                        else:
+                            st.info(a["message"])
+    except Exception:
+        pass
+
+    # ── Project metadata + HTML report ──────────────────────────
+    st.divider()
+    st.subheader("Prüfprotokoll")
+    pcol1, pcol2 = st.columns(2)
+    project_name = pcol1.text_input("Projektname", "", key="proj_name")
+    author_name = pcol2.text_input("Prüfer/in", "", key="author_name")
+
+    if project_name or author_name:
+        try:
+            from ifc_geo_validator.report.html_report import generate_html_report
+            rs_name = ruleset["metadata"]["name"] if ruleset else "—"
+            html_report = generate_html_report(
+                results, ifc_filename=uploaded_file.name,
+                ruleset_name=rs_name,
+                project_name=project_name,
+                author=author_name,
+            )
+            st.download_button(
+                "📄 HTML-Prüfprotokoll herunterladen",
+                data=html_report,
+                file_name=f"{Path(uploaded_file.name).stem}_pruefprotokoll.html",
+                mime="text/html",
+                use_container_width=True,
+            )
+        except Exception:
+            pass
+
     # ── Download report ──────────────────────────────────────────
     st.divider()
 
