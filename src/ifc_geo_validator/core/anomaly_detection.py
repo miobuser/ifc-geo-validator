@@ -153,6 +153,11 @@ def _check_profile_steps(mesh_data: dict, l2: dict) -> list[dict]:
     if len(widths) < 5:
         return anomalies
 
+    # Ignore first and last 15% of the centerline (edge effects from
+    # slicing — fewer vertices at the ends produce unreliable widths).
+    trim = max(1, int(len(widths) * 0.15))
+    widths = widths[trim:-trim] if trim < len(widths) // 2 else widths
+
     # First differences
     diffs = np.diff(widths)
     if len(diffs) < 3:
@@ -170,7 +175,7 @@ def _check_profile_steps(mesh_data: dict, l2: dict) -> list[dict]:
     jumps = np.where(np.abs(diffs - median_diff) > threshold)[0]
     for idx in jumps:
         jump_size = float(abs(diffs[idx])) * 1000  # mm
-        if jump_size > 10:  # only report > 10mm jumps
+        if jump_size > 50:  # only report > 50mm jumps (significant steps)
             anomalies.append({
                 "type": "profile_step",
                 "severity": "warning",
@@ -214,7 +219,10 @@ def _check_normal_consistency(mesh_data: dict) -> list[dict]:
     total = n_pos + n_neg
     if total > 0:
         minority_ratio = min(n_pos, n_neg) / total
-        if minority_ratio > 0.1:  # >10% of faces have flipped normals
+        if minority_ratio > 0.3:  # >30% of faces have flipped normals
+            # Note: BRep tessellation (IfcFacetedBrep) commonly produces
+            # ~25% "inconsistent" normals on curved surfaces due to face
+            # winding conventions. Only flag above 30%.
             anomalies.append({
                 "type": "inconsistent_normals",
                 "severity": "warning",
