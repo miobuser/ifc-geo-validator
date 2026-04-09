@@ -133,6 +133,22 @@ def main():
         help="Compute pairwise distances between ALL elements (min vertex, horizontal, vertical)",
     )
     parser.add_argument(
+        "--csv",
+        default=None,
+        help="Export all measurements as CSV spreadsheet (for Excel/Power BI)",
+    )
+    parser.add_argument(
+        "--filter-name",
+        default=None,
+        help="Filter elements by name pattern (e.g. '*Stütz*' or 'Mauer')",
+    )
+    parser.add_argument(
+        "--compare",
+        default=None,
+        metavar="REFERENCE_IFC",
+        help="Compare against reference IFC (as-designed vs as-built)",
+    )
+    parser.add_argument(
         "--heatmap-categories",
         default="crown",
         help="Face categories for heatmap, comma-separated (default: crown). "
@@ -220,6 +236,34 @@ def main():
     # Load model
     model = load_model(ifc_file)
 
+    # --compare: compare two models and exit
+    if args.compare:
+        from ifc_geo_validator.core.ifc_compare import compare_models
+        print(f"Comparing: {ifc_file}")
+        print(f"Reference: {args.compare}")
+        print()
+        result = compare_models(args.compare, ifc_file,
+                                entity_type=entity_types[0])
+        s = result["summary"]
+        print(f"Matched: {s['total_matched']} elements")
+        print(f"Deviations: {s['with_deviations']} elements exceed tolerance ({s['tolerance_mm']}mm)")
+        if s["unmatched_a"]:
+            print(f"Only in reference: {s['unmatched_a']}")
+        if s["unmatched_b"]:
+            print(f"Only in comparison: {s['unmatched_b']}")
+        print()
+        for m in result["matched"]:
+            if "error" in m:
+                print(f"  {m['name']}: ERROR {m['error']}")
+                continue
+            status = _red("DEVIATION") if m["has_deviation"] else _green("OK")
+            print(f"  {m['name']}: {status}")
+            for d in m.get("deviations", []):
+                if d["exceeds_tolerance"]:
+                    print(f"    {d['property']:>25s}: {d['value_a']} → {d['value_b']} "
+                          f"(Δ{d['difference']:.2f} {d['unit']}, tol={d['tolerance']})")
+        return
+
     # --scan: discover all entity types with geometry, then exit
     if args.scan:
         _scan_model(model)
@@ -235,6 +279,15 @@ def main():
             elements.extend(found)
     if len(entity_types) > 1:
         print(f"Total: {len(elements)} elements")
+
+    # Name-based filtering (glob pattern on element name)
+    if args.filter_name:
+        import fnmatch
+        pattern = args.filter_name
+        before = len(elements)
+        elements = [e for e in elements
+                    if fnmatch.fnmatch(getattr(e, "Name", "") or "", pattern)]
+        print(f"Name filter '{pattern}': {len(elements)}/{before} elements match")
 
     # Alignment detection
     alignment_centerline = None
@@ -800,6 +853,58 @@ def main():
         with open(args.html, "w", encoding="utf-8") as f:
             f.write(html)
         print(f"\nHTML report written to: {args.html}")
+
+    # Export measurements as CSV (for Excel/Power BI)
+    if args.csv:
+        import csv as csv_mod
+        csv_rows = []
+        for r in all_results:
+            if "error" in r:
+                continue
+            l1 = r.get("level1", {})
+            l2 = r.get("level2", {})
+            l3 = r.get("level3", {})
+            l4 = r.get("level4", {})
+            slope = r.get("slope_analysis", {})
+            row = {
+                "element_id": r.get("element_id"),
+                "element_name": r.get("element_name"),
+                "role": l2.get("element_role", ""),
+                "confidence": l2.get("confidence", ""),
+                "volume_m3": l1.get("volume"),
+                "total_area_m2": l1.get("total_area"),
+                "num_triangles": l1.get("num_triangles"),
+                "watertight": l1.get("is_watertight"),
+                "crown_width_mm": l3.get("crown_width_mm"),
+                "crown_slope_pct": l3.get("crown_slope_percent"),
+                "min_thickness_mm": l3.get("min_wall_thickness_mm"),
+                "avg_thickness_mm": l3.get("avg_wall_thickness_mm"),
+                "wall_height_m": l3.get("wall_height_m"),
+                "inclination_ratio": l3.get("front_inclination_ratio"),
+                "foundation_width_mm": l3.get("foundation_width_mm"),
+                "is_curved": l3.get("is_curved"),
+                "min_radius_m": l3.get("min_radius_m"),
+                "cross_slope_avg_pct": slope.get("area_weighted_cross_pct"),
+                "cross_slope_max_pct": slope.get("max_cross_pct"),
+                "long_slope_max_pct": slope.get("max_long_pct"),
+                "taper_ratio": l3.get("taper_ratio"),
+                "plumbness_deg": l3.get("front_plumbness_deg"),
+                "uncertainty_mm": l3.get("measurement_uncertainty_mm"),
+                "min_distance_mm": l3.get("min_distance_to_nearest_mm"),
+            }
+            if l4:
+                s = l4.get("summary", {})
+                row["rules_passed"] = s.get("passed")
+                row["rules_failed"] = s.get("failed")
+                row["rules_skipped"] = s.get("skipped")
+            csv_rows.append(row)
+
+        if csv_rows:
+            with open(args.csv, "w", newline="", encoding="utf-8") as f:
+                writer = csv_mod.DictWriter(f, fieldnames=csv_rows[0].keys())
+                writer.writeheader()
+                writer.writerows(csv_rows)
+            print(f"\nCSV export written to: {args.csv} ({len(csv_rows)} elements)")
 
     # Write JSON report if requested
     if args.output:
