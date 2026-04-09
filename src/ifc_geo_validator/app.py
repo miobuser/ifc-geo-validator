@@ -810,6 +810,53 @@ if run_button or uploaded_file:
         except Exception:
             pass
 
+    # ── CSV export ───────────────────────────────────────────────
+    try:
+        import csv
+        import io
+        csv_buf = io.StringIO()
+        csv_rows = []
+        for r in results:
+            if "error" in r:
+                continue
+            l1r = r.get("level1", {})
+            l3r = r.get("level3", {})
+            l4r = r.get("level4", {})
+            l2r = r.get("level2", {})
+            row = {
+                "element_id": r.get("element_id"),
+                "element_name": r.get("element_name"),
+                "role": l2r.get("element_role", ""),
+                "confidence": l2r.get("confidence", ""),
+                "volume_m3": l1r.get("volume"),
+                "crown_width_mm": l3r.get("crown_width_mm"),
+                "crown_slope_pct": l3r.get("crown_slope_percent"),
+                "min_thickness_mm": l3r.get("min_wall_thickness_mm"),
+                "wall_height_m": l3r.get("wall_height_m"),
+                "is_curved": l3r.get("is_curved"),
+                "min_radius_m": l3r.get("min_radius_m"),
+                "uncertainty_mm": l3r.get("measurement_uncertainty_mm"),
+            }
+            if l4r:
+                s = l4r.get("summary", {})
+                row["rules_passed"] = s.get("passed")
+                row["rules_failed"] = s.get("failed")
+            csv_rows.append(row)
+
+        if csv_rows:
+            writer = csv.DictWriter(csv_buf, fieldnames=csv_rows[0].keys())
+            writer.writeheader()
+            writer.writerows(csv_rows)
+            st.download_button(
+                f"📊 CSV {t('download_report') if 'download' in t('download_report').lower() else 'Export'}",
+                data=csv_buf.getvalue(),
+                file_name=f"{Path(uploaded_file.name).stem}_measurements.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+    except Exception:
+        pass
+
     # ── Download report ──────────────────────────────────────────
     st.divider()
 
