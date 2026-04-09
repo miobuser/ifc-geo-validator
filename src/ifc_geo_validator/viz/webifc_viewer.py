@@ -16,13 +16,16 @@ def render_ifc_viewer(
     ifc_bytes: bytes,
     height: int = 600,
     highlight_elements: dict = None,
+    classification_data: dict = None,
 ) -> None:
-    """Render an IFC file in an embedded 3D viewer using web-ifc + Three.js.
+    """Render an IFC file with web-ifc + Three.js and classification overlay.
 
     Args:
         ifc_bytes: raw IFC file content (bytes).
         height: viewer height in pixels.
         highlight_elements: optional dict {element_id: color_hex} for highlighting.
+        classification_data: optional dict {expressID: {category, pass_fail}}
+                            for color-coding elements by validation result.
     """
     ifc_b64 = base64.b64encode(ifc_bytes).decode("ascii")
 
@@ -31,14 +34,23 @@ def render_ifc_viewer(
         for eid, color in highlight_elements.items():
             highlight_js += f"highlightMap[{eid}] = '{color}';\n"
 
+    # Pass classification data for overlay modes
+    class_js = ""
+    if classification_data:
+        import json
+        class_js = f"const classData = {json.dumps(classification_data)};"
+    else:
+        class_js = "const classData = {};"
+
     html = _VIEWER_HTML.replace("__IFC_DATA_B64__", ifc_b64)
     html = html.replace("__HIGHLIGHT_JS__", highlight_js)
+    html = html.replace("__CLASS_DATA_JS__", class_js)
     html = html.replace("__HEIGHT__", str(height))
 
     components.html(html, height=height + 10, scrolling=False)
 
 
-_VIEWER_HTML = """
+_VIEWER_HTML = r"""
 <!DOCTYPE html>
 <html>
 <head>
@@ -66,6 +78,23 @@ import * as WebIFC from 'https://cdn.jsdelivr.net/npm/web-ifc@0.0.57/web-ifc-api
 
 const highlightMap = {};
 __HIGHLIGHT_JS__
+__CLASS_DATA_JS__
+
+// Category colors for classification overlay
+const CATEGORY_COLORS = {
+  crown:        new THREE.Color(0x2196F3),  // blue
+  foundation:   new THREE.Color(0x795548),  // brown
+  front:        new THREE.Color(0xF44336),  // red
+  back:         new THREE.Color(0xFF9800),  // orange
+  end_left:     new THREE.Color(0x4CAF50),  // green
+  end_right:    new THREE.Color(0x8BC34A),  // light green
+  unclassified: new THREE.Color(0x9E9E9E),  // grey
+};
+
+// Pass/fail colors
+const PASS_COLOR = new THREE.Color(0x4CAF50);
+const FAIL_COLOR = new THREE.Color(0xF44336);
+const SKIP_COLOR = new THREE.Color(0x9E9E9E);
 
 async function init() {
   // Scene setup

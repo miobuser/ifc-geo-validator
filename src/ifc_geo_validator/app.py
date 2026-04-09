@@ -532,32 +532,25 @@ if run_button or uploaded_file:
                 })
             st.dataframe(group_data, use_container_width=True, hide_index=True)
 
-            # ── 3D Viewer ──────────────────────────────────
+            # ── 3D Viewer (web-ifc + Three.js) ─────────────
             try:
-                mesh = r.get("mesh_data")
-                if mesh is not None:
-                    view_mode = st.radio(
-                        "3D-Ansicht",
-                        ["Klassifikation", "Quergefälle", "IFC-Modell (web-ifc)"],
-                        horizontal=True,
-                        key=f"view_{eid}",
-                    )
-                    if view_mode == "IFC-Modell (web-ifc)":
-                        from ifc_geo_validator.viz.webifc_viewer import render_ifc_viewer
-                        render_ifc_viewer(file_bytes, height=500)
-                    else:
-                        from ifc_geo_validator.viz.plotly_viewer import create_3d_figure
-                        if view_mode == "Klassifikation":
-                            fig = create_3d_figure(mesh, l2, mode="classification",
-                                                   title=f"{name} — Flächenklassifikation")
-                        else:
-                            from ifc_geo_validator.viz.slope_heatmap import compute_triangle_slopes
-                            import numpy as np_v
-                            sl = compute_triangle_slopes(mesh, axis=np_v.array(l2["wall_axis"]),
-                                                          centerline=l2.get("centerline"))
-                            fig = create_3d_figure(mesh, l2, mode="slope", slope_data=sl,
-                                                   title=f"{name} — Quergefälle")
-                        st.plotly_chart(fig, use_container_width=True)
+                from ifc_geo_validator.viz.webifc_viewer import render_ifc_viewer
+
+                # Build classification data for element coloring
+                class_data = {}
+                for g in l2.get("face_groups", []):
+                    cat = g.get("category", "unclassified")
+                    # Map element expressID to category (for web-ifc overlay)
+                    class_data[str(eid)] = {
+                        "category": l2.get("element_role", "wall_stem"),
+                        "has_errors": any(c["status"] == "FAIL" and c["severity"] == "ERROR"
+                                         for c in l4.get("checks", [])) if l4 else False,
+                    }
+
+                render_ifc_viewer(
+                    file_bytes, height=500,
+                    classification_data=class_data,
+                )
             except Exception:
                 pass  # Viewer is optional
 
