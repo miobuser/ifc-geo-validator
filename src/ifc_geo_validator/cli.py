@@ -850,6 +850,16 @@ def main():
     dt_total = time.time() - t_start
     print(f"\n  {_dim(f'Total time: {dt_total:.2f}s for {len(all_results)} elements')}")
 
+    # Statistical summary (for multi-element models)
+    if len(all_results) >= 3 and args.verbose:
+        from ifc_geo_validator.report.summary_stats import compute_summary_stats, format_summary
+        stats = compute_summary_stats(all_results)
+        if stats.get("outliers"):
+            print(f"\n  {_yellow('Outliers detected:')}")
+            for o in stats["outliers"]:
+                print(f"    {o['element']}: {o['property']}={o['value']} "
+                      f"(z={o['z_score']:.1f}, group median={o['group_median']})")
+
     # Machine-readable summary (for CI/CD integration)
     if args.summary:
         print("# SUMMARY (machine-readable)")
