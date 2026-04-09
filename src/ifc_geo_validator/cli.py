@@ -154,6 +154,16 @@ def main():
         help="Auto-configure: detect entity types and best ruleset automatically",
     )
     parser.add_argument(
+        "--project",
+        default=None,
+        help="Project name/number for report header (e.g. 'A1 Bern-Zürich, Los 3')",
+    )
+    parser.add_argument(
+        "--author",
+        default=None,
+        help="Author/validator name for report signature",
+    )
+    parser.add_argument(
         "--quick",
         action="store_true",
         help="Quick summary: one line per element with key metrics and PASS/FAIL",
@@ -941,6 +951,8 @@ def main():
         html = generate_html_report(
             all_results, ifc_filename=Path(ifc_file).name,
             ruleset_name=rs_name,
+            project_name=args.project or "",
+            author=args.author or "",
         )
         with open(args.html, "w", encoding="utf-8") as f:
             f.write(html)

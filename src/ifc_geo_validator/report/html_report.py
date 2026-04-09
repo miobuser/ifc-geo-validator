@@ -23,6 +23,8 @@ def generate_html_report(
     ruleset_name: str = "",
     l5_result: dict = None,
     l6_result: dict = None,
+    project_name: str = "",
+    author: str = "",
 ) -> str:
     """Generate a complete HTML report from validation results.
 
@@ -53,11 +55,18 @@ def generate_html_report(
 
     parts = [_html_head(ifc_filename, timestamp)]
 
-    # Header
+    # Header with project metadata
+    project_section = ""
+    if project_name:
+        project_section += f'<span>Projekt: <b>{_esc(project_name)}</b></span>'
+    if author:
+        project_section += f'<span>Prüfer: <b>{_esc(author)}</b></span>'
+
     parts.append(f"""
     <div class="header">
-        <h1>IFC Geometry Validation Report</h1>
+        <h1>Geometrisches Prüfprotokoll</h1>
         <div class="meta">
+            {project_section}
             <span>Datei: <b>{_esc(ifc_filename)}</b></span>
             <span>Regelwerk: <b>{_esc(ruleset_name)}</b></span>
             <span>Datum: {timestamp}</span>
@@ -200,10 +209,35 @@ def generate_html_report(
 
         parts.append('</div>')
 
+    # Signature block
+    if author:
+        parts.append(f"""
+        <div class="element" style="margin-top:24px;page-break-inside:avoid">
+            <h3>Prüfvermerk</h3>
+            <p style="margin:8px 0">Dieses Prüfprotokoll wurde automatisch erstellt mit
+            <b>ifc-geo-validator v2.0.0</b> basierend auf dem Regelwerk
+            <b>{_esc(ruleset_name)}</b>.</p>
+            <div style="display:flex;gap:40px;margin-top:20px">
+                <div style="flex:1">
+                    <div style="border-bottom:1px solid #999;height:40px"></div>
+                    <div style="font-size:11px;color:#666;margin-top:4px">
+                        Ort, Datum
+                    </div>
+                </div>
+                <div style="flex:1">
+                    <div style="border-bottom:1px solid #999;height:40px"></div>
+                    <div style="font-size:11px;color:#666;margin-top:4px">
+                        {_esc(author)} (Prüfer/in)
+                    </div>
+                </div>
+            </div>
+        </div>
+        """)
+
     # Footer
     parts.append(f"""
     <div class="footer">
-        IFC Geometry Validator — BSc Thesis BFH · Generiert: {timestamp}
+        IFC Geometry Validator v2.0.0 — BSc Thesis BFH · Generiert: {timestamp}
     </div>
     </body></html>
     """)
