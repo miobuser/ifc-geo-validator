@@ -226,6 +226,23 @@ class TestFormalAccuracy:
         assert l3["wall_height_m"] == pytest.approx(3.5, abs=0.01)
 
 
+class TestT1ExactMeasurements:
+    """T1 box: every measurement must be mathematically exact (no taper/slope)."""
+
+    def test_crown_width_exact_400mm(self):
+        r = _run_pipeline("tests/test_models/T1_simple_box.ifc")[0]
+        assert r["l3"]["crown_width_mm"] == pytest.approx(400.0, abs=0.01)
+
+    def test_thickness_exact_400mm(self):
+        """T1 has no inclination → horizontal = perpendicular thickness."""
+        r = _run_pipeline("tests/test_models/T1_simple_box.ifc")[0]
+        assert r["l3"]["min_wall_thickness_mm"] == pytest.approx(400.0, abs=0.01)
+
+    def test_foundation_width_exact_400mm(self):
+        r = _run_pipeline("tests/test_models/T1_simple_box.ifc")[0]
+        assert r["l3"]["foundation_width_mm"] == pytest.approx(400.0, abs=0.1)
+
+
 class TestPerformance:
     """Performance regression tests."""
 
