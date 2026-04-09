@@ -152,18 +152,29 @@ st.set_page_config(
 )
 
 
+# ── Language selector ────────────────────────────────────────────────
+
+from ifc_geo_validator.i18n import t, set_language, get_language
+
+lang = st.sidebar.selectbox(
+    "🌐 Sprache / Langue / Lingua",
+    ["Deutsch", "Français", "Italiano"],
+    index=0,
+)
+set_language({"Deutsch": "de", "Français": "fr", "Italiano": "it"}[lang])
+
 # ── Navigation ──────────────────────────────────────────────────────
 
 page = st.sidebar.radio(
     "Navigation",
-    ["🏗️ Validierung", "📐 Ruleset Editor", "📖 Variablen-Referenz"],
+    [f"🏗️ {t('validation')}", f"📐 {t('ruleset_editor')}", f"📖 {t('variable_reference')}"],
     index=0,
 )
 
-if page == "📐 Ruleset Editor":
+if t("ruleset_editor") in page:
     _run_ruleset_editor()
     st.stop()
-elif page == "📖 Variablen-Referenz":
+elif t("variable_reference") in page:
     _run_variable_reference()
     st.stop()
 
