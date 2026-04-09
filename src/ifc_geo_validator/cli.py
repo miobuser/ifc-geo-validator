@@ -425,6 +425,17 @@ def main():
                 if "crown_width_cv" in l3:
                     print(f"    Profile CV:       {l3['crown_width_cv']:.4f}")
 
+            # ── Anomaly detection ─────────────────────────────────
+            if l2 is not None and l3 is not None:
+                from ifc_geo_validator.core.anomaly_detection import detect_anomalies
+                anomalies = detect_anomalies(mesh_data, l2, l3)
+                if anomalies:
+                    print(f"\n  Anomalies ({len(anomalies)}):")
+                    for a in anomalies:
+                        sev = _yellow("WARN") if a["severity"] == "warning" else _dim("INFO")
+                        print(f"    [{sev}] {a['message'][:80]}")
+                    elem_result["anomalies"] = anomalies
+
             # ── Advanced geometry analysis ────────────────────────
             if l2 is not None and l3 is not None:
                 from ifc_geo_validator.core.advanced_geometry import (
