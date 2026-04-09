@@ -135,8 +135,86 @@ class WallCenterline:
         i = int(np.argmin(dists))
         return self.tangents[i].copy(), self.normals[i].copy(), z_up
 
+    def curvature_profile(self) -> dict:
+        """Compute local curvature κ at each centerline point.
+
+        The discrete curvature at point i is estimated from the angle
+        change between consecutive tangent vectors:
+
+            κᵢ = |Δθᵢ| / Lᵢ
+
+        where Δθᵢ is the angle between tangents at i-1 and i+1,
+        and Lᵢ is the arc length between those tangents.
+
+        The local radius of curvature is R = 1/κ.
+
+        Returns:
+            dict with:
+                kappa: (N,) curvature at each point [1/m]
+                radius_m: (N,) radius of curvature [m] (inf for straight)
+                min_radius_m: float — minimum radius along the centerline
+                max_kappa: float — maximum curvature
+                mean_radius_m: float — area-weighted mean radius
+
+        Reference: do Carmo, M.P. (1976). Differential Geometry of Curves
+        and Surfaces, Ch. 1.
+        """
+        n = len(self.points_2d)
+        kappa = np.zeros(n)
+
+        if n < 3:
+            return {"kappa": kappa, "radius_m": np.full(n, float("inf")),
+                    "min_radius_m": float("inf"), "max_kappa": 0.0,
+                    "mean_radius_m": float("inf")}
+
+        diffs = np.diff(self.points_2d, axis=0)
+        seg_lens = np.linalg.norm(diffs, axis=1)
+
+        for i in range(1, n - 1):
+            if seg_lens[i - 1] < 1e-12 or seg_lens[i] < 1e-12:
+                continue
+            t_prev = diffs[i - 1] / seg_lens[i - 1]
+            t_next = diffs[i] / seg_lens[i]
+            dot = np.clip(np.dot(t_prev, t_next), -1.0, 1.0)
+            angle = np.arccos(dot)
+            arc_len = (seg_lens[i - 1] + seg_lens[i]) / 2.0
+            kappa[i] = angle / arc_len
+
+        # Extrapolate endpoints
+        kappa[0] = kappa[1]
+        kappa[-1] = kappa[-2]
+
+        # Radius = 1/κ (guard against κ=0)
+        safe_kappa = np.where(kappa > 1e-10, kappa, 1e-10)
+        radius = 1.0 / safe_kappa
+        radius = np.where(kappa > 1e-10, radius, float("inf"))
+
+        # Statistics
+        valid = kappa > 1e-10
+        min_r = float(radius[valid].min()) if valid.any() else float("inf")
+        max_k = float(kappa.max())
+        # Area-weighted mean (using segment lengths as weights)
+        if valid.sum() > 0 and self.length > 0:
+            weights = np.zeros(n)
+            weights[1:-1] = (seg_lens[:-1] + seg_lens[1:]) / 2
+            weights[0] = seg_lens[0] / 2
+            weights[-1] = seg_lens[-1] / 2
+            w_valid = weights[valid]
+            mean_r = float((radius[valid] * w_valid).sum() / w_valid.sum()) if w_valid.sum() > 0 else float("inf")
+        else:
+            mean_r = float("inf")
+
+        return {
+            "kappa": kappa,
+            "radius_m": radius,
+            "min_radius_m": round(min_r, 2),
+            "max_kappa": round(max_k, 6),
+            "mean_radius_m": round(mean_r, 2),
+        }
+
     def to_dict(self) -> dict:
         """Serialize metadata for JSON output (no large arrays)."""
+        curv = self.curvature_profile()
         return {
             "is_curved": self.is_curved,
             "use_local_measurement": self.use_local_measurement,
@@ -144,6 +222,8 @@ class WallCenterline:
             "n_slices": len(self.points_2d),
             "wall_axis": self.wall_axis.tolist(),
             "source": getattr(self, "_source", "geometry"),
+            "min_radius_m": curv["min_radius_m"],
+            "max_curvature": curv["max_kappa"],
         }
 
     @staticmethod

@@ -302,6 +302,49 @@ class TestCenterlineProperties:
         assert cl2.length == pytest.approx(cl1.length * 2, rel=1e-10)
 
 
+# ── Curvature Profile ────────────────────────────────────────────
+
+class TestCurvatureProperties:
+    """Curvature must satisfy differential geometry invariants."""
+
+    def test_circle_radius_correct(self):
+        """For a circular arc of radius R, κ ≈ 1/R."""
+        for R in [5.0, 10.0, 20.0, 50.0]:
+            angles = np.linspace(0, np.pi / 2, 50)
+            pts = np.column_stack([R * np.cos(angles), R * np.sin(angles)])
+            cl = WallCenterline.from_polyline(pts)
+            curv = cl.curvature_profile()
+            assert curv["min_radius_m"] == pytest.approx(R, rel=0.05), \
+                f"R={R}: measured R_min={curv['min_radius_m']}"
+
+    def test_straight_line_infinite_radius(self):
+        """A straight line has κ=0 and R=∞."""
+        pts = np.array([[0, 0], [5, 0], [10, 0], [15, 0]])
+        cl = WallCenterline.from_polyline(pts)
+        curv = cl.curvature_profile()
+        assert curv["max_kappa"] < 1e-6
+        assert curv["min_radius_m"] == float("inf")
+
+    def test_curvature_scales_inversely(self):
+        """κ(sC) = κ(C)/s — curvature scales inversely with scale factor."""
+        angles = np.linspace(0, np.pi / 3, 30)
+        pts = np.column_stack([10 * np.cos(angles), 10 * np.sin(angles)])
+        cl1 = WallCenterline.from_polyline(pts)
+        cl2 = WallCenterline.from_polyline(pts * 2)
+        k1 = cl1.curvature_profile()["max_kappa"]
+        k2 = cl2.curvature_profile()["max_kappa"]
+        # κ(2C) ≈ κ(C)/2
+        assert k2 == pytest.approx(k1 / 2, rel=0.05)
+
+    def test_curvature_non_negative(self):
+        """Curvature is always ≥ 0."""
+        t = np.linspace(0, 2 * np.pi, 80)
+        pts = np.column_stack([t * 3, 2 * np.sin(t)])
+        cl = WallCenterline.from_polyline(pts)
+        curv = cl.curvature_profile()
+        assert np.all(curv["kappa"] >= 0)
+
+
 # ── Classification: Conservation of Area ──────────────────────────
 
 class TestClassificationProperties:

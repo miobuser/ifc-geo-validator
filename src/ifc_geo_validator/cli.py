@@ -329,7 +329,10 @@ def main():
                 if cinfo:
                     curved = cinfo.get("is_curved", False)
                     if curved:
-                        print(f"  Curved:      Yes (length {cinfo.get('length_m', 0):.2f} m, {cinfo.get('n_slices', 0)} slices)")
+                        min_r = cinfo.get("min_radius_m", "?")
+                        r_str = f", R_min={min_r}m" if min_r != "?" and min_r != float("inf") else ""
+                        print(f"  Curved:      Yes (length {cinfo.get('length_m', 0):.2f} m, "
+                              f"{cinfo.get('n_slices', 0)} slices{r_str})")
                     elif args.verbose:
                         print(f"  Curved:      No")
 
