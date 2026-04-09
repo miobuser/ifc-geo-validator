@@ -98,6 +98,20 @@ def check_clearance(
 
         selected = vertices[mask]
 
+        # Also sample edge midpoints to catch cases where a triangle
+        # edge crosses the clearance boundary but neither vertex is inside.
+        # For each pair of selected vertices, add the midpoint.
+        if len(selected) >= 2:
+            n_sel = len(selected)
+            # Sample midpoints of edges between close vertices
+            mid_pts = []
+            for k in range(min(n_sel, 50)):
+                for l in range(k + 1, min(n_sel, 50)):
+                    mid = (selected[k] + selected[l]) / 2.0
+                    mid_pts.append(mid)
+            if mid_pts:
+                selected = np.vstack([selected, np.array(mid_pts)])
+
         # Project onto local (normal, Z) plane
         norm_2d = normal[:2]
         norm_mag = np.linalg.norm(norm_2d)

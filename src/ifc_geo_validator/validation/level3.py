@@ -293,11 +293,32 @@ def _compute_crown_width(vertices, faces, crown_groups, wall_axis, centerline=No
     if len(crown_verts) == 0:
         return {"width_mm": 0.0, "method": "empty_crown"}
     projections = crown_verts @ perp_axis
-    width_m = float(projections.max() - projections.min())
+    width_horiz = float(projections.max() - projections.min())
+
+    # Correct for crown slope: the horizontal projection underestimates
+    # the true width along the tilted crown surface.
+    #
+    # For a crown tilted by α from horizontal:
+    #   width_surface = width_horizontal / cos(α)
+    #
+    # We compute α from the crown face normal's Z-component:
+    #   cos(α) = |nz| for a near-horizontal surface
+    #
+    # For 3% slope: cos(arctan(0.03)) = 0.99955 → 0.045% correction
+    # Small but exact.
+    correction = 1.0
+    if crown_groups:
+        total_area = sum(g["area"] for g in crown_groups)
+        if total_area > 0:
+            avg_nz = sum(abs(g["normal"][2]) * g["area"] for g in crown_groups) / total_area
+            if avg_nz > 1e-6:
+                correction = 1.0 / avg_nz  # = 1/cos(α)
+
+    width_m = width_horiz * correction
 
     return {
         "width_mm": width_m * 1000.0,
-        "method": "vertex_extent_perpendicular",
+        "method": "vertex_extent_perpendicular_corrected",
     }
 
 
@@ -588,9 +609,38 @@ def _compute_wall_thickness(vertices, faces, front_groups, back_groups,
     if min_thickness == 0.0:
         min_thickness = avg_thickness
 
+    # Correct for wall inclination: the horizontal thickness overestimates
+    # the true perpendicular thickness for inclined walls.
+    #
+    # For a wall face with area-weighted average normal n:
+    #   horizontal_thickness = t_perp / cos(α)
+    #   where α = angle of face normal from horizontal
+    #   so t_perp = t_horizontal × cos(α)
+    #
+    # cos(α) = sqrt(nx² + ny²) / ||n|| for the horizontal component magnitude
+    # relative to the full normal magnitude. Since ||n||=1:
+    #   cos(α) = sqrt(1 - nz²)
+    #
+    # For a vertical wall: cos(α) = 1 (no correction).
+    # For 10:1 inclination: cos(5.7°) = 0.995.
+    correction = 1.0
+    if front_groups:
+        total_area_f = sum(g["area"] for g in front_groups)
+        if total_area_f > 0:
+            avg_n = np.zeros(3)
+            for g in front_groups:
+                avg_n += np.array(g["normal"]) * g["area"]
+            avg_n /= total_area_f
+            n_mag = np.linalg.norm(avg_n)
+            if n_mag > 1e-10:
+                avg_n /= n_mag
+            horiz_comp = np.sqrt(avg_n[0]**2 + avg_n[1]**2)
+            if horiz_comp > 1e-10:
+                correction = horiz_comp  # = cos(α) from vertical
+
     return {
-        "min_thickness_mm": min_thickness * 1000.0,
-        "avg_thickness_mm": avg_thickness * 1000.0,
+        "min_thickness_mm": min_thickness * 1000.0 * correction,
+        "avg_thickness_mm": avg_thickness * 1000.0 * correction,
     }
 
 

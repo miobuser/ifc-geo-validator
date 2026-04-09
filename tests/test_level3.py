@@ -646,8 +646,8 @@ class TestT15FromIFC:
         self.l3 = validate_level3(mesh_data, self.l2)
 
     def test_crown_width_400mm(self):
-        """Crown width = 400mm."""
-        assert abs(self.l3["crown_width_mm"] - 400.0) < 10.0
+        """Crown width ≈ 400mm (surface-corrected, may be slightly larger for steep slopes)."""
+        assert abs(self.l3["crown_width_mm"] - 400.0) < 25.0
 
     def test_crown_slope_30pct(self):
         """Crown slope approximately 30% (variable height!)."""

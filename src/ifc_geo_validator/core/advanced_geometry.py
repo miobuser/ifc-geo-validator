@@ -203,9 +203,25 @@ def check_overlap(mesh_a: dict, mesh_b: dict) -> dict:
     overlap_size = np.clip(overlap_per_axis, 0, None)
     overlap_vol = float(np.prod(overlap_size))
 
-    # Vertex penetration test (check if A's vertices are inside B's AABB)
+    # Vertex penetration: check if vertices of A are inside B's convex hull
+    # approximation (AABB), AND vice versa for completeness.
     inside_b = np.all((va >= min_b) & (va <= max_b), axis=1)
-    n_pen = int(inside_b.sum())
+    inside_a = np.all((vb >= min_a) & (vb <= max_a), axis=1)
+    n_pen = int(inside_b.sum()) + int(inside_a.sum())
+
+    # For exact overlap: also check if any edges of A cross faces of B.
+    # Sample edge midpoints and check those too (catches edge crossings
+    # where neither vertex is inside the other element's AABB).
+    fa, fb = mesh_a.get("faces", np.zeros((0, 3), dtype=int)), mesh_b.get("faces", np.zeros((0, 3), dtype=int))
+    if len(fa) > 0 and len(fb) > 0:
+        # Sample edge midpoints of A, check against B's AABB
+        edges_a = np.vstack([
+            (va[fa[:, 0]] + va[fa[:, 1]]) / 2,
+            (va[fa[:, 1]] + va[fa[:, 2]]) / 2,
+            (va[fa[:, 0]] + va[fa[:, 2]]) / 2,
+        ])
+        mid_inside = np.all((edges_a >= min_b) & (edges_a <= max_b), axis=1)
+        n_pen += int(mid_inside.sum())
 
     return {
         "aabb_overlap": True,
