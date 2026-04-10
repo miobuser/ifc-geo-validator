@@ -234,12 +234,9 @@ if ruleset_choice == "Custom (upload)":
         type=["yaml", "yml"],
     )
 
-run_button = st.sidebar.button("Validate", type="primary", use_container_width=True)
-
-
 # ── Main area ────────────────────────────────────────────────────────
 
-if not uploaded_file and not run_button:
+if not uploaded_file:
     st.title("IFC Geometry Validator")
     st.markdown(
         """
@@ -260,10 +257,6 @@ if not uploaded_file and not run_button:
         Upload an IFC file in the sidebar to begin.
         """
     )
-    st.stop()
-
-if not uploaded_file:
-    st.warning("Please upload an IFC file first.")
     st.stop()
 
 
@@ -379,7 +372,7 @@ def run_validation(_file_bytes, file_name, entity_types_str, predefined_type, _r
     return all_results, report, ruleset, l5_result, l6_result, terrain is not None
 
 
-if run_button or uploaded_file:
+if uploaded_file:
     file_bytes = uploaded_file.getvalue()
     rs_bytes = ruleset_file.getvalue() if ruleset_file else None
     pred = predefined_type.strip() or ""
