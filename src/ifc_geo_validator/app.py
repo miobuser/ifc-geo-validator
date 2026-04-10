@@ -29,11 +29,12 @@ from ifc_geo_validator.report.json_report import generate_report
 
 RULESETS_DIR = Path(__file__).parent / "rules" / "rulesets"
 BUILTIN_RULESETS = {
+    "ASTRA FHB T/G — Komplett (alle Regeln)": RULESETS_DIR / "astra_fhb_komplett.yaml",
     "ASTRA FHB T/G — Stützmauern": RULESETS_DIR / "astra_fhb_stuetzmauer.yaml",
-    "SIA 262 — Stützmauern": RULESETS_DIR / "sia_262_stuetzmauer.yaml",
     "ASTRA FHB T/G — Tunnel": RULESETS_DIR / "astra_fhb_tunnel.yaml",
+    "SIA 262 — Stützmauern": RULESETS_DIR / "sia_262_stuetzmauer.yaml",
 }
-DEFAULT_RULESET = RULESETS_DIR / "astra_fhb_stuetzmauer.yaml"
+DEFAULT_RULESET = RULESETS_DIR / "astra_fhb_komplett.yaml"
 
 
 # ── Variable catalog (shared between editor and reference) ──────────
