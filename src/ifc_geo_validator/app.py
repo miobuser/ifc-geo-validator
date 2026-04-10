@@ -442,31 +442,38 @@ if uploaded_file:
         summary_rows.append(row)
     st.dataframe(summary_rows, use_container_width=True, hide_index=True)
 
-    # ── 3D Viewer (web-ifc + Three.js) ──────────────────────────
+    # ── 3D Viewer (Three.js with pre-extracted meshes) ──────────
     st.subheader("3D Viewer")
     try:
-        from ifc_geo_validator.viz.webifc_viewer import render_ifc_viewer
+        from ifc_geo_validator.viz.mesh_viewer import render_mesh_viewer
 
-        # Build classification data: map every validated element to PASS/FAIL
-        class_data = {}
+        # Build viewer payload: status per element from L4 result
+        viewer_elements = []
         for r in valid_results:
-            eid = str(r.get("element_id", ""))
             l4 = r.get("level4")
-            has_errors = False
             if l4:
-                has_errors = any(
-                    c["status"] == "FAIL" and c["severity"] == "ERROR"
-                    for c in l4.get("checks", [])
-                )
-            class_data[eid] = {
-                "category": r.get("level2", {}).get("element_role", "wall_stem"),
-                "has_errors": has_errors,
-            }
+                s = l4["summary"]
+                if s["failed"] == 0 and s["errors"] == 0:
+                    status = "PASS"
+                elif s["errors"] > 0:
+                    status = "FAIL"
+                else:
+                    status = "WARN"
+            else:
+                status = "—"
+            viewer_elements.append({
+                "element_id": r.get("element_id"),
+                "element_name": r.get("element_name", ""),
+                "mesh_data": r.get("mesh_data"),
+                "status": status,
+            })
 
-        render_ifc_viewer(
-            file_bytes, height=550,
-            classification_data=class_data,
-        )
+        # Pull terrain mesh if available (from L6 context)
+        terrain_for_viewer = None
+        if l6_result and l6_result.get("terrain_mesh"):
+            terrain_for_viewer = l6_result["terrain_mesh"]
+
+        render_mesh_viewer(viewer_elements, height=550, terrain_mesh=terrain_for_viewer)
     except Exception as e:
         st.error(f"3D Viewer konnte nicht geladen werden: {e}")
 
