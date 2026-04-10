@@ -128,8 +128,8 @@ function setStatus(msg, isError) {
 
 try {
   setStatus('Lade Three.js...');
-  const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js');
-  const { OrbitControls } = await import('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js');
+  const THREE = await import('https://esm.sh/three@0.160.0');
+  const { OrbitControls } = await import('https://esm.sh/three@0.160.0/examples/jsm/controls/OrbitControls.js');
   setStatus('Baue Szene...');
 
   const DATA = __DATA_JSON__;
