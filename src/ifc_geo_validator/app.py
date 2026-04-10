@@ -442,6 +442,34 @@ if uploaded_file:
         summary_rows.append(row)
     st.dataframe(summary_rows, use_container_width=True, hide_index=True)
 
+    # ── 3D Viewer (web-ifc + Three.js) ──────────────────────────
+    st.subheader("3D Viewer")
+    try:
+        from ifc_geo_validator.viz.webifc_viewer import render_ifc_viewer
+
+        # Build classification data: map every validated element to PASS/FAIL
+        class_data = {}
+        for r in valid_results:
+            eid = str(r.get("element_id", ""))
+            l4 = r.get("level4")
+            has_errors = False
+            if l4:
+                has_errors = any(
+                    c["status"] == "FAIL" and c["severity"] == "ERROR"
+                    for c in l4.get("checks", [])
+                )
+            class_data[eid] = {
+                "category": r.get("level2", {}).get("element_role", "wall_stem"),
+                "has_errors": has_errors,
+            }
+
+        render_ifc_viewer(
+            file_bytes, height=550,
+            classification_data=class_data,
+        )
+    except Exception as e:
+        st.error(f"3D Viewer konnte nicht geladen werden: {e}")
+
     # ── Element selector (when multiple elements) ───────────────
     if len(valid_results) > 1:
         elem_options = {
@@ -534,28 +562,6 @@ if uploaded_file:
                     "Normal": f"({n[0]:+.3f}, {n[1]:+.3f}, {n[2]:+.3f})",
                 })
             st.dataframe(group_data, use_container_width=True, hide_index=True)
-
-            # ── 3D Viewer (web-ifc + Three.js) ─────────────
-            try:
-                from ifc_geo_validator.viz.webifc_viewer import render_ifc_viewer
-
-                # Build classification data for element coloring
-                class_data = {}
-                for g in l2.get("face_groups", []):
-                    cat = g.get("category", "unclassified")
-                    # Map element expressID to category (for web-ifc overlay)
-                    class_data[str(eid)] = {
-                        "category": l2.get("element_role", "wall_stem"),
-                        "has_errors": any(c["status"] == "FAIL" and c["severity"] == "ERROR"
-                                         for c in l4.get("checks", [])) if l4 else False,
-                    }
-
-                render_ifc_viewer(
-                    file_bytes, height=500,
-                    classification_data=class_data,
-                )
-            except Exception:
-                pass  # Viewer is optional
 
             # ── Curved wall info ────────────────────────────
             is_c = l3.get("is_curved")
