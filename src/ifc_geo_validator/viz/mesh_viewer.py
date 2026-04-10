@@ -71,141 +71,184 @@ _VIEWER_HTML = r"""
 <html>
 <head>
 <style>
-  body { margin: 0; overflow: hidden; background: #1a1a2e; font-family: sans-serif; }
-  #c { width: 100%; height: __HEIGHT__px; display: block; }
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #1a1a2e;
+                font-family: sans-serif; width: 100%; height: __HEIGHT__px; }
+  #c { display: block; width: 100%; height: __HEIGHT__px; }
   #legend {
     position: absolute; top: 10px; right: 10px;
-    background: rgba(0,0,0,0.6); color: #e0e0e0;
-    padding: 8px 12px; border-radius: 4px; font-size: 12px;
+    background: rgba(0,0,0,0.7); color: #e0e0e0;
+    padding: 8px 12px; border-radius: 4px; font-size: 12px; z-index: 10;
   }
   .swatch { display: inline-block; width: 12px; height: 12px;
             margin-right: 6px; vertical-align: middle; border-radius: 2px; }
   #info {
     position: absolute; bottom: 10px; left: 10px;
-    background: rgba(0,0,0,0.6); color: #e0e0e0;
-    padding: 6px 10px; border-radius: 4px; font-size: 11px;
+    background: rgba(0,0,0,0.7); color: #e0e0e0;
+    padding: 6px 10px; border-radius: 4px; font-size: 11px; z-index: 10;
   }
+  #status {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    color: #e0e0e0; font-size: 14px; text-align: center; z-index: 20;
+    background: rgba(0,0,0,0.7); padding: 12px 18px; border-radius: 6px;
+    max-width: 80%; word-wrap: break-word;
+  }
+  #err { color: #ff6b6b; }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="legend">
+<div id="status">Lade Three.js...</div>
+<div id="legend" style="display:none">
   <div><span class="swatch" style="background:#4CAF50"></span>PASS</div>
   <div><span class="swatch" style="background:#F44336"></span>FAIL</div>
   <div><span class="swatch" style="background:#FF9800"></span>WARN</div>
   <div><span class="swatch" style="background:#795548"></span>Terrain</div>
 </div>
-<div id="info">Maus: Drehen | Scroll: Zoom | Rechtsklick: Pan</div>
+<div id="info" style="display:none">Maus: Drehen | Scroll: Zoom | Rechtsklick: Pan</div>
+
+<script>
+const statusDiv = document.getElementById('status');
+function setStatus(msg, isError) {
+  statusDiv.innerHTML = isError ? '<span id="err">' + msg + '</span>' : msg;
+}
+window.onerror = (msg, src, line, col, err) => {
+  setStatus('JS Error: ' + msg + ' (line ' + line + ')', true);
+  return false;
+};
+window.addEventListener('unhandledrejection', e => {
+  setStatus('Promise Rejected: ' + (e.reason && e.reason.message || e.reason), true);
+});
+</script>
 
 <script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
-import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+const statusDiv = document.getElementById('status');
+function setStatus(msg, isError) {
+  statusDiv.innerHTML = isError ? '<span id="err">' + msg + '</span>' : msg;
+}
 
-const DATA = __DATA_JSON__;
-const HEIGHT = __HEIGHT__;
+try {
+  setStatus('Lade Three.js...');
+  const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js');
+  const { OrbitControls } = await import('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js');
+  setStatus('Baue Szene...');
 
-const STATUS_COLOR = {
-  "PASS": 0x4CAF50,
-  "FAIL": 0xF44336,
-  "WARN": 0xFF9800,
-  "—":    0x90A4AE,
-};
+  const DATA = __DATA_JSON__;
+  const HEIGHT = __HEIGHT__;
 
-const canvas = document.getElementById('c');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(window.devicePixelRatio);
+  if (!DATA.elements || DATA.elements.length === 0) {
+    setStatus('Keine Mesh-Daten verfügbar', true);
+    throw new Error('no elements');
+  }
 
-function resize() {
-  const w = canvas.clientWidth;
-  renderer.setSize(w, HEIGHT, false);
-  if (camera) {
+  const STATUS_COLOR = {
+    "PASS": 0x4CAF50,
+    "FAIL": 0xF44336,
+    "WARN": 0xFF9800,
+    "—":    0x90A4AE,
+  };
+
+  const canvas = document.getElementById('c');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(window.devicePixelRatio);
+
+  // Use viewport width with fallback
+  function getWidth() {
+    return Math.max(canvas.clientWidth, window.innerWidth, 800);
+  }
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x1a1a2e);
+
+  const camera = new THREE.PerspectiveCamera(45, getWidth() / HEIGHT, 0.01, 100000);
+  const controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+  dirLight.position.set(50, 100, 50);
+  scene.add(dirLight);
+  scene.add(new THREE.HemisphereLight(0x8888ff, 0x443322, 0.4));
+
+  const worldBox = new THREE.Box3();
+  let totalTris = 0;
+
+  for (const el of DATA.elements) {
+    const verts = new Float32Array(el.vertices);
+    const idx = new Uint32Array(el.indices);
+    if (verts.length === 0 || idx.length === 0) continue;
+
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+    geom.setIndex(new THREE.BufferAttribute(idx, 1));
+    geom.computeVertexNormals();
+
+    const colorHex = STATUS_COLOR[el.status] ?? STATUS_COLOR["—"];
+    const mat = new THREE.MeshLambertMaterial({
+      color: colorHex,
+      side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(geom, mat);
+    scene.add(mesh);
+    worldBox.expandByObject(mesh);
+    totalTris += idx.length / 3;
+  }
+
+  if (DATA.terrain) {
+    const tv = new Float32Array(DATA.terrain.vertices);
+    const ti = new Uint32Array(DATA.terrain.indices);
+    if (tv.length > 0 && ti.length > 0) {
+      const tg = new THREE.BufferGeometry();
+      tg.setAttribute('position', new THREE.BufferAttribute(tv, 3));
+      tg.setIndex(new THREE.BufferAttribute(ti, 1));
+      tg.computeVertexNormals();
+      const tm = new THREE.MeshLambertMaterial({
+        color: 0x795548, side: THREE.DoubleSide,
+        transparent: true, opacity: 0.5,
+      });
+      const tmesh = new THREE.Mesh(tg, tm);
+      scene.add(tmesh);
+      worldBox.expandByObject(tmesh);
+    }
+  }
+
+  if (worldBox.isEmpty()) {
+    setStatus('Mesh-Bounding-Box ist leer', true);
+    throw new Error('empty bbox');
+  }
+
+  const center = new THREE.Vector3();
+  const size = new THREE.Vector3();
+  worldBox.getCenter(center);
+  worldBox.getSize(size);
+  const maxDim = Math.max(size.x, size.y, size.z, 1);
+  camera.position.set(center.x + maxDim, center.y + maxDim * 0.7, center.z + maxDim);
+  controls.target.copy(center);
+  controls.update();
+
+  function resize() {
+    const w = getWidth();
+    renderer.setSize(w, HEIGHT, false);
     camera.aspect = w / HEIGHT;
     camera.updateProjectionMatrix();
   }
+  resize();
+  window.addEventListener('resize', resize);
+
+  function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  // Hide status, show legend
+  statusDiv.style.display = 'none';
+  document.getElementById('legend').style.display = 'block';
+  document.getElementById('info').style.display = 'block';
+
+} catch (err) {
+  setStatus('Fehler: ' + (err.message || err), true);
 }
-
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1a1a2e);
-
-let camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100000);
-const controls = new OrbitControls(camera, canvas);
-controls.enableDamping = true;
-
-scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
-dirLight.position.set(50, 100, 50);
-scene.add(dirLight);
-scene.add(new THREE.HemisphereLight(0x8888ff, 0x443322, 0.4));
-
-const worldBox = new THREE.Box3();
-
-// Build element meshes
-for (const el of DATA.elements) {
-  const verts = new Float32Array(el.vertices);
-  const idx = new Uint32Array(el.indices);
-
-  const geom = new THREE.BufferGeometry();
-  geom.setAttribute('position', new THREE.BufferAttribute(verts, 3));
-  geom.setIndex(new THREE.BufferAttribute(idx, 1));
-  geom.computeVertexNormals();
-
-  const colorHex = STATUS_COLOR[el.status] ?? STATUS_COLOR["—"];
-  const mat = new THREE.MeshLambertMaterial({
-    color: colorHex,
-    side: THREE.DoubleSide,
-  });
-  const mesh = new THREE.Mesh(geom, mat);
-  mesh.userData = { id: el.id, name: el.name, status: el.status };
-  scene.add(mesh);
-
-  // Edge overlay for clearer geometry
-  const edges = new THREE.EdgesGeometry(geom, 30);
-  const edgeMat = new THREE.LineBasicMaterial({
-    color: 0x000000, transparent: true, opacity: 0.3,
-  });
-  scene.add(new THREE.LineSegments(edges, edgeMat));
-
-  worldBox.expandByObject(mesh);
-}
-
-// Build terrain (semi-transparent brown)
-if (DATA.terrain) {
-  const tv = new Float32Array(DATA.terrain.vertices);
-  const ti = new Uint32Array(DATA.terrain.indices);
-  const tg = new THREE.BufferGeometry();
-  tg.setAttribute('position', new THREE.BufferAttribute(tv, 3));
-  tg.setIndex(new THREE.BufferAttribute(ti, 1));
-  tg.computeVertexNormals();
-  const tm = new THREE.MeshLambertMaterial({
-    color: 0x795548,
-    side: THREE.DoubleSide,
-    transparent: true,
-    opacity: 0.5,
-  });
-  const tmesh = new THREE.Mesh(tg, tm);
-  scene.add(tmesh);
-  worldBox.expandByObject(tmesh);
-}
-
-// Center & frame the model
-const center = new THREE.Vector3();
-const size = new THREE.Vector3();
-worldBox.getCenter(center);
-worldBox.getSize(size);
-const maxDim = Math.max(size.x, size.y, size.z, 1);
-camera.position.set(center.x + maxDim, center.y + maxDim * 0.7, center.z + maxDim);
-controls.target.copy(center);
-controls.update();
-
-resize();
-window.addEventListener('resize', resize);
-
-function animate() {
-  requestAnimationFrame(animate);
-  controls.update();
-  renderer.render(scene, camera);
-}
-animate();
 </script>
 </body>
 </html>
