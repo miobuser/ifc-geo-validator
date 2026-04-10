@@ -157,6 +157,7 @@ st.set_page_config(
     page_title="IFC Geometry Validator",
     page_icon="🏗️",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 
