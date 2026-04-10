@@ -447,7 +447,7 @@ if uploaded_file:
     try:
         from ifc_geo_validator.viz.mesh_viewer import render_mesh_viewer
 
-        # Build viewer payload: status per element from L4 result
+        # Build viewer payload with full L1/L2/L3/L4 context per element
         viewer_elements = []
         for r in valid_results:
             l4 = r.get("level4")
@@ -466,6 +466,10 @@ if uploaded_file:
                 "element_name": r.get("element_name", ""),
                 "mesh_data": r.get("mesh_data"),
                 "status": status,
+                "level1": r.get("level1"),
+                "level2": r.get("level2"),
+                "level3": r.get("level3"),
+                "level4": l4,
             })
 
         # Pull terrain mesh if available (from L6 context)
@@ -473,7 +477,7 @@ if uploaded_file:
         if l6_result and l6_result.get("terrain_mesh"):
             terrain_for_viewer = l6_result["terrain_mesh"]
 
-        render_mesh_viewer(viewer_elements, height=550, terrain_mesh=terrain_for_viewer)
+        render_mesh_viewer(viewer_elements, height=650, terrain_mesh=terrain_for_viewer)
     except Exception as e:
         st.error(f"3D Viewer konnte nicht geladen werden: {e}")
 
