@@ -19,8 +19,7 @@ Designed for retaining walls per ASTRA FHB T/G, extensible to tunnel components,
 | L3 | Face-specific measurements (crown width, slope, thickness, inclination, height) |
 | L4 | YAML rule evaluation with actionable FAIL messages and smart filtering |
 | L5 | Inter-element context (Contact Surface Normal Analysis, stacking, gaps) |
-| L6 | Terrain context (gradient-based earth/air side, clearance, embedment) |
-| L7 | Distance calculations (YAML-configurable, evaluated via L4 engine) |
+| L6 | Terrain context (gradient-based earth/air side, clearance, embedment, inter-element distances) |
 
 ## Installation
 

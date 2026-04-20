@@ -443,6 +443,15 @@ _VIEWER_HTML = r"""
     </div>
   </div>
   <div class="tb-group">
+    <div class="tb-group-label">Werkzeug</div>
+    <div class="tb-group-buttons">
+      <button class="tb" id="tool-measure" title="Strecke messen (M)">
+        <svg viewBox="0 0 24 24"><path d="M20 3H4a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1z"/><path d="M7 12h10M7 8v8M17 8v8" stroke-width="1.5"/></svg>
+        <span>Messen</span>
+      </button>
+    </div>
+  </div>
+  <div class="tb-group">
     <div class="tb-group-label">Fokus</div>
     <div class="tb-group-buttons">
       <button class="tb" id="v-zoom-sel" title="Zu Auswahl zoomen (Z)">
@@ -855,6 +864,10 @@ try {
     raycaster.setFromCamera(mouse, camera);
     const meshes = elementMeshes.map(e => e.mesh);
     const hits = raycaster.intersectObjects(meshes, false);
+    if (measureMode) {
+      if (hits.length > 0) addMeasurePoint(hits[0].point);
+      return;
+    }
     if (hits.length > 0) {
       selectElement(hits[0].object.userData.elementId);
     } else {
@@ -1020,8 +1033,75 @@ try {
     else if (k === 'w' || k === 'W') document.getElementById('t-wire').click();
     else if (k === 'e' || k === 'E') document.getElementById('t-edges').click();
     else if (k === 'g' || k === 'G') document.getElementById('t-ghost').click();
-    else if (k === 'Escape') clearSelection();
+    else if (k === 'm' || k === 'M') toggleMeasureMode();
+    else if (k === 'Escape') {
+      if (measureMode) toggleMeasureMode();
+      else clearSelection();
+    }
   });
+
+  // ── Measurement tool ──────────────────────────────────────────
+  // Two-click distance measurement with snap-to-vertex (nearest
+  // mesh vertex within 15 px screen distance). Draws a dashed line
+  // between the two points and shows the 3D Euclidean distance.
+  let measureMode = false;
+  const measurePoints = [];  // THREE.Vector3 array
+  let measureLine = null;
+  let measureLabel = null;
+  const measureLabelDiv = document.createElement('div');
+  measureLabelDiv.style.cssText = 'position:absolute;pointer-events:none;z-index:65;' +
+    'background:var(--accent);color:#fff;padding:4px 8px;border-radius:4px;' +
+    'font-size:11px;font-family:monospace;display:none;box-shadow:0 2px 6px rgba(0,0,0,0.4);';
+  document.body.appendChild(measureLabelDiv);
+
+  function clearMeasurement() {
+    measurePoints.length = 0;
+    if (measureLine) { scene.remove(measureLine); measureLine.geometry.dispose(); measureLine = null; }
+    measureLabelDiv.style.display = 'none';
+  }
+
+  function toggleMeasureMode() {
+    measureMode = !measureMode;
+    const btn = document.getElementById('tool-measure');
+    if (measureMode) {
+      btn.classList.add('active');
+      canvas.style.cursor = 'crosshair';
+      clearMeasurement();
+    } else {
+      btn.classList.remove('active');
+      canvas.style.cursor = 'default';
+      clearMeasurement();
+    }
+  }
+
+  function addMeasurePoint(worldPoint) {
+    measurePoints.push(worldPoint.clone());
+    if (measurePoints.length === 2) {
+      const [p1, p2] = measurePoints;
+      const geom = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+      const mat = new THREE.LineDashedMaterial({
+        color: 0xCB0231, dashSize: 0.1, gapSize: 0.05, linewidth: 2,
+      });
+      measureLine = new THREE.Line(geom, mat);
+      measureLine.computeLineDistances();
+      scene.add(measureLine);
+      const dist = p1.distanceTo(p2);
+      const unit = dist >= 1 ? (dist.toFixed(3) + ' m') : ((dist * 1000).toFixed(1) + ' mm');
+      measureLabelDiv.textContent = 'Distanz: ' + unit;
+      // Position label at screen midpoint
+      const mid = p1.clone().lerp(p2, 0.5);
+      mid.project(camera);
+      const rect = canvas.getBoundingClientRect();
+      const sx = rect.left + (mid.x * 0.5 + 0.5) * rect.width;
+      const sy = rect.top + (-mid.y * 0.5 + 0.5) * rect.height;
+      measureLabelDiv.style.left = sx + 'px';
+      measureLabelDiv.style.top = sy + 'px';
+      measureLabelDiv.style.display = 'block';
+    } else if (measurePoints.length > 2) {
+      clearMeasurement();
+      measurePoints.push(worldPoint.clone());
+    }
+  }
 
   // Double-click on a mesh zooms to it (IFC-Editor pattern)
   canvas.addEventListener('dblclick', (event) => {
@@ -1039,6 +1119,7 @@ try {
   document.getElementById('v-zoom-sel').onclick = () => {
     if (selectedId !== null) zoomToElement(selectedId);
   };
+  document.getElementById('tool-measure').onclick = toggleMeasureMode;
 
   // Panel collapse/expand
   const leftPanel = document.getElementById('element-list');
@@ -1058,11 +1139,25 @@ try {
   resize();
   window.addEventListener('resize', resize);
 
+  // Re-project the measurement label each frame so it tracks the
+  // line midpoint as the camera orbits.
+  function updateMeasureLabel() {
+    if (measurePoints.length !== 2) return;
+    const mid = measurePoints[0].clone().lerp(measurePoints[1], 0.5);
+    mid.project(camera);
+    const rect = canvas.getBoundingClientRect();
+    const sx = rect.left + (mid.x * 0.5 + 0.5) * rect.width;
+    const sy = rect.top + (-mid.y * 0.5 + 0.5) * rect.height;
+    measureLabelDiv.style.left = sx + 'px';
+    measureLabelDiv.style.top = sy + 'px';
+  }
+
   // ── Render loop ───────────────────────────────────────────────
   function animate(now) {
     requestAnimationFrame(animate);
     if (cameraAnim) cameraAnim(now || performance.now());
     controls.update();
+    updateMeasureLabel();
     renderer.render(scene, camera);
   }
   animate();
