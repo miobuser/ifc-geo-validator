@@ -1,8 +1,15 @@
 # ifc-geo-validator
 
 [![Tests](https://github.com/miobuser/ifc-geo-validator/actions/workflows/test.yml/badge.svg)](https://github.com/miobuser/ifc-geo-validator/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org)
+[![Live App](https://img.shields.io/badge/app-streamlit.app-FF4B4B.svg)](https://ifc-geo-validator2.streamlit.app)
 
 Geometric validation of IFC infrastructure models against configurable requirements.
+
+**➡️ Try the live app:** https://ifc-geo-validator2.streamlit.app (click "Demo-Modell laden" for a sample run).
+
+**New here?** Start with [docs/quickstart.md](docs/quickstart.md) — zero-to-first-report in 5 minutes.
 
 ## Overview
 

@@ -93,12 +93,12 @@ TRANSLATIONS = {
     "crown_width": {
         "de": "Kronenbreite",
         "fr": "Largeur de couronnement",
-        "it": "Larghezza della corona",
+        "it": "Larghezza del coronamento",
     },
     "crown_slope": {
         "de": "Kronenneigung",
         "fr": "Pente du couronnement",
-        "it": "Pendenza della corona",
+        "it": "Pendenza del coronamento",
     },
     "wall_thickness": {
         "de": "Wandstärke",
@@ -138,7 +138,7 @@ TRANSLATIONS = {
     "embedment_depth": {
         "de": "Einbindetiefe",
         "fr": "Profondeur d'encastrement",
-        "it": "Profondità di incorporamento",
+        "it": "Profondità d'infissione",
     },
     "measurement_uncertainty": {
         "de": "Messunsicherheit",
@@ -160,7 +160,7 @@ TRANSLATIONS = {
     "crown": {
         "de": "Krone",
         "fr": "Couronnement",
-        "it": "Corona",
+        "it": "Coronamento",
     },
     "foundation": {
         "de": "Fundament",
@@ -216,8 +216,8 @@ TRANSLATIONS = {
     },
     "inspector": {
         "de": "Prüfer/in",
-        "fr": "Inspecteur/trice",
-        "it": "Ispettore/trice",
+        "fr": "Inspecteur·trice",
+        "it": "Ispettore/Ispettrice",
     },
     "download_report": {
         "de": "Prüfprotokoll herunterladen",
@@ -245,8 +245,8 @@ TRANSLATIONS = {
     # ── Element roles ─────────────────────────────────────
     "wall_stem": {
         "de": "Mauerstiel",
-        "fr": "Voile de mur",
-        "it": "Fusto del muro",
+        "fr": "Voile",
+        "it": "Elevazione",
     },
     "parapet": {
         "de": "Brüstung",
@@ -308,6 +308,47 @@ TRANSLATIONS = {
         "fr": "Télécharger un fichier IFC dans la barre latérale pour commencer.",
         "it": "Caricare un file IFC nella barra laterale per iniziare.",
     },
+    "load_demo_model": {
+        "de": "📦 Demo-Modell laden",
+        "fr": "📦 Charger un modèle de démo",
+        "it": "📦 Carica modello demo",
+    },
+    "demo_model_caption": {
+        "de": "Kein IFC zur Hand? Probiere das ASTRA-konforme T28-Showcase-Modell.",
+        "fr": "Pas de fichier IFC ? Essayez le modèle T28 conforme ASTRA.",
+        "it": "Nessun file IFC? Prova il modello T28 conforme ASTRA.",
+    },
+    "overall_verdict": {
+        "de": "Gesamtbewertung",
+        "fr": "Verdict global",
+        "it": "Verdetto complessivo",
+    },
+    "verdict_pass": {"de": "✅ KONFORM", "fr": "✅ CONFORME", "it": "✅ CONFORME"},
+    "verdict_fail": {
+        "de": "❌ NICHT KONFORM",
+        "fr": "❌ NON CONFORME",
+        "it": "❌ NON CONFORME",
+    },
+    "verdict_partial": {
+        "de": "⚠️ TEILWEISE KONFORM",
+        "fr": "⚠️ PARTIELLEMENT CONFORME",
+        "it": "⚠️ PARZIALMENTE CONFORME",
+    },
+    "dl_json": {
+        "de": "JSON-Report (strukturiert)",
+        "fr": "Rapport JSON (structuré)",
+        "it": "Rapporto JSON (strutturato)",
+    },
+    "dl_enriched": {
+        "de": "Angereicherte IFC (mit Pset_GeoValidation)",
+        "fr": "IFC enrichi (avec Pset_GeoValidation)",
+        "it": "IFC arricchito (con Pset_GeoValidation)",
+    },
+    "dl_bcf": {
+        "de": "BCF-Issues (für Revit / Navisworks)",
+        "fr": "Problèmes BCF (pour Revit / Navisworks)",
+        "it": "Problemi BCF (per Revit / Navisworks)",
+    },
 
     # ── Summary panel ────────────────────────────────────
     "validated": {"de": "Validiert", "fr": "Validé", "it": "Validato"},
@@ -350,7 +391,7 @@ TRANSLATIONS = {
     # ── Common metric labels ─────────────────────────────
     "triangles": {"de": "Dreiecke", "fr": "Triangles", "it": "Triangoli"},
     "vertices": {"de": "Vertices", "fr": "Sommets", "it": "Vertici"},
-    "bounding_box": {"de": "Bounding Box", "fr": "Boîte englobante", "it": "Riquadro di delimitazione"},
+    "bounding_box": {"de": "Hüllquader", "fr": "Boîte englobante", "it": "Riquadro di delimitazione"},
     "yes": {"de": "Ja", "fr": "Oui", "it": "Sì"},
     "no": {"de": "Nein", "fr": "Non", "it": "No"},
     "value_actual": {"de": "Ist", "fr": "Mesuré", "it": "Effettivo"},
@@ -392,15 +433,15 @@ TRANSLATIONS = {
     "tb_top": {"de": "Oben", "fr": "Dessus", "it": "Sopra"},
     "tb_front": {"de": "Vorne", "fr": "Avant", "it": "Avanti"},
     "tb_side": {"de": "Seite", "fr": "Côté", "it": "Lato"},
-    "tb_wire": {"de": "Gitter", "fr": "Fil", "it": "Reticolo"},
+    "tb_wire": {"de": "Gitter", "fr": "Filaire", "it": "Wireframe"},
     "tb_edges": {"de": "Kanten", "fr": "Arêtes", "it": "Bordi"},
-    "tb_terrain": {"de": "Terrain", "fr": "Terrain", "it": "Terreno"},
-    "tb_ghost": {"de": "Ghost", "fr": "Fantôme", "it": "Fantasma"},
+    "tb_terrain": {"de": "Gelände", "fr": "Terrain", "it": "Terreno"},
+    "tb_ghost": {"de": "Transparent", "fr": "Fantôme", "it": "Trasparente"},
     "tb_measure": {"de": "Messen", "fr": "Mesurer", "it": "Misura"},
-    "tb_section_off": {"de": "Aus", "fr": "Arrêt", "it": "Off"},
+    "tb_section_off": {"de": "Aus", "fr": "Arrêt", "it": "Disattiva"},
     "tb_zoom_selection": {"de": "Zoom", "fr": "Zoom", "it": "Zoom"},
-    "tb_clear": {"de": "Clear", "fr": "Effacer", "it": "Pulisci"},
-    "tb_flip": {"de": "Flip", "fr": "Inverser", "it": "Inverti"},
+    "tb_clear": {"de": "Löschen", "fr": "Effacer", "it": "Pulisci"},
+    "tb_flip": {"de": "Umkehren", "fr": "Inverser", "it": "Inverti"},
 
     # ── Viewer tooltips ──────────────────────────────────
     "tt_status_mode": {
@@ -513,12 +554,12 @@ TRANSLATIONS = {
         "it": "Spessore min (mm)",
     },
     "m_wall_height_m": {"de": "Wandhöhe (m)", "fr": "Hauteur mur (m)", "it": "Altezza muro (m)"},
-    "m_inclination_ratio": {"de": "Anzug (n:1)", "fr": "Fruit (n:1)", "it": "Rientranza (n:1)"},
+    "m_inclination_ratio": {"de": "Anzug (n:1)", "fr": "Fruit (n:1)", "it": "Rastremazione (n:1)"},
     "m_min_radius_m": {"de": "Min. Radius (m)", "fr": "Rayon min (m)", "it": "Raggio min (m)"},
     "m_plumbness_deg": {
         "de": "Lotabweichung (°)",
-        "fr": "Écart du plomb (°)",
-        "it": "Scarto a piombo (°)",
+        "fr": "Écart d'aplomb (°)",
+        "it": "Scostamento dal piombo (°)",
     },
 
     # ── Errors / warnings ────────────────────────────────

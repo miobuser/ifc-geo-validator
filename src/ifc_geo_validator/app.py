@@ -173,6 +173,24 @@ uploaded_file = st.sidebar.file_uploader(
     help=t("upload_ifc_help"),
 )
 
+# Demo-model handoff: when the welcome page's "Demo laden" button stashes
+# bytes into session_state, synthesize a file-like object so the rest of
+# the pipeline treats it identically to a real upload.
+if uploaded_file is None and st.session_state.get("_demo_bytes"):
+    import io
+
+    class _DemoFile:
+        def __init__(self, data: bytes, name: str):
+            self._data = data
+            self.name = name
+
+        def getvalue(self) -> bytes:
+            return self._data
+
+    uploaded_file = _DemoFile(
+        st.session_state["_demo_bytes"], st.session_state["_demo_name"]
+    )
+
 entity_types = st.sidebar.multiselect(
     t("entity_types"),
     ["IfcWall", "IfcSlab", "IfcColumn", "IfcBeam", "IfcMember",
@@ -205,6 +223,20 @@ if ruleset_choice == t("custom_upload"):
 if not uploaded_file:
     st.title(t("app_title"))
     st.markdown(t("intro_text"))
+
+    # Demo-Modell: Single click try-without-upload. Lowers bounce rate
+    # for first-time visitors who don't have an IFC file ready.
+    demo_path = Path(__file__).resolve().parents[2] / "tests" / "test_models" / "T28_showcase.ifc"
+    if demo_path.exists():
+        c_demo1, c_demo2 = st.columns([1, 2])
+        with c_demo1:
+            if st.button(t("load_demo_model"), type="primary", use_container_width=True):
+                st.session_state["_demo_bytes"] = demo_path.read_bytes()
+                st.session_state["_demo_name"] = "T28_showcase.ifc"
+                st.rerun()
+        with c_demo2:
+            st.caption(t("demo_model_caption"))
+
     st.markdown(f"**{t('pipeline_title')}**")
     l_col = t("level_col")
     d_col = t("description_col")
@@ -407,22 +439,39 @@ if uploaded_file:
     valid_results = [r for r in results if "error" not in r]
     error_results = [r for r in results if "error" in r]
 
+    # Hero verdict banner: biggest signal the user looks for. Compute
+    # the overall PASS/WARN/FAIL across every element's L4 result and
+    # render it as a coloured banner before the detailed metrics.
+    total_errors = 0
+    total_warnings = 0
+    total_checks_all = 0
+    total_passed_all = 0
+    for r in valid_results:
+        l4 = r.get("level4")
+        if not l4:
+            continue
+        s = l4.get("summary", {})
+        total_errors += s.get("errors", 0)
+        total_warnings += s.get("failed", 0) - s.get("errors", 0)
+        total_checks_all += s.get("total", 0)
+        total_passed_all += s.get("passed", 0)
+
+    if total_checks_all > 0:
+        if total_errors == 0 and total_warnings == 0:
+            st.success(f"## {t('verdict_pass')}  ·  {total_passed_all}/{total_checks_all} {t('rules_passed').lower()}")
+        elif total_errors > 0:
+            st.error(f"## {t('verdict_fail')}  ·  {total_passed_all}/{total_checks_all} {t('rules_passed').lower()}  ·  {total_errors} {t('errors').lower()}")
+        else:
+            st.warning(f"## {t('verdict_partial')}  ·  {total_passed_all}/{total_checks_all} {t('rules_passed').lower()}")
+
     col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric(t("elements"), len(results))
     col2.metric(t("validated"), len(valid_results))
     col3.metric(t("errors"), len(error_results))
     col4.metric(t("terrain"), t("detected") if has_terrain else t("none"))
 
-    if valid_results and "level4" in valid_results[0]:
-        total_checks = sum(
-            r["level4"]["summary"]["total"]
-            for r in valid_results if "level4" in r
-        )
-        total_passed = sum(
-            r["level4"]["summary"]["passed"]
-            for r in valid_results if "level4" in r
-        )
-        col5.metric(t("rules_passed"), f"{total_passed}/{total_checks}")
+    if total_checks_all > 0:
+        col5.metric(t("rules_passed"), f"{total_passed_all}/{total_checks_all}")
 
     # ── Summary table (all elements at a glance) ────────────────
     st.subheader(t("element_overview"))
@@ -908,7 +957,7 @@ if uploaded_file:
     dl1, dl2, dl3 = st.columns(3)
 
     dl1.download_button(
-        "Download JSON Report",
+        f"📄 {t('dl_json')}",
         data=report_json,
         file_name=f"{Path(uploaded_file.name).stem}_report.json",
         mime="application/json",
@@ -936,7 +985,7 @@ if uploaded_file:
             enriched_bytes = f.read()
 
         dl2.download_button(
-            "Download Enriched IFC",
+            f"📥 {t('dl_enriched')}",
             data=enriched_bytes,
             file_name=f"{Path(uploaded_file.name).stem}_validated.ifc",
             mime="application/octet-stream",
@@ -966,7 +1015,7 @@ if uploaded_file:
             bcf_bytes = f.read()
 
         dl3.download_button(
-            "Download BCF Issues",
+            f"🐛 {t('dl_bcf')}",
             data=bcf_bytes,
             file_name=f"{Path(uploaded_file.name).stem}_issues.bcf",
             mime="application/octet-stream",

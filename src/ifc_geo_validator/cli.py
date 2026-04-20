@@ -38,7 +38,44 @@ def _build_argparser() -> argparse.ArgumentParser:
     """
     parser = argparse.ArgumentParser(
         prog="ifc-geo-validator",
-        description="Geometric validation of IFC infrastructure models",
+        description="Geometric validation of IFC infrastructure models "
+                    "against ASTRA FHB T/G and configurable YAML rulesets.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Beispiele / Examples:
+
+  # Validierung einer einzelnen IFC-Datei (Auto-Config)
+  ifc-geo-validator model.ifc --auto
+
+  # Bestimmtes Ruleset mit Konsolenausgabe
+  ifc-geo-validator model.ifc -r rulesets/astra_fhb_komplett.yaml
+
+  # Vollständiger Export: JSON + HTML + BCF + CSV
+  ifc-geo-validator model.ifc --auto \\
+      -o report.json --html report.html \\
+      --bcf issues.bcf --csv measurements.csv
+
+  # Mehrere Element-Typen, Project-Metadaten
+  ifc-geo-validator model.ifc \\
+      --filter-type IfcWall,IfcSlab,IfcFooting \\
+      --project "A1 Bern-Zürich" --author "M. Buser"
+
+  # Modell scannen (Element-Typen entdecken, keine Prüfung)
+  ifc-geo-validator model.ifc --scan
+
+  # Batch-Modus: alle IFCs in einem Ordner
+  ifc-geo-validator ./ifcs/ --auto --summary
+
+  # IFC-Vergleich (as-designed ↔ as-built)
+  ifc-geo-validator as_built.ifc --compare as_designed.ifc
+
+Exit-Codes:
+  0  — alle Regeln PASS (oder keine bewertet)
+  1  — mindestens ein ERROR-Check FAIL
+  2  — IFC-Datei nicht ladbar / Geometrie-Extraktion fehlgeschlagen
+
+Mehr Dokumentation: docs/  |  https://github.com/miobuser/ifc-geo-validator
+""",
     )
     parser.add_argument("ifc_file", nargs="+", help="Path to IFC file(s) or directory")
     parser.add_argument("-r", "--ruleset", default=None, help="Path to YAML ruleset file")
@@ -336,6 +373,27 @@ def _resolve_classifier_thresholds(ruleset, project_config):
 
 
 def main():
+    """Entry point — wraps _main() so domain-specific errors produce
+    a clean single-line message instead of a Python traceback, and map
+    to the documented exit codes (see argparser epilog)."""
+    try:
+        return _main()
+    except KeyboardInterrupt:
+        print("\nAbgebrochen.", file=sys.stderr)
+        sys.exit(130)
+    except Exception as exc:  # noqa: BLE001
+        # Narrow catches for our own error classes give a friendly
+        # message with exit code 2. Everything else re-raises to show
+        # the full traceback so bug reports contain useful context.
+        from ifc_geo_validator.core.ifc_parser import IFCLoadError
+        from ifc_geo_validator.core.mesh_converter import MeshExtractionError
+        if isinstance(exc, (IFCLoadError, MeshExtractionError)):
+            print(f"FEHLER: {exc}", file=sys.stderr)
+            sys.exit(2)
+        raise
+
+
+def _main():
     sys.stdout.reconfigure(encoding="utf-8")
 
     parser = _build_argparser()

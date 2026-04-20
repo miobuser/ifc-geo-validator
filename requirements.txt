@@ -1,6 +1,19 @@
-ifcopenshell>=0.8.0
-numpy>=1.24
+# Runtime dependencies for the Streamlit Cloud deployment.
+# Minor floors track our tested compatibility, upper floors avoid
+# known CVEs. Keep in sync with pyproject.toml [project.dependencies]
+# and optional-dependencies.
+
+ifcopenshell>=0.8.0,<0.9
+numpy>=1.24,<3
 pyyaml>=6.0
-streamlit>=1.30
+
+# Streamlit 1.37 closed CVE-2024-42474 (XSRF/CORS bypass); do not relax.
+streamlit>=1.37,<2
+
+# Optional report format: BCF 2.1 issues for Revit/Navisworks consumers.
 bcf-client>=0.8
-plotly>=5.0
+xsdata>=24.0
+
+# Small plot utilities used by a couple of viz helpers. Adds ~15 MB;
+# drop this line if you don't need the slope heatmap / cross-section.
+plotly>=5.0,<7

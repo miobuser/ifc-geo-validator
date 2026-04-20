@@ -1,0 +1,12 @@
+# Force LF line endings in the repo; Windows developers still see CRLF
+# in their working tree (autocrlf=true) but commits stay consistent for
+# CI, Docker, and Linux self-hosters.
+* text=auto eol=lf
+
+# Binary files — never touch.
+*.ifc binary
+*.pdf binary
+*.png binary
+*.jpg binary
+*.xlsx binary
+*.bcf binary
