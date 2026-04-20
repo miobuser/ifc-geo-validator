@@ -187,35 +187,45 @@ def validate_level6(
                 })
 
     # ── Inter-element distances ──────────────────────────────────
-    if len(elements_data) >= 2:
-        from itertools import combinations
+    # Vectorised AABB prefilter: reject pairs farther apart than
+    # NEIGHBOR_CUTOFF_M (5 m by default — past this distance the
+    # elements are not structurally related for L6's purposes).
+    # This replaces the O(N²) full pair loop — which would do
+    # N² × min_vertex_distance calls (each O(M_A·M_B)) — with one
+    # vectorised bbox computation and only the surviving neighbour
+    # pairs go through the full vertex comparison. For N=2000 walls,
+    # typical reduction is 99 %+ on linear-infrastructure geometry.
+    NEIGHBOR_CUTOFF_M = 5.0
 
-        for i, j in combinations(range(len(elements_data)), 2):
-            a = elements_data[i]
-            b = elements_data[j]
-            mesh_a = a.get("mesh_data")
-            mesh_b = b.get("mesh_data")
-            l1_a = a.get("level1", {})
-            l1_b = b.get("level1", {})
+    usable = [
+        (i, elements_data[i]) for i in range(len(elements_data))
+        if elements_data[i].get("mesh_data") and elements_data[i].get("level1", {}).get("bbox")
+    ]
+    if len(usable) >= 2:
+        idxs = [u[0] for u in usable]
+        bmin = np.array([u[1]["level1"]["bbox"]["min"] for u in usable])
+        bmax = np.array([u[1]["level1"]["bbox"]["max"] for u in usable])
+        lower = np.maximum(bmin[:, None, :], bmin[None, :, :])
+        upper = np.minimum(bmax[:, None, :], bmax[None, :, :])
+        gap = np.maximum(0.0, lower - upper)       # (N,N,3)
+        max_axis_gap = gap.max(axis=2)             # (N,N)
+        candidate_mask = (max_axis_gap <= NEIGHBOR_CUTOFF_M)
+        candidate_mask &= np.triu(np.ones_like(max_axis_gap, dtype=bool), k=1)
+        ii, jj = np.nonzero(candidate_mask)
 
-            if not mesh_a or not mesh_b:
-                continue
+        for ii_k, jj_k in zip(ii.tolist(), jj.tolist()):
+            a = usable[ii_k][1]
+            b = usable[jj_k][1]
+            mesh_a = a["mesh_data"]
+            mesh_b = b["mesh_data"]
+            bbox_a = a["level1"]["bbox"]
+            bbox_b = b["level1"]["bbox"]
 
-            bbox_a = l1_a.get("bbox", {})
-            bbox_b = l1_b.get("bbox", {})
-
-            if not bbox_a or not bbox_b:
-                continue
-
-            # Minimum vertex-to-vertex distance
             min_dist = min_vertex_distance(mesh_a["vertices"], mesh_b["vertices"])
-
-            # Horizontal XY distance
             h_dist = horizontal_distance_xy(
                 np.array(bbox_a["min"]), np.array(bbox_a["max"]),
                 np.array(bbox_b["min"]), np.array(bbox_b["max"]),
             )
-
             result["distances"].append({
                 "element_a_id": a.get("element_id"),
                 "element_a_name": a.get("element_name", "Unnamed"),

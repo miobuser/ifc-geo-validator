@@ -234,3 +234,60 @@ def test_json_report_does_not_leak_tempfile_path():
     r = generate_report("/tmp/tmp_secret_path.ifc", elements_results=[])
     assert "ifc_path" not in r["report"]
     assert r["report"]["ifc_file"] == "tmp_secret_path.ifc"
+
+
+# ── Scalability regression tests ──────────────────────────────────
+
+def test_level5_bbox_prefilter_rejects_distant_pairs():
+    """N² bbox prefilter must reject pairs beyond max_gap in one pass."""
+    # 50 tiny elements on a line 10 m apart — only adjacent pairs should
+    # be candidates with the 1.0 m default cutoff.
+    n = 50
+    elements = []
+    for i in range(n):
+        cx = i * 10.0
+        elements.append({
+            "element_id": i,
+            "element_name": f"E{i}",
+            "level1": {
+                "bbox": {"min": [cx, 0, 0], "max": [cx + 0.5, 0.5, 1],
+                         "size": [0.5, 0.5, 1]},
+                "volume": 0.25,
+                "centroid": [cx + 0.25, 0.25, 0.5],
+            },
+            "mesh_data": {
+                "vertices": UNIT_CUBE_VERTS * 0.5 + np.array([cx, 0, 0]),
+                "faces": UNIT_CUBE_FACES,
+                "normals": np.zeros((12, 3)),
+                "areas": np.ones(12) * 0.25,
+            },
+        })
+    result = validate_level5(elements)
+    # Pairs 10 m apart → all rejected. num_pairs must be 0.
+    assert result["summary"]["num_pairs"] == 0, (
+        f"Prefilter should reject all distant pairs, got {result['summary']['num_pairs']}"
+    )
+
+
+def test_level5_prefilter_finds_adjacent_pairs():
+    """Prefilter must NOT reject pairs that are actually within cutoff."""
+    # Two overlapping-bbox walls — gap should be 0, pair surviving.
+    a = {
+        "element_id": 1, "element_name": "A",
+        "level1": {"bbox": {"min": [0, 0, 0], "max": [1, 1, 1],
+                            "size": [1, 1, 1]}, "volume": 1.0,
+                   "centroid": [0.5, 0.5, 0.5]},
+        "mesh_data": {"vertices": UNIT_CUBE_VERTS, "faces": UNIT_CUBE_FACES,
+                      "normals": np.zeros((12, 3)), "areas": np.ones(12)},
+    }
+    b = {
+        "element_id": 2, "element_name": "B",
+        "level1": {"bbox": {"min": [0.5, 0.5, 0], "max": [1.5, 1.5, 1],
+                            "size": [1, 1, 1]}, "volume": 1.0,
+                   "centroid": [1.0, 1.0, 0.5]},
+        "mesh_data": {"vertices": UNIT_CUBE_VERTS + np.array([0.5, 0.5, 0]),
+                      "faces": UNIT_CUBE_FACES,
+                      "normals": np.zeros((12, 3)), "areas": np.ones(12)},
+    }
+    result = validate_level5([a, b])
+    assert result["summary"]["num_pairs"] == 1

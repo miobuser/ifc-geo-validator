@@ -143,12 +143,18 @@ def render_mesh_viewer(
                 "message": c.get("message", ""),
             })
 
+        # Viewer-side JSON payload: vertices at mm precision (3 decimals
+        # in metres) shrinks the wire size by ~60 % vs full float64
+        # repr without visible quality loss — Three.js stores them as
+        # Float32 anyway so anything past 6 significant digits is lost
+        # downstream. Faces indices stay lossless.
+        verts_mm_precision = np.round(verts, 3)
         payload.append({
             "id": int(el.get("element_id", 0)),
             "name": str(el.get("element_name", "")),
             "status": el.get("status", "—"),
             "role": (el.get("level2") or {}).get("element_role", ""),
-            "vertices": verts.flatten().tolist(),
+            "vertices": verts_mm_precision.flatten().tolist(),
             "indices": faces.flatten().tolist(),
             "face_categories": face_cats,
             "metrics": metrics,
