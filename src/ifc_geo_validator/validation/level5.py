@@ -350,9 +350,19 @@ def _compute_overhang(upper, lower):
 
 
 def _min_bbox_distance_xy(a, b):
-    """Minimum XY distance between two bounding boxes."""
-    gap_x = max(0, max(a["bbox_min"][0], b["bbox_min"][0]) -
-                    min(a["bbox_max"][0], b["bbox_max"][0]))
-    gap_y = max(0, max(a["bbox_min"][1], b["bbox_min"][1]) -
-                    min(a["bbox_max"][1], b["bbox_max"][1]))
-    return float(max(gap_x, 0) + max(gap_y, 0))
+    """Minimum Euclidean XY distance between two axis-aligned bounding boxes.
+
+    For overlapping projections the gap is zero on that axis; otherwise it
+    is the signed separation along that axis (positive). The Euclidean
+    combination √(dx² + dy²) is the correct 2D free-space distance between
+    the closest points of two AABBs (Arvo & Kirk, "A Survey of Ray Tracing
+    Acceleration Techniques", 1989). Manhattan summation would overstate
+    the gap by up to √2 on diagonal pairs and affect proximity-based rule
+    outcomes.
+    """
+    import math
+    gap_x = max(0.0, max(a["bbox_min"][0], b["bbox_min"][0]) -
+                     min(a["bbox_max"][0], b["bbox_max"][0]))
+    gap_y = max(0.0, max(a["bbox_min"][1], b["bbox_min"][1]) -
+                     min(a["bbox_max"][1], b["bbox_max"][1]))
+    return float(math.hypot(gap_x, gap_y))
