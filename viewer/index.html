@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IFC Geo Validator</title>
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   IFC-Editor Design System (adapted for Geo Validator)
+   ═══════════════════════════════════════════════════════════════ */
+:root {
+  /* Backgrounds */
+  --bg-primary: #1a1a1a;
+  --bg-secondary: #222222;
+  --bg-tertiary: #2a2a2a;
+  /* Text */
+  --text-primary: #e0e0e0;
+  --text-secondary: #909090;
+  /* Accent (blue for Geo Validator, red was B+S corporate) */
+  --accent: #0098ff;
+  --accent-hover: #33adff;
+  --accent-light: rgba(0, 152, 255, 0.15);
+  /* Borders & Semantic */
+  --border: #404040;
+  --success: #4ec9b0;
+  --warning: #dcdcaa;
+  --error: #f14c4c;
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  /* Radius */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  /* Typography */
+  --font-xs: 10px;
+  --font-sm: 11px;
+  --font-base: 13px;
+  --font-lg: 14px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: var(--font-base); background: var(--bg-primary); color: var(--text-primary); }
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-primary); }
+::-webkit-scrollbar-thumb { background: #4a4a4a; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #5a5a5a; }
+
+/* ═══════════════════════════════════════════════════════════════
+   APP LAYOUT
+   ═══════════════════════════════════════════════════════════════ */
+#app { display: flex; flex-direction: column; width: 100%; height: 100%; }
+
+/* ── TOOLBAR ────────────────────────────────────────────────── */
+#toolbar {
+  display: flex; align-items: center; gap: 4px;
+  padding: 6px 12px; min-height: 52px; flex-shrink: 0;
+  background: linear-gradient(180deg, var(--bg-tertiary), var(--bg-secondary));
+  border-bottom: 1px solid var(--border);
+}
+.toolbar-group {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  background: var(--bg-secondary); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 4px 4px 2px;
+}
+.toolbar-group-label {
+  font-size: 9px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--text-secondary); line-height: 1;
+}
+.toolbar-group-btns { display: flex; gap: 2px; }
+.toolbar-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 4px 8px; min-width: 40px; border: 1px solid transparent;
+  border-radius: var(--radius-md); background: transparent;
+  color: var(--text-primary); cursor: pointer;
+  font: 500 var(--font-xs)/1.2 inherit; transition: all 0.15s;
+}
+.toolbar-btn:hover { background: var(--bg-tertiary); border-color: var(--border); }
+.toolbar-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.toolbar-btn:disabled { opacity: 0.4; cursor: default; }
+.toolbar-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.5; }
+.toolbar-sep { width: 1px; height: 32px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
+.toolbar-spacer { flex: 1; }
+
+/* Toolbar select */
+.toolbar-select {
+  background: var(--bg-primary); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: 4px 8px; font: inherit; font-size: var(--font-sm); cursor: pointer;
+}
+.toolbar-select:focus { border-color: var(--accent); outline: none; }
+
+/* ── MAIN CONTAINER ─────────────────────────────────────────── */
+#main-container { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+
+/* Top row: element-list | viewport | properties */
+#top-row { display: flex; flex: 3; min-height: 0; }
+
+/* Bottom row: summary table */
+#bottom-row { flex: 1; min-height: 120px; max-height: 40%; border-top: 1px solid var(--border); overflow: hidden; }
+
+/* Splitters */
+.splitter-h {
+  width: 4px; cursor: col-resize; background: var(--border);
+  flex-shrink: 0; transition: background 0.15s;
+}
+.splitter-h:hover, .splitter-h.dragging { background: var(--accent); }
+.splitter-v {
+  height: 4px; cursor: row-resize; background: var(--border);
+  flex-shrink: 0; transition: background 0.15s;
+}
+.splitter-v:hover, .splitter-v.dragging { background: var(--accent); }
+
+/* ── PANELS ─────────────────────────────────────────────────── */
+.panel { display: flex; flex-direction: column; overflow: hidden; background: var(--bg-secondary); }
+.panel-header {
+  display: flex; align-items: center; padding: 6px 12px;
+  border-bottom: 1px solid var(--border); background: var(--bg-tertiary);
+  font-size: 12px; font-weight: 600; flex-shrink: 0; gap: 8px;
+}
+.panel-header-title { color: var(--accent); }
+.panel-header-count { color: var(--text-secondary); font-weight: 400; font-size: var(--font-sm); }
+.panel-body { flex: 1; overflow-y: auto; min-height: 0; }
+
+/* ── LEFT PANEL: Element List ───────────────────────────────── */
+#element-list-panel { width: 220px; min-width: 150px; }
+.elem-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px; cursor: pointer; border-left: 3px solid transparent;
+  transition: all 0.15s; font-size: 12px;
+}
+.elem-item:hover { background: var(--bg-tertiary); }
+.elem-item.selected { background: #505050; color: #fff; }
+.elem-item.pass { border-left-color: var(--success); }
+.elem-item.fail { border-left-color: var(--error); }
+.elem-item.warn { border-left-color: #f0ad4e; }
+.elem-item.none { border-left-color: var(--text-secondary); }
+.elem-status {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.elem-status.pass { background: var(--success); }
+.elem-status.fail { background: var(--error); }
+.elem-status.warn { background: #f0ad4e; }
+.elem-status.none { background: var(--text-secondary); }
+.elem-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.elem-id { font-size: var(--font-xs); color: var(--text-secondary); font-family: monospace; }
+
+/* ── CENTER: 3D Viewport ────────────────────────────────────── */
+#viewport-panel { flex: 1; min-width: 200px; position: relative; overflow: hidden; background: linear-gradient(135deg, #2a2a2a, #1a1a1a); }
+#viewport-panel canvas { display: block; width: 100%; height: 100%; }
+
+/* Drop zone overlay */
+#drop-zone {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; background: var(--bg-primary); z-index: 2;
+}
+#drop-zone.hidden { display: none; }
+#drop-zone h1 { color: var(--accent); font-size: 18px; font-weight: 600; }
+#drop-zone p { color: var(--text-secondary); margin: 4px 0; font-size: var(--font-sm); }
+.drop-btn {
+  padding: 6px 14px; border: 1px solid var(--accent); background: transparent;
+  color: var(--accent); border-radius: var(--radius-md); cursor: pointer;
+  font: inherit; margin: 4px; transition: 0.15s;
+}
+.drop-btn:hover, .drop-btn.primary { background: var(--accent); color: #fff; }
+#loading-indicator { display: none; margin-top: 12px; text-align: center; }
+.spinner {
+  width: 20px; height: 20px; border: 2px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin 0.7s linear infinite; margin: 0 auto 4px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Viewport stat overlay */
+#viewport-stat {
+  position: absolute; bottom: 4px; left: 4px; z-index: 1;
+  background: rgba(26,26,26,0.9); padding: 2px 8px; border-radius: 3px;
+  font-size: var(--font-xs); color: var(--text-secondary);
+}
+
+/* ── RIGHT PANEL: Properties / Validation ───────────────────── */
+#properties-panel { width: 320px; min-width: 200px; }
+
+/* Detail view (shown on element select) */
+#detail-view { display: none; border-bottom: 1px solid var(--border); background: #1e2a35; padding: 10px 12px; max-height: 45%; overflow-y: auto; flex-shrink: 0; }
+
+/* Metrics grid */
+.metrics-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2px; margin-bottom: 4px; }
+.metric-item { background: var(--bg-primary); padding: 3px 6px; border-radius: var(--radius-sm); }
+.metric-label { font-size: 9px; color: var(--text-secondary); }
+.metric-value { font-size: 12px; font-weight: 600; color: #fff; }
+.metric-item.ok .metric-value { color: var(--success); }
+.metric-item.bad .metric-value { color: var(--error); }
+.metric-item.accent .metric-value { color: var(--accent); }
+
+/* Face group items */
+.face-group {
+  padding: 5px 7px; margin: 2px 0; border-radius: var(--radius-sm);
+  cursor: pointer; border-left: 3px solid #555; transition: 0.1s;
+}
+.face-group:hover { background: var(--bg-tertiary); }
+.face-group.selected { background: #333; }
+.face-group .fg-name { font-weight: 600; font-size: var(--font-sm); }
+.face-group .fg-detail { font-size: var(--font-xs); color: var(--text-secondary); }
+.face-group .fg-why { font-size: 9px; color: #5dade2; margin-top: 1px; }
+
+/* Rule items */
+.rule-item {
+  padding: 4px 6px; margin: 2px 0; border-radius: var(--radius-sm);
+  cursor: pointer; transition: 0.1s; border-left: 3px solid #555;
+}
+.rule-item:hover { background: var(--bg-tertiary); }
+.rule-item.pass { border-left-color: var(--success); }
+.rule-item.fail-error { border-left-color: var(--error); }
+.rule-item.fail-warn { border-left-color: #f0ad4e; }
+.rule-item.skip { border-left-color: #555; }
+
+/* L5 pair items */
+.l5-pair {
+  padding: 5px 7px; margin: 2px 0; border-radius: var(--radius-sm);
+  cursor: pointer; border-left: 3px solid #ff69b4; transition: 0.1s;
+  background: var(--bg-primary);
+}
+.l5-pair:hover { background: var(--bg-tertiary); }
+.l5-pair.selected { background: #332233; }
+
+/* Section headers */
+.section { border-bottom: 1px solid var(--border); }
+.section-header {
+  padding: 6px 12px; font-size: var(--font-xs); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--text-secondary); background: var(--bg-tertiary);
+}
+.section-body { padding: 6px 12px 8px; }
+
+/* Verdict box */
+.verdict {
+  margin: 6px 0; padding: 6px 8px; border-radius: 3px; border-left: 3px solid;
+}
+.verdict.pass { border-left-color: var(--success); background: rgba(78, 201, 176, 0.06); }
+.verdict.fail { border-left-color: var(--error); background: rgba(241, 76, 76, 0.08); }
+.verdict.warn { border-left-color: #f0ad4e; background: rgba(240, 173, 78, 0.08); }
+
+/* ── BOTTOM PANEL: Summary Table ────────────────────────────── */
+#summary-panel { display: flex; flex-direction: column; height: 100%; }
+#summary-table-wrap { flex: 1; overflow: auto; }
+#summary-table {
+  width: 100%; border-collapse: collapse; font-size: 12px;
+}
+#summary-table thead { position: sticky; top: 0; z-index: 1; }
+#summary-table th {
+  padding: 6px 10px; text-align: left; font-weight: 600; font-size: var(--font-sm);
+  background: var(--bg-tertiary); border-bottom: 1px solid var(--border);
+  color: var(--text-secondary); white-space: nowrap; cursor: pointer;
+  user-select: none;
+}
+#summary-table th:hover { color: var(--accent); }
+#summary-table td {
+  padding: 4px 10px; border-bottom: 1px solid var(--border);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#summary-table tr { cursor: pointer; transition: background 0.1s; }
+#summary-table tbody tr:hover { background: var(--bg-tertiary); }
+#summary-table tbody tr.selected { background: #505050; }
+.status-badge {
+  display: inline-block; padding: 1px 6px; border-radius: 2px;
+  font-size: 9px; font-weight: 600; color: #fff;
+}
+.status-badge.pass { background: var(--success); }
+.status-badge.fail { background: var(--error); }
+.status-badge.warn { background: #f0ad4e; }
+.status-badge.none { background: #555; }
+
+/* ── STATUS BAR ─────────────────────────────────────────────── */
+#status-bar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 4px 12px; font-size: 12px; flex-shrink: 0;
+  background: var(--accent); color: #fff;
+}
+#status-bar .status-text { flex: 1; }
+#status-bar .status-item { opacity: 0.85; font-size: var(--font-sm); }
+
+/* ── HELP MODAL ─────────────────────────────────────────────── */
+#help-modal {
+  display: none; position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,0.6); justify-content: center; align-items: center;
+}
+#help-modal.visible { display: flex; }
+#help-modal .modal-content {
+  background: var(--bg-secondary); border: 1px solid var(--border);
+  border-radius: 8px; max-width: 520px; width: 90%;
+  max-height: 80vh; overflow-y: auto; padding: 24px;
+}
+
+/* CSS2D labels */
+.label-2d { color: #fff; font-size: var(--font-xs); font-family: inherit; background: rgba(0,0,0,.7); padding: 1px 5px; border-radius: 2px; pointer-events: none; white-space: nowrap; }
+.label-2d.dim { border: 1px solid rgba(255,255,255,.3); }
+.label-2d.pair { color: #ffd700; border: 1px solid rgba(255,215,0,.4); font-size: var(--font-sm); font-weight: 600; }
+
+/* Hidden file input */
+input[type=file] { display: none; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ═══ TOOLBAR ═══ -->
+  <div id="toolbar">
+    <div style="font-weight:700;color:var(--accent);font-size:14px;margin-right:4px">IFC Geo Validator</div>
+    <div class="toolbar-sep"></div>
+
+    <!-- File -->
+    <div class="toolbar-group">
+      <div class="toolbar-group-btns">
+        <button class="toolbar-btn" id="btn-open" title="IFC-Datei öffnen">
+          <svg viewBox="0 0 24 24"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+          <span>Öffnen</span>
+        </button>
+      </div>
+      <div class="toolbar-group-label">Datei</div>
+    </div>
+    <div class="toolbar-sep"></div>
+
+    <!-- View -->
+    <div class="toolbar-group">
+      <div class="toolbar-group-btns">
+        <button class="toolbar-btn" id="btn-fit" title="Alles einpassen">
+          <svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+          <span>Fit</span>
+        </button>
+        <button class="toolbar-btn" id="btn-edges" title="Kanten ein/aus">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 12h18M12 3v18"/></svg>
+          <span>Kanten</span>
+        </button>
+        <button class="toolbar-btn" id="btn-explode" title="Elemente auseinander">
+          <svg viewBox="0 0 24 24"><path d="M16 4l4 4-4 4M8 20l-4-4 4-4M12 2v20"/></svg>
+          <span>Explode</span>
+        </button>
+      </div>
+      <div class="toolbar-group-label">Ansicht</div>
+    </div>
+    <div class="toolbar-sep"></div>
+
+    <!-- Heatmap -->
+    <div class="toolbar-group">
+      <div class="toolbar-group-btns">
+        <button class="toolbar-btn active" id="btn-hm-off" title="Flächenklassifikation">
+          <svg viewBox="0 0 24 24"><path d="M12 3l9 4.5v9L12 21l-9-4.5v-9L12 3z"/></svg>
+          <span>Klasse</span>
+        </button>
+        <button class="toolbar-btn" id="btn-hm-cross" title="Quergefälle-Heatmap">
+          <svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/></svg>
+          <span>Quer</span>
+        </button>
+        <button class="toolbar-btn" id="btn-hm-long" title="Längsgefälle-Heatmap">
+          <svg viewBox="0 0 24 24"><path d="M3 12h18M17 8l4 4-4 4"/></svg>
+          <span>Längs</span>
+        </button>
+        <button class="toolbar-btn" id="btn-hm-total" title="Gesamtgefälle-Heatmap">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg>
+          <span>Gesamt</span>
+        </button>
+      </div>
+      <div class="toolbar-group-label">Heatmap</div>
+    </div>
+    <div class="toolbar-sep"></div>
+
+    <!-- Export -->
+    <div class="toolbar-group">
+      <div class="toolbar-group-btns">
+        <button class="toolbar-btn" id="btn-export-json" title="JSON-Report exportieren">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <span>JSON</span>
+        </button>
+        <button class="toolbar-btn" id="btn-screenshot" title="Screenshot speichern">
+          <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          <span>Bild</span>
+        </button>
+      </div>
+      <div class="toolbar-group-label">Export</div>
+    </div>
+    <div class="toolbar-sep"></div>
+
+    <!-- Ruleset -->
+    <div class="toolbar-group">
+      <div class="toolbar-group-btns">
+        <select class="toolbar-select" id="ruleset-select" title="Regelset auswählen">
+          <option value="astra_fhb_stuetzmauer">ASTRA FHB Stützmauer</option>
+        </select>
+      </div>
+      <div class="toolbar-group-label">Regelset</div>
+    </div>
+
+    <div class="toolbar-spacer"></div>
+
+    <!-- Info -->
+    <button class="toolbar-btn" id="btn-help" title="Info / Hilfe">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01"/></svg>
+      <span>Info</span>
+    </button>
+  </div>
+
+  <!-- ═══ MAIN CONTAINER ═══ -->
+  <div id="main-container">
+    <!-- TOP ROW: Element List | Viewport | Properties -->
+    <div id="top-row">
+
+      <!-- LEFT: Element List -->
+      <div class="panel" id="element-list-panel">
+        <div class="panel-header">
+          <span class="panel-header-title">Elemente</span>
+          <span class="panel-header-count" id="element-count"></span>
+        </div>
+        <div class="panel-body" id="element-list">
+          <div style="padding:12px;color:var(--text-secondary);font-size:var(--font-sm)">
+            IFC-Datei laden...
+          </div>
+        </div>
+      </div>
+
+      <!-- Splitter -->
+      <div class="splitter-h" id="splitter-left"></div>
+
+      <!-- CENTER: 3D Viewport -->
+      <div id="viewport-panel">
+        <div id="drop-zone">
+          <h1>IFC Geo Validator</h1>
+          <p>IFC-Datei hierher ziehen oder Datei öffnen</p>
+          <div style="margin-top:8px;display:flex;gap:4px">
+            <input type="file" id="file-input" accept=".ifc">
+            <button class="drop-btn primary" id="btn-open-drop">Datei öffnen</button>
+          </div>
+          <div style="margin-top:6px">
+            <select class="toolbar-select" id="ruleset-select-drop" style="font-size:12px">
+              <option value="astra_fhb_stuetzmauer">ASTRA FHB Stützmauer</option>
+            </select>
+          </div>
+          <div id="loading-indicator">
+            <div class="spinner"></div>
+            <div id="loading-msg" style="font-size:var(--font-xs);color:var(--text-secondary)"></div>
+          </div>
+        </div>
+        <div id="viewport-stat"></div>
+      </div>
+
+      <!-- Splitter -->
+      <div class="splitter-h" id="splitter-right"></div>
+
+      <!-- RIGHT: Properties / Validation -->
+      <div class="panel" id="properties-panel">
+        <div class="panel-header">
+          <span class="panel-header-title">Validierung</span>
+        </div>
+        <div id="detail-view"></div>
+        <div class="panel-body" id="properties-body">
+          <div style="padding:12px;color:var(--text-secondary);font-size:var(--font-sm)">
+            IFC-Datei laden.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Splitter -->
+    <div class="splitter-v" id="splitter-bottom"></div>
+
+    <!-- BOTTOM: Summary Table -->
+    <div id="bottom-row">
+      <div id="summary-panel">
+        <div class="panel-header">
+          <span class="panel-header-title">Übersicht</span>
+          <span class="panel-header-count" id="summary-count"></span>
+        </div>
+        <div id="summary-table-wrap">
+          <table id="summary-table">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Name</th>
+                <th>ID</th>
+                <th>Volumen</th>
+                <th>Fläche</th>
+                <th>Krone</th>
+                <th>Dicke</th>
+                <th>Höhe</th>
+                <th>Neigung</th>
+                <th>Anzug</th>
+                <th>Regeln</th>
+              </tr>
+            </thead>
+            <tbody id="summary-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ STATUS BAR ═══ -->
+  <div id="status-bar">
+    <span class="status-text" id="status-text">Bereit</span>
+    <span class="status-item" id="status-elements"></span>
+    <span class="status-item" id="status-ruleset"></span>
+  </div>
+</div>
+
+<!-- ═══ HELP MODAL ═══ -->
+<div id="help-modal">
+  <div class="modal-content">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="color:var(--accent);font-size:16px;margin:0">IFC Geo Validator</h2>
+      <button id="help-close" style="background:none;border:none;color:var(--text-secondary);font-size:18px;cursor:pointer">&times;</button>
+    </div>
+    <p style="margin-bottom:12px">Geometrische Validierung von IFC-Infrastrukturmodellen gegen konfigurierbare YAML-Regelsets (ASTRA FHB T/G).</p>
+    <h3 style="font-size:13px;margin:12px 0 6px">Farblegende</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:2px;background:#2196F3;display:inline-block"></span>Krone</div>
+      <div style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:2px;background:#795548;display:inline-block"></span>Fundament</div>
+      <div style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:2px;background:#F44336;display:inline-block"></span>Ansichtsfläche</div>
+      <div style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:2px;background:#FF9800;display:inline-block"></span>Rückseite</div>
+      <div style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:2px;background:#4CAF50;display:inline-block"></span>Stirnfläche L</div>
+      <div style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:2px;background:#8BC34A;display:inline-block"></span>Stirnfläche R</div>
+    </div>
+    <h3 style="font-size:13px;margin:12px 0 6px">Validierungslevel</h3>
+    <table style="width:100%;font-size:var(--font-sm);border-collapse:collapse">
+      <tr><td style="padding:2px 6px;color:var(--accent);font-weight:600">L1</td><td>Geometrische Kennwerte (Volumen, Fläche, BBox)</td></tr>
+      <tr><td style="padding:2px 6px;color:var(--accent);font-weight:600">L2</td><td>Semantische Flächenklassifikation</td></tr>
+      <tr><td style="padding:2px 6px;color:var(--accent);font-weight:600">L3</td><td>Flächenspezifische Masse (Kronenbreite, Neigung)</td></tr>
+      <tr><td style="padding:2px 6px;color:var(--accent);font-weight:600">L4</td><td>Regelprüfung gegen YAML-Regelset</td></tr>
+      <tr><td style="padding:2px 6px;color:var(--accent);font-weight:600">L5</td><td>Inter-Element-Beziehungen</td></tr>
+      <tr><td style="padding:2px 6px;color:var(--accent);font-weight:600">L6</td><td>Terrain-Kontext</td></tr>
+    </table>
+    <p style="color:var(--text-secondary);font-size:var(--font-xs);margin-top:16px;border-top:1px solid var(--border);padding-top:8px">
+      BSc Thesis BFH — Geometrische Validierung von IFC-Infrastrukturmodellen
+    </p>
+  </div>
+</div>
+
+<!-- ═══ THREE.JS ═══ -->
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+// ═══════════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════════
+const CC = {crown:[33,150,243],foundation:[121,85,72],front:[244,67,54],back:[255,152,0],end_left:[76,175,80],end_right:[139,195,74],unclassified:[158,158,158]};
+const CL = {crown:'Krone',foundation:'Fundament',front:'Ansichtsfläche',back:'Rückseite',end_left:'Stirnfl. L',end_right:'Stirnfl. R',unclassified:'Unklassifiziert'};
+
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+let data = null;
+let selectedElemIdx = -1;
+let selectedMesh = null;
+let edgesVisible = false;
+let exploded = false;
+let needsRender = true;
+const allMeshes = [];
+const elemGroups = [];
+
+let centerlineObj = null;
+let measureObjs = [];
+let l5PairObjs = [];
+let l5SelectedPairIdx = -1;
+
+// ═══════════════════════════════════════════════════════════════
+// THREE.JS SETUP (IFC-Editor settings)
+// ═══════════════════════════════════════════════════════════════
+const container = document.getElementById('viewport-panel');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1a1a);
+
+const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100000);
+camera.up.set(0, 0, 1);
+camera.position.set(50, -50, 30);
+
+const renderer = new THREE.WebGLRenderer({
+  antialias: true, alpha: true, stencil: true,
+  powerPreference: 'high-performance',
+  logarithmicDepthBuffer: true,
+  preserveDrawingBuffer: true,
+});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.domElement.style.width = '100%';
+renderer.domElement.style.height = '100%';
+renderer.domElement.style.display = 'block';
+container.appendChild(renderer.domElement);
+
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(container.clientWidth, container.clientHeight);
+labelRenderer.domElement.style.position = 'absolute';
+labelRenderer.domElement.style.top = '0';
+labelRenderer.domElement.style.left = '0';
+labelRenderer.domElement.style.pointerEvents = 'none';
+container.appendChild(labelRenderer.domElement);
+
+// Lighting (IFC-Editor 4-light setup)
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+[[50,100,50,0.8],[-50,50,-50,0.4],[0,-100,0,0.3]].forEach(([x,y,z,i]) => {
+  const l = new THREE.DirectionalLight(0xffffff, i);
+  l.position.set(x, y, z);
+  scene.add(l);
+});
+
+// OrbitControls (IFC-Editor settings)
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.15;
+controls.zoomSpeed = 1.5;
+controls.rotateSpeed = 1.0;
+controls.panSpeed = 1.0;
+controls.zoomToCursor = true;
+controls.minDistance = 0.001;
+controls.addEventListener('change', () => { needsRender = true; });
+
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+// Resize
+function onResize() {
+  const w = container.clientWidth, h = container.clientHeight;
+  if (w === 0 || h === 0) return;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+  labelRenderer.setSize(w, h);
+  needsRender = true;
+}
+onResize();
+new ResizeObserver(onResize).observe(container);
+
+// Render loop (demand-based)
+(function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  if (needsRender) {
+    const dist = camera.position.distanceTo(controls.target);
+    camera.near = Math.max(0.0001, dist * 0.0005);
+    camera.updateProjectionMatrix();
+    renderer.render(scene, camera);
+    labelRenderer.render(scene, camera);
+    needsRender = false;
+  }
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// SPLITTER SYSTEM
+// ═══════════════════════════════════════════════════════════════
+function initSplitter(splitterId, direction, prevId, nextId) {
+  const splitter = document.getElementById(splitterId);
+  const prev = document.getElementById(prevId);
+  const next = nextId ? document.getElementById(nextId) : null;
+  let startPos, startPrevSize, startNextSize;
+
+  splitter.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    splitter.classList.add('dragging');
+    if (direction === 'h') {
+      startPos = e.clientX;
+      startPrevSize = prev.offsetWidth;
+      if (next) startNextSize = next.offsetWidth;
+    } else {
+      startPos = e.clientY;
+      startPrevSize = prev.offsetHeight;
+      if (next) startNextSize = next.offsetHeight;
+    }
+
+    function onMove(e) {
+      const delta = direction === 'h' ? e.clientX - startPos : e.clientY - startPos;
+      const newPrev = Math.max(direction === 'h' ? 150 : 80, startPrevSize + delta);
+      prev.style[direction === 'h' ? 'width' : 'height'] = newPrev + 'px';
+      prev.style.flex = 'none';
+      if (next) {
+        const newNext = Math.max(direction === 'h' ? 150 : 80, startNextSize - delta);
+        next.style[direction === 'h' ? 'width' : 'height'] = newNext + 'px';
+        next.style.flex = 'none';
+      }
+      onResize();
+      needsRender = true;
+    }
+
+    function onUp() {
+      splitter.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+initSplitter('splitter-left', 'h', 'element-list-panel', null);
+initSplitter('splitter-right', 'h', 'viewport-panel', 'properties-panel');
+initSplitter('splitter-bottom', 'v', 'top-row', 'bottom-row');
+
+// ═══════════════════════════════════════════════════════════════
+// OVERLAY HELPERS
+// ═══════════════════════════════════════════════════════════════
+function makeLabel(text, cssClass = 'label-2d') {
+  const div = document.createElement('div');
+  div.className = cssClass;
+  div.textContent = text;
+  return new CSS2DObject(div);
+}
+
+function clearCenterline() {
+  if (centerlineObj) { scene.remove(centerlineObj); centerlineObj = null; }
+}
+function clearMeasurements() {
+  measureObjs.forEach(o => scene.remove(o)); measureObjs = [];
+}
+function clearL5Pair() {
+  l5PairObjs.forEach(o => {
+    if (o.userData?._l5Meshes) {
+      o.userData._l5Meshes.forEach(m => {
+        if (m.userData._cloned) { m.material.emissive.setHex(0x000000); m.material.emissiveIntensity = 0; m.material.needsUpdate = true; }
+      });
+    }
+    scene.remove(o);
+  });
+  l5PairObjs = [];
+  l5SelectedPairIdx = -1;
+  document.querySelectorAll('.l5-pair').forEach(e => e.classList.remove('selected'));
+  needsRender = true;
+}
+
+function showCenterline(ei) {
+  clearCenterline();
+  if (!data) return;
+  const elem = data.elements[ei];
+  if (!elem.centerline?.points || elem.centerline.points.length < 2) return;
+  const group = elemGroups[ei];
+  if (!group) return;
+  const box = new THREE.Box3().setFromObject(group);
+  const crownZ = box.max.z + 0.05;
+  const pts = elem.centerline.points.map(p => new THREE.Vector3(p[0], p[1], crownZ));
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  centerlineObj = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 2 }));
+  centerlineObj.userData._overlay = true;
+  scene.add(centerlineObj);
+  needsRender = true;
+}
+
+function showMeasurements(ei) {
+  clearMeasurements();
+  if (!data) return;
+  const elem = data.elements[ei];
+  const m = elem.metrics;
+  const group = elemGroups[ei];
+  if (!m || !group) return;
+
+  const box = new THREE.Box3().setFromObject(group);
+  const center = new THREE.Vector3(); box.getCenter(center);
+  const off = 0.15;
+
+  // Crown width
+  if (m.crown_width_mm > 0) {
+    const sx = box.max.x-box.min.x, sy = box.max.y-box.min.y;
+    const z = box.max.z + off;
+    let p1, p2;
+    if (sx < sy) { p1 = new THREE.Vector3(box.min.x,center.y,z); p2 = new THREE.Vector3(box.max.x,center.y,z); }
+    else { p1 = new THREE.Vector3(center.x,box.min.y,z); p2 = new THREE.Vector3(center.x,box.max.y,z); }
+    addDimLine(p1, p2, `${m.crown_width_mm} mm`, 0xffcc00, box);
+  }
+  // Wall height
+  if (m.wall_height_m > 0) {
+    const sx = box.max.x-box.min.x, sy = box.max.y-box.min.y;
+    let px, py;
+    if (sx < sy) { px = box.max.x + off; py = center.y; }
+    else { px = center.x; py = box.min.y - off; }
+    const p1 = new THREE.Vector3(px, py, box.min.z);
+    const p2 = new THREE.Vector3(px, py, box.max.z);
+    addDimLine(p1, p2, `${m.wall_height_m} m`, 0x00ff88, box);
+  }
+  needsRender = true;
+}
+
+function addDimLine(p1, p2, label, color, box) {
+  const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+  const line = new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color }));
+  line.userData._overlay = true;
+  scene.add(line);
+  measureObjs.push(line);
+
+  const mid = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
+  const lbl = makeLabel(label, 'label-2d dim');
+  lbl.position.copy(mid);
+  lbl.userData._overlay = true;
+  scene.add(lbl);
+  measureObjs.push(lbl);
+}
+
+function showL5Pair(pairIdx) {
+  clearL5Pair();
+  if (!data?.l5_pairs || pairIdx < 0 || pairIdx >= data.l5_pairs.length) return;
+  l5SelectedPairIdx = pairIdx;
+  const pair = data.l5_pairs[pairIdx];
+  const eiA = data.elements.findIndex(e => e.id === pair.element_a_id);
+  const eiB = data.elements.findIndex(e => e.id === pair.element_b_id);
+  if (eiA < 0 || eiB < 0) return;
+
+  const pairMeshes = [];
+  allMeshes.forEach(m => {
+    if (m.userData.ei === eiA || m.userData.ei === eiB) {
+      if (!m.userData._cloned) { m.material = m.material.clone(); m.userData._cloned = true; }
+      m.material.emissive.setHex(0xff69b4);
+      m.material.emissiveIntensity = 0.35;
+      m.material.needsUpdate = true;
+      pairMeshes.push(m);
+    }
+  });
+
+  const boxA = new THREE.Box3().setFromObject(elemGroups[eiA]);
+  const boxB = new THREE.Box3().setFromObject(elemGroups[eiB]);
+  const cA = new THREE.Vector3(), cB = new THREE.Vector3();
+  boxA.getCenter(cA); boxB.getCenter(cB);
+
+  const lineGeo = new THREE.BufferGeometry().setFromPoints([cA, cB]);
+  const lineMat = new THREE.LineDashedMaterial({ color: 0xff69b4, dashSize: 0.3, gapSize: 0.15 });
+  const line = new THREE.Line(lineGeo, lineMat);
+  line.computeLineDistances();
+  line.userData._overlay = true;
+  line.userData._l5Meshes = pairMeshes;
+  scene.add(line); l5PairObjs.push(line);
+
+  const mid = new THREE.Vector3().lerpVectors(cA, cB, 0.5); mid.z += 0.2;
+  const typeLabel = pair.pair_type === 'stacked' ? 'gestapelt' : 'nebeneinander';
+  const gapInfo = pair.pair_type === 'stacked' ? `${pair.vertical_gap_mm||0} mm` : `${pair.horizontal_gap_mm||0} mm`;
+  const lbl = makeLabel(`${typeLabel} (${gapInfo})`, 'label-2d pair');
+  lbl.position.copy(mid); lbl.userData._overlay = true;
+  scene.add(lbl); l5PairObjs.push(lbl);
+
+  document.querySelectorAll('.l5-pair').forEach((e, i) => e.classList.toggle('selected', i === pairIdx));
+  needsRender = true;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SELECTION
+// ═══════════════════════════════════════════════════════════════
+renderer.domElement.addEventListener('click', (event) => {
+  if (!data) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  requestAnimationFrame(() => {
+    raycaster.setFromCamera(mouse, camera);
+    const hits = raycaster.intersectObjects(allMeshes, false);
+    const hit = hits.find(h => h.object.userData.gi !== undefined);
+    if (hit) selectElement(hit.object.userData.ei, hit.object);
+    else deselectAll();
+  });
+});
+
+function selectElement(ei, mesh) {
+  deselectAll();
+  selectedElemIdx = ei;
+  if (mesh) {
+    if (!mesh.userData._cloned) { mesh.material = mesh.material.clone(); mesh.userData._cloned = true; }
+    mesh.material.emissive.setHex(0xff69b4);
+    mesh.material.emissiveIntensity = 0.5;
+    mesh.material.needsUpdate = true;
+    selectedMesh = mesh;
+  }
+  needsRender = true;
+
+  // Highlight in element list
+  document.querySelectorAll('.elem-item').forEach((el, i) => el.classList.toggle('selected', i === ei));
+  // Highlight in summary table
+  document.querySelectorAll('#summary-tbody tr').forEach((el, i) => el.classList.toggle('selected', i === ei));
+  // Highlight face groups
+  document.querySelectorAll('.face-group').forEach(e => e.classList.remove('selected'));
+  if (mesh) {
+    const fg = document.getElementById(`fg-${ei}-${mesh.userData.gi}`);
+    if (fg) { fg.classList.add('selected'); fg.scrollIntoView({behavior:'smooth', block:'nearest'}); }
+  }
+
+  showCenterline(ei);
+  showMeasurements(ei);
+  if (mesh) showDetail(ei, mesh.userData.gi);
+  scrollPropertiesToElement(ei);
+}
+
+function deselectAll() {
+  if (selectedMesh) {
+    selectedMesh.material.emissive.setHex(0x000000);
+    selectedMesh.material.emissiveIntensity = 0;
+    selectedMesh.material.needsUpdate = true;
+  }
+  selectedMesh = null;
+  selectedElemIdx = -1;
+  document.querySelectorAll('.elem-item').forEach(e => e.classList.remove('selected'));
+  document.querySelectorAll('#summary-tbody tr').forEach(e => e.classList.remove('selected'));
+  document.querySelectorAll('.face-group').forEach(e => e.classList.remove('selected'));
+  document.getElementById('detail-view').style.display = 'none';
+  clearCenterline();
+  clearMeasurements();
+  clearL5Pair();
+  needsRender = true;
+}
+
+function scrollPropertiesToElement(ei) {
+  const section = document.getElementById(`elem-section-${ei}`);
+  if (section) section.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function showDetail(ei, gi) {
+  const elem = data.elements[ei];
+  const grp = elem.groups[gi];
+  const n = grp.normal;
+  const cat = grp.category;
+  const rgb = CC[cat] || [158,158,158];
+  const dotZ = Math.abs(n[2]);
+  const cos45 = Math.SQRT2 / 2;
+
+  let h = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">`;
+  h += `<div style="width:14px;height:14px;border-radius:2px;background:rgb(${rgb});flex-shrink:0"></div>`;
+  h += `<div style="font-weight:700;font-size:13px;color:#fff">${CL[cat] || cat}</div></div>`;
+  h += `<div style="font-size:var(--font-sm);line-height:1.6;color:#c0d0e0">`;
+  h += `<div style="margin-bottom:4px"><span style="color:var(--text-secondary)">Normale:</span> <code style="color:#7ec8e3">(${n[0].toFixed(3)}, ${n[1].toFixed(3)}, ${n[2].toFixed(3)})</code></div>`;
+  h += `<div style="margin-bottom:4px"><span style="color:var(--text-secondary)">|n·Z|:</span> ${dotZ.toFixed(4)} ${dotZ > cos45 ? '> 0.707 (horizontal)' : '≤ 0.707 (vertikal)'}</div>`;
+  h += `<table style="width:100%;font-size:var(--font-xs);border-collapse:collapse;margin-top:4px">`;
+  h += `<tr style="border-top:1px solid #334"><td style="padding:2px 4px;color:var(--text-secondary)">Fläche</td><td style="text-align:right">${grp.area} m²</td></tr>`;
+  h += `<tr style="border-top:1px solid #334"><td style="padding:2px 4px;color:var(--text-secondary)">Dreiecke</td><td style="text-align:right">${grp.triangles}</td></tr>`;
+  h += `</table></div>`;
+
+  const dv = document.getElementById('detail-view');
+  dv.innerHTML = h;
+  dv.style.display = 'block';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LOAD MODEL
+// ═══════════════════════════════════════════════════════════════
+function loadModel(d) {
+  data = d;
+  document.getElementById('drop-zone').classList.add('hidden');
+
+  allMeshes.length = 0;
+  elemGroups.forEach(g => scene.remove(g));
+  elemGroups.length = 0;
+  scene.children.filter(c => c.userData._t || c.userData._overlay).forEach(c => scene.remove(c));
+  clearCenterline(); clearMeasurements(); clearL5Pair();
+  selectedMesh = null; selectedElemIdx = -1;
+
+  const worldBox = new THREE.Box3();
+
+  d.elements.forEach((elem, ei) => {
+    const verts = Array.isArray(elem.vertices[0]) ? new Float32Array(elem.vertices.flat()) : new Float32Array(elem.vertices);
+    const group = new THREE.Group();
+    group.userData = { ei };
+
+    elem.groups.forEach((grp, gi) => {
+      if (!grp.face_indices?.length) return;
+      const vmap = new Map(); const pos = []; const idx = [];
+      for (const fi of grp.face_indices) {
+        const tri = elem.faces[fi];
+        if (!tri || tri.length < 3) continue;
+        for (const vi of tri) {
+          if (!vmap.has(vi)) { vmap.set(vi, pos.length / 3); pos.push(verts[vi*3], verts[vi*3+1], verts[vi*3+2]); }
+          idx.push(vmap.get(vi));
+        }
+      }
+      if (idx.length === 0) return;
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setIndex(new THREE.BufferAttribute(new Uint32Array(idx), 1));
+      geo.computeVertexNormals();
+
+      const rgb = CC[grp.category] || [158,158,158];
+      const mat = new THREE.MeshLambertMaterial({
+        color: new THREE.Color(rgb[0]/255, rgb[1]/255, rgb[2]/255),
+        emissive: new THREE.Color(0x000000), side: THREE.DoubleSide,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.userData = { ei, gi, cat: grp.category };
+
+      const edgeGeo = new THREE.EdgesGeometry(geo, 20);
+      const edges = new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.1 }));
+      mesh.add(edges);
+
+      group.add(mesh);
+      allMeshes.push(mesh);
+    });
+
+    scene.add(group);
+    elemGroups.push(group);
+    worldBox.expandByObject(group);
+  });
+
+  // Terrain
+  if (d.terrain?.vertices && d.terrain?.faces) {
+    const tv = Array.isArray(d.terrain.vertices[0]) ? new Float32Array(d.terrain.vertices.flat()) : new Float32Array(d.terrain.vertices);
+    const ti = new Uint32Array(Array.isArray(d.terrain.faces[0]) ? d.terrain.faces.flat() : d.terrain.faces);
+    const tg = new THREE.BufferGeometry();
+    tg.setAttribute('position', new THREE.Float32BufferAttribute(tv, 3));
+    tg.setIndex(new THREE.BufferAttribute(ti, 1));
+    tg.computeVertexNormals();
+    const tmesh = new THREE.Mesh(tg, new THREE.MeshLambertMaterial({ color: 0x5a8a5a, side: THREE.DoubleSide, transparent: true, opacity: 0.3 }));
+    tmesh.userData._t = true;
+    scene.add(tmesh);
+    worldBox.expandByObject(tmesh);
+  }
+
+  // Grid
+  const center = new THREE.Vector3(), size = new THREE.Vector3();
+  worldBox.getCenter(center); worldBox.getSize(size);
+  const maxDim = Math.max(size.x, size.y, size.z, 1);
+  const gs = Math.max(maxDim * 2.5, 50);
+  const grid = new THREE.GridHelper(gs, Math.round(gs), 0x444444, 0x333333);
+  grid.rotation.x = Math.PI / 2;
+  grid.position.z = worldBox.min.z - 0.01;
+  grid.userData._t = true;
+  scene.add(grid);
+
+  // Fit camera
+  camera.position.set(center.x + maxDim*0.8, center.y - maxDim*1.0, center.z + maxDim*0.6);
+  controls.target.copy(center);
+  needsRender = true;
+
+  buildUI(d);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BUILD UI PANELS
+// ═══════════════════════════════════════════════════════════════
+function mi(l, v, c = '') { return `<div class="metric-item ${c}"><div class="metric-label">${l}</div><div class="metric-value">${v}</div></div>`; }
+
+function getElemStatus(elem) {
+  if (!elem.rules?.length) return 'none';
+  const hasError = elem.rules.some(r => r.status === 'FAIL' && r.severity === 'ERROR');
+  if (hasError) return 'fail';
+  const hasWarn = elem.rules.some(r => r.status === 'FAIL');
+  if (hasWarn) return 'warn';
+  return 'pass';
+}
+
+function buildUI(d) {
+  // ── Element List (left panel) ──
+  let elHtml = '';
+  d.elements.forEach((el, ei) => {
+    const status = getElemStatus(el);
+    elHtml += `<div class="elem-item ${status}" data-ei="${ei}">`;
+    elHtml += `<div class="elem-status ${status}"></div>`;
+    elHtml += `<div class="elem-name">${el.name}</div>`;
+    elHtml += `<div class="elem-id">#${el.id}</div>`;
+    elHtml += `</div>`;
+  });
+  document.getElementById('element-list').innerHTML = elHtml;
+  document.getElementById('element-count').textContent = `(${d.elements.length})`;
+
+  // ── Properties Panel (right) ──
+  let propHtml = '';
+  d.elements.forEach((el, ei) => {
+    const m = el.metrics;
+    const status = getElemStatus(el);
+
+    propHtml += `<div class="section" id="elem-section-${ei}">`;
+    propHtml += `<div class="section-header">${el.name} <span style="float:right;font-size:9px">#${el.id}</span></div>`;
+    propHtml += `<div class="section-body">`;
+
+    // Metrics grid
+    propHtml += `<div class="metrics-grid">`;
+    propHtml += mi('Vol', m.volume_m3 + 'm³');
+    propHtml += mi('Krone', m.crown_width_mm + 'mm', m.crown_width_mm >= 300 ? 'ok' : 'bad');
+    propHtml += mi('Dicke', m.wall_thickness_mm + 'mm', m.wall_thickness_mm >= 300 ? 'ok' : 'bad');
+    propHtml += mi('Höhe', m.wall_height_m + 'm');
+    propHtml += mi('Neig.', m.crown_slope_pct + '%');
+    propHtml += mi('Anzug', m.inclination || 'vert.');
+    propHtml += `</div>`;
+
+    if (m.foundation_width_mm > 0 || (m.crown_width_cv != null && m.crown_width_cv > 0)) {
+      propHtml += `<div class="metrics-grid" style="margin-top:2px">`;
+      if (m.foundation_width_mm > 0) propHtml += mi('Fundament', m.foundation_width_mm + 'mm', m.foundation_width_mm >= 600 ? 'ok' : 'bad');
+      if (m.crown_width_cv != null && m.crown_width_cv > 0) propHtml += mi('Profil-CV', m.crown_width_cv.toFixed(4), m.crown_width_cv <= 0.1 ? 'ok' : 'bad');
+      propHtml += `</div>`;
+    }
+
+    // Tags
+    if (m.is_curved) propHtml += `<span style="display:inline-block;padding:1px 5px;border-radius:2px;font-size:9px;color:#fff;margin:2px;background:var(--accent)">Gekrümmt</span>`;
+    propHtml += `<span style="display:inline-block;padding:1px 5px;border-radius:2px;font-size:9px;color:#fff;margin:2px;background:${m.watertight ? 'var(--success)' : 'var(--error)'}">${m.watertight ? 'Watertight' : 'Mesh offen'}</span>`;
+
+    // Verdict
+    if (el.rules?.length) {
+      const errors = el.rules.filter(r => r.status === 'FAIL' && r.severity === 'ERROR');
+      const warnings = el.rules.filter(r => r.status === 'FAIL' && (r.severity === 'WARNING' || r.severity === 'INFO'));
+      const passed = el.rules.filter(r => r.status === 'PASS').length;
+      const skipped = el.rules.filter(r => r.status === 'SKIP').length;
+
+      propHtml += `<div class="verdict ${errors.length > 0 ? 'fail' : warnings.length > 0 ? 'warn' : 'pass'}">`;
+      if (errors.length > 0) {
+        propHtml += `<div style="font-size:12px;font-weight:700;color:var(--error)">Normverstoss — ${errors.length} Pflichtprüfung${errors.length > 1 ? 'en' : ''} fehlgeschlagen</div>`;
+        errors.forEach(r => propHtml += `<div style="font-size:var(--font-xs);color:var(--error)">- ${r.name}</div>`);
+      } else if (warnings.length > 0) {
+        propHtml += `<div style="font-size:12px;font-weight:700;color:#f0ad4e">Bestanden — ${warnings.length} Empfehlung${warnings.length > 1 ? 'en' : ''} offen</div>`;
+      } else {
+        propHtml += `<div style="font-size:12px;font-weight:700;color:var(--success)">Alle Prüfungen bestanden</div>`;
+      }
+      propHtml += `<div style="font-size:var(--font-xs);color:var(--text-secondary);margin-top:2px">${passed} bestanden · ${skipped} übersprungen (${el.rules.length} total)</div>`;
+      propHtml += `</div>`;
+    }
+
+    // Face groups
+    el.groups.forEach((g, gi) => {
+      const rgb = CC[g.category] || [158,158,158];
+      const dz = Math.abs(g.normal[2]).toFixed(3);
+      let why;
+      if (g.category === 'crown' || g.category === 'foundation') why = `|n·Z|=${dz} > 0.707`;
+      else if (g.category === 'front' || g.category === 'back') why = `|n·Z|=${dz} < 0.707`;
+      else if (g.category.startsWith('end_')) why = 'parallel zur Achse, am Rand';
+      else why = 'intern';
+
+      propHtml += `<div class="face-group" id="fg-${ei}-${gi}" style="border-left-color:rgb(${rgb})" data-ei="${ei}" data-gi="${gi}">`;
+      propHtml += `<div class="fg-name">${CL[g.category] || g.category}</div>`;
+      propHtml += `<div class="fg-detail">${g.area}m² · ${g.triangles} Dreiecke</div>`;
+      propHtml += `<div class="fg-why">${why}</div></div>`;
+    });
+
+    // Rules
+    if (el.rules?.length) {
+      propHtml += `<div style="margin-top:6px;font-size:var(--font-xs);font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Regelprüfung</div>`;
+      el.rules.forEach((r) => {
+        const cls = r.status === 'PASS' ? 'pass' : r.status === 'FAIL' ? (r.severity === 'ERROR' ? 'fail-error' : 'fail-warn') : 'skip';
+        const ic = r.status === 'PASS' ? '✓' : r.status === 'FAIL' ? '✗' : '–';
+        const sevLabel = r.severity === 'ERROR' ? 'Pflicht' : r.severity === 'WARNING' ? 'Empfehlung' : 'Hinweis';
+        propHtml += `<div class="rule-item ${cls}" data-ei="${ei}">`;
+        propHtml += `<div style="display:flex;align-items:center;gap:4px">`;
+        propHtml += `<span style="font-size:12px">${ic}</span>`;
+        propHtml += `<span style="font-weight:600;font-size:var(--font-sm)">${r.name}</span>`;
+        propHtml += `<span style="font-size:9px;color:#666;margin-left:auto">${sevLabel}</span></div>`;
+        if (r.message) propHtml += `<div style="font-size:var(--font-xs);color:var(--text-secondary);margin-top:1px">${r.message}</div>`;
+        propHtml += `</div>`;
+      });
+    }
+
+    propHtml += `</div></div>`;
+  });
+
+  // L5 pairs
+  if (d.l5_pairs?.length) {
+    propHtml += `<div class="section"><div class="section-header">Inter-Element (L5)</div><div class="section-body">`;
+    d.l5_pairs.forEach((p, pi) => {
+      const typeLabel = p.pair_type === 'stacked' ? 'gestapelt' : 'nebeneinander';
+      const gapInfo = p.pair_type === 'stacked' ? `${p.vertical_gap_mm||0} mm` : `${p.horizontal_gap_mm||0} mm`;
+      propHtml += `<div class="l5-pair" data-pi="${pi}">`;
+      propHtml += `<div style="font-weight:600;font-size:var(--font-sm)">${p.element_a_name || '#'+p.element_a_id} ↔ ${p.element_b_name || '#'+p.element_b_id}</div>`;
+      propHtml += `<div style="font-size:var(--font-xs);color:var(--text-secondary)">${typeLabel} · ${gapInfo}</div></div>`;
+    });
+    propHtml += `</div></div>`;
+  }
+
+  document.getElementById('properties-body').innerHTML = propHtml;
+
+  // ── Summary Table (bottom) ──
+  let tableHtml = '';
+  d.elements.forEach((el, ei) => {
+    const m = el.metrics;
+    const status = getElemStatus(el);
+    const statusLabel = status === 'pass' ? 'PASS' : status === 'fail' ? 'FAIL' : status === 'warn' ? 'WARN' : '—';
+    const passCount = el.rules ? el.rules.filter(r => r.status === 'PASS').length : 0;
+    const totalCount = el.rules ? el.rules.length : 0;
+
+    tableHtml += `<tr data-ei="${ei}">`;
+    tableHtml += `<td><span class="status-badge ${status}">${statusLabel}</span></td>`;
+    tableHtml += `<td>${el.name}</td>`;
+    tableHtml += `<td style="font-family:monospace;color:var(--text-secondary)">#${el.id}</td>`;
+    tableHtml += `<td>${m.volume_m3} m³</td>`;
+    tableHtml += `<td>${m.total_area_m2} m²</td>`;
+    tableHtml += `<td style="color:${m.crown_width_mm >= 300 ? 'var(--success)' : 'var(--error)'}">${m.crown_width_mm} mm</td>`;
+    tableHtml += `<td style="color:${m.wall_thickness_mm >= 300 ? 'var(--success)' : 'var(--error)'}">${m.wall_thickness_mm} mm</td>`;
+    tableHtml += `<td>${m.wall_height_m} m</td>`;
+    tableHtml += `<td>${m.crown_slope_pct}%</td>`;
+    tableHtml += `<td>${m.inclination}</td>`;
+    tableHtml += `<td>${passCount}/${totalCount}</td>`;
+    tableHtml += `</tr>`;
+  });
+  document.getElementById('summary-tbody').innerHTML = tableHtml;
+  document.getElementById('summary-count').textContent = `(${d.elements.length} Elemente)`;
+
+  // ── Status Bar ──
+  document.getElementById('status-text').textContent = d.source;
+  document.getElementById('status-elements').textContent = `${d.elements.length} Element${d.elements.length !== 1 ? 'e' : ''}${d.terrain ? ' + Terrain' : ''}`;
+  document.getElementById('status-ruleset').textContent = document.getElementById('ruleset-select').selectedOptions[0]?.text || '';
+  document.getElementById('viewport-stat').textContent = `${d.source} · ${d.elements.length} Element(e)`;
+
+  // ── Event Listeners ──
+  bindUIEvents();
+}
+
+function bindUIEvents() {
+  // Element list click
+  document.querySelectorAll('.elem-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const ei = +el.dataset.ei;
+      const firstMesh = allMeshes.find(m => m.userData.ei === ei);
+      selectElement(ei, firstMesh);
+    });
+  });
+
+  // Face group click
+  document.querySelectorAll('.face-group').forEach(el => {
+    el.addEventListener('click', () => {
+      const ei = +el.dataset.ei, gi = +el.dataset.gi;
+      const mesh = allMeshes.find(m => m.userData.ei === ei && m.userData.gi === gi);
+      if (mesh) selectElement(ei, mesh);
+    });
+    el.addEventListener('mouseenter', () => {
+      const ei = +el.dataset.ei, gi = +el.dataset.gi;
+      if (selectedMesh?.userData.ei === ei && selectedMesh?.userData.gi === gi) return;
+      const mesh = allMeshes.find(m => m.userData.ei === ei && m.userData.gi === gi);
+      if (mesh) {
+        if (!mesh.userData._cloned) { mesh.material = mesh.material.clone(); mesh.userData._cloned = true; }
+        mesh.material.emissive.setHex(0x446688); mesh.material.emissiveIntensity = 0.3; mesh.material.needsUpdate = true;
+        needsRender = true;
+      }
+    });
+    el.addEventListener('mouseleave', () => {
+      const ei = +el.dataset.ei, gi = +el.dataset.gi;
+      if (selectedMesh?.userData.ei === ei && selectedMesh?.userData.gi === gi) return;
+      const mesh = allMeshes.find(m => m.userData.ei === ei && m.userData.gi === gi);
+      if (mesh?.userData._cloned) {
+        mesh.material.emissive.setHex(0x000000); mesh.material.emissiveIntensity = 0; mesh.material.needsUpdate = true;
+        needsRender = true;
+      }
+    });
+  });
+
+  // Summary table click
+  document.querySelectorAll('#summary-tbody tr').forEach(el => {
+    el.addEventListener('click', () => {
+      const ei = +el.dataset.ei;
+      const firstMesh = allMeshes.find(m => m.userData.ei === ei);
+      selectElement(ei, firstMesh);
+    });
+  });
+
+  // L5 pair click
+  document.querySelectorAll('.l5-pair').forEach(el => {
+    el.addEventListener('click', () => {
+      const pi = +el.dataset.pi;
+      if (l5SelectedPairIdx === pi) clearL5Pair();
+      else { deselectAll(); showL5Pair(pi); }
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TOOLBAR ACTIONS
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('btn-edges').addEventListener('click', () => {
+  edgesVisible = !edgesVisible;
+  document.getElementById('btn-edges').classList.toggle('active', edgesVisible);
+  allMeshes.forEach(m => m.children.forEach(c => { if (c.isLineSegments) c.visible = edgesVisible; }));
+  needsRender = true;
+});
+
+document.getElementById('btn-explode').addEventListener('click', () => {
+  exploded = !exploded;
+  document.getElementById('btn-explode').classList.toggle('active', exploded);
+  if (elemGroups.length <= 1) return;
+  const ctr = new THREE.Vector3();
+  elemGroups.forEach(g => ctr.add(new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3())));
+  ctr.divideScalar(elemGroups.length);
+  elemGroups.forEach(g => {
+    if (exploded) { const c = new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3()); g.position.add(c.sub(ctr).normalize().multiplyScalar(2)); }
+    else g.position.set(0, 0, 0);
+  });
+  needsRender = true;
+});
+
+document.getElementById('btn-fit').addEventListener('click', () => {
+  if (!data) return;
+  const box = new THREE.Box3();
+  elemGroups.forEach(g => box.expandByObject(g));
+  const center = new THREE.Vector3(), size = new THREE.Vector3();
+  box.getCenter(center); box.getSize(size);
+  const maxDim = Math.max(size.x, size.y, size.z, 1);
+  camera.position.set(center.x + maxDim*0.8, center.y - maxDim*1.0, center.z + maxDim*0.6);
+  controls.target.copy(center);
+  needsRender = true;
+});
+
+// Heatmap
+let heatmapMode = 'off';
+function setHeatmapMode(mode) {
+  heatmapMode = mode;
+  ['off','cross','long','total'].forEach(k => {
+    const btn = document.getElementById('btn-hm-' + k);
+    if (btn) btn.classList.toggle('active', k === mode);
+  });
+  if (!data) return;
+  data.elements.forEach((elem, ei) => {
+    const group = elemGroups[ei];
+    if (!group) return;
+    let meshIdx = 0;
+    elem.groups.forEach(grp => {
+      if (!grp.face_indices?.length) return;
+      const mesh = group.children[meshIdx++];
+      if (!mesh?.isMesh) return;
+      if (mode === 'off') {
+        const rgb = CC[grp.category] || [158,158,158];
+        mesh.material.color.setRGB(rgb[0]/255, rgb[1]/255, rgb[2]/255);
+        mesh.material.vertexColors = false;
+        mesh.material.needsUpdate = true;
+        if (mesh.geometry.hasAttribute('color')) mesh.geometry.deleteAttribute('color');
+      }
+    });
+  });
+  needsRender = true;
+}
+document.getElementById('btn-hm-off').addEventListener('click', () => setHeatmapMode('off'));
+document.getElementById('btn-hm-cross').addEventListener('click', () => setHeatmapMode('cross'));
+document.getElementById('btn-hm-long').addEventListener('click', () => setHeatmapMode('long'));
+document.getElementById('btn-hm-total').addEventListener('click', () => setHeatmapMode('total'));
+
+// Screenshot
+document.getElementById('btn-screenshot').addEventListener('click', () => {
+  needsRender = true;
+  requestAnimationFrame(() => {
+    renderer.render(scene, camera);
+    const link = document.createElement('a');
+    link.download = 'geo-validator-screenshot.png';
+    link.href = renderer.domElement.toDataURL('image/png');
+    link.click();
+  });
+});
+
+// Export JSON
+document.getElementById('btn-export-json').addEventListener('click', () => {
+  if (!data) return;
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const link = document.createElement('a');
+  link.download = (data.source || 'validation') + '_report.json';
+  link.href = URL.createObjectURL(blob);
+  link.click();
+});
+
+// Help modal
+document.getElementById('btn-help').addEventListener('click', () => document.getElementById('help-modal').classList.add('visible'));
+document.getElementById('help-close').addEventListener('click', () => document.getElementById('help-modal').classList.remove('visible'));
+document.getElementById('help-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('visible'); });
+
+// ═══════════════════════════════════════════════════════════════
+// FILE UPLOAD (Drag & Drop + Button)
+// ═══════════════════════════════════════════════════════════════
+const fileInput = document.getElementById('file-input');
+const dropZone = document.getElementById('drop-zone');
+
+function uploadFile(file) {
+  const loading = document.getElementById('loading-indicator');
+  const msg = document.getElementById('loading-msg');
+  loading.style.display = 'block';
+  msg.textContent = `Validiere ${file.name}...`;
+  document.getElementById('status-text').textContent = `Validiere ${file.name}...`;
+
+  const rulesetName = document.getElementById('ruleset-select-drop').value || document.getElementById('ruleset-select').value;
+  const formData = new FormData();
+  formData.append('file', file);
+
+  fetch(`/api/validate?ruleset_name=${encodeURIComponent(rulesetName)}`, { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(d => {
+      loading.style.display = 'none';
+      if (d.error) { msg.textContent = 'Fehler: ' + d.error; alert(d.error); return; }
+      d.source = file.name;
+      loadModel(d);
+    })
+    .catch(err => {
+      loading.style.display = 'none';
+      msg.textContent = 'Fehler: ' + err.message;
+      document.getElementById('status-text').textContent = 'Fehler beim Laden';
+    });
+}
+
+// File input button
+document.getElementById('btn-open').addEventListener('click', () => fileInput.click());
+document.getElementById('btn-open-drop').addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) uploadFile(fileInput.files[0]); });
+
+// Drag & Drop
+document.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); });
+document.addEventListener('drop', (e) => {
+  e.preventDefault(); e.stopPropagation();
+  const file = e.dataTransfer.files[0];
+  if (file && file.name.toLowerCase().endsWith('.ifc')) uploadFile(file);
+});
+
+// Sync ruleset selects
+document.getElementById('ruleset-select').addEventListener('change', (e) => {
+  document.getElementById('ruleset-select-drop').value = e.target.value;
+});
+document.getElementById('ruleset-select-drop').addEventListener('change', (e) => {
+  document.getElementById('ruleset-select').value = e.target.value;
+});
+
+// Load available rulesets
+fetch('/api/rulesets').then(r => r.json()).then(rulesets => {
+  ['ruleset-select', 'ruleset-select-drop'].forEach(id => {
+    const sel = document.getElementById(id);
+    sel.innerHTML = '';
+    rulesets.forEach(rs => {
+      const opt = document.createElement('option');
+      opt.value = rs.name;
+      opt.textContent = rs.name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      sel.appendChild(opt);
+    });
+  });
+}).catch(() => {});
+
+</script>
+</body>
+</html>

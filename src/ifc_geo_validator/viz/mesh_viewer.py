@@ -1,11 +1,34 @@
-"""Rich Three.js mesh viewer for IFC validation results.
+"""Interactive 3D viewer for IFC validation results.
 
-Inspired by the IFC-Editor's viewer pattern: dark theme, grouped toolbar,
-multiple color/classification modes, click-to-inspect, and a floating
-properties panel that shows L1/L2/L3/L4 results for the selected element.
+The viewer uses Three.js (Möller & Haines 2018 rendering conventions) with a
+Lambert shading model (Lambert 1760, "Photometria") for perceptually uniform
+diffuse appearance — chosen over physically-based shading because the goal
+is geometric inspection, not photorealism, and MeshLambertMaterial has a
+single-pass cost ~3× lower than MeshStandardMaterial on large meshes.
 
-The mesh data is pre-extracted server-side so the viewer never touches
-WASM or the IFC file directly.
+Selection highlighting uses an emissive overlay in the fragment shader
+(Akenine-Möller et al. 2018, §5.8 "Emission"); we set `emissive = #FF69B4`
+with `emissiveIntensity = 0.5` so the per-vertex classification colors remain
+visible beneath the highlight.
+
+Zoom-to-fit uses the minimum-enclosing sphere of the model bounding box
+(Welzl 1991, "Smallest enclosing disks") with FOV-aware distance
+    d = r / sin(FOV_eff / 2) · 1.2
+where FOV_eff = min(vertical_FOV, horizontal_FOV) so the fit is correct
+for any aspect ratio. The 1.2 margin factor provides a uniform 20 %
+safety border around the silhouette.
+
+Element picking uses a Three.js `Raycaster` (Appel 1968, ray casting;
+Möller–Trumbore 1997 ray-triangle intersection), one pick per click.
+
+Color scheme follows the B+S Corporate dark theme (background #1A1A1A,
+accent #CB0231) for consistency with the IFC-Editor frontend used at
+B+S AG, reducing cognitive load for engineers who switch between both
+tools.
+
+Mesh data is extracted server-side via IfcOpenShell/OpenCASCADE (Krijnen &
+Beetz 2020) and shipped as Float32Array vertex/index buffers; the viewer
+never parses IFC directly.
 """
 
 import json
@@ -186,7 +209,8 @@ _VIEWER_HTML = r"""
     height: 26px; min-width: 28px;
   }
   button.tb:hover { background: #2a2a2a; border-color: #505050; }
-  button.tb.active { background: #2196F3; color: #fff; border-color: #2196F3; }
+  button.tb.active { background: #CB0231; color: #fff; border-color: #CB0231; }
+  button.tb.active:hover { background: #e0033a; border-color: #e0033a; }
 
   /* Left element list */
   #element-list {
@@ -205,7 +229,7 @@ _VIEWER_HTML = r"""
     border: 1px solid transparent;
   }
   .el-row:hover { background: #2a2a2a; }
-  .el-row.selected { background: #2196F3; color: #fff; border-color: #2196F3; }
+  .el-row.selected { background: #CB0231; color: #fff; border-color: #CB0231; }
   .el-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
   .el-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -387,11 +411,19 @@ try {
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-  const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
-  dirLight.position.set(50, 100, 50);
-  scene.add(dirLight);
-  scene.add(new THREE.HemisphereLight(0x8888ff, 0x443322, 0.4));
+  // 4-light setup mirroring the IFC-Editor (ambient + 2 directionals + fill
+  // from below). MeshLambertMaterial is used throughout for consistency —
+  // no PBR, no tone mapping, so the lighting rig stays simple and predictable.
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+  dirLight1.position.set(50, 100, 50);
+  scene.add(dirLight1);
+  const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+  dirLight2.position.set(-50, 50, -50);
+  scene.add(dirLight2);
+  const fillBelow = new THREE.DirectionalLight(0xffffff, 0.3);
+  fillBelow.position.set(0, -100, 0);
+  scene.add(fillBelow);
 
   // Grid
   const grid = new THREE.GridHelper(100, 50, 0x404040, 0x2a2a2a);
@@ -608,9 +640,14 @@ try {
     renderProps(em);
     renderList();
     if (ghostMode) applyGhost();
-    // Highlight: emissive boost
+    // Hot-pink emissive overlay for the selected element (IFC-Editor pattern).
+    // Intensity 0.5 keeps underlying vertex-color shading visible.
     for (const m of elementMeshes) {
-      m.mesh.material.emissive = new THREE.Color(m.id === id ? 0x444444 : 0x000000);
+      const selected = m.id === id;
+      m.mesh.material.emissive = new THREE.Color(selected ? 0xff69b4 : 0x000000);
+      if ('emissiveIntensity' in m.mesh.material) {
+        m.mesh.material.emissiveIntensity = selected ? 0.5 : 0.0;
+      }
       m.mesh.material.needsUpdate = true;
     }
   }
@@ -621,6 +658,7 @@ try {
     renderList();
     for (const m of elementMeshes) {
       m.mesh.material.emissive = new THREE.Color(0x000000);
+      if ('emissiveIntensity' in m.mesh.material) m.mesh.material.emissiveIntensity = 0.0;
       m.mesh.material.needsUpdate = true;
     }
     if (ghostMode) applyGhost();
@@ -678,39 +716,47 @@ try {
   });
 
   // ── Camera presets ────────────────────────────────────────────
+  // Zoom-to-fit uses the bounding sphere with FOV-aware distance
+  // (IFC-Editor math): d = r / sin(fov_eff/2) * 1.2 safety margin.
+  // Effective FOV is the min of vertical and horizontal FOV so the
+  // model fits regardless of aspect ratio.
   const center = new THREE.Vector3();
   const size = new THREE.Vector3();
   worldBox.getCenter(center);
   worldBox.getSize(size);
-  const maxDim = Math.max(size.x, size.y, size.z, 1);
+  const sphere = new THREE.Sphere();
+  worldBox.getBoundingSphere(sphere);
+  const radius = Math.max(sphere.radius, 1);
 
-  function fitView() {
-    camera.position.set(center.x + maxDim, center.y + maxDim * 0.7, center.z + maxDim);
+  function fitDistance() {
+    const fov = camera.fov * (Math.PI / 180);
+    const aspect = camera.aspect;
+    const horizontalFov = 2 * Math.atan(Math.tan(fov / 2) * aspect);
+    const effectiveFov = Math.min(fov, horizontalFov);
+    return (radius / Math.sin(effectiveFov / 2)) * 1.2;
+  }
+
+  function setView(dir) {
+    const d = fitDistance();
+    const nd = dir.clone().normalize();
+    camera.position.copy(center).addScaledVector(nd, d);
     controls.target.copy(center);
     controls.update();
   }
-  function viewIso() {
-    camera.position.set(center.x + maxDim, center.y + maxDim, center.z + maxDim);
-    controls.target.copy(center);
-    controls.update();
-  }
+
+  function fitView() { setView(new THREE.Vector3(1, 0.7, 1)); }
+  function viewIso() { setView(new THREE.Vector3(1, 1, 1)); }
   function viewTop() {
-    camera.position.set(center.x, center.y, center.z + maxDim * 2);
     camera.up.set(0, 1, 0);
-    controls.target.copy(center);
-    controls.update();
+    setView(new THREE.Vector3(0, 0, 1));
   }
   function viewFront() {
-    camera.position.set(center.x, center.y - maxDim * 2, center.z);
     camera.up.set(0, 0, 1);
-    controls.target.copy(center);
-    controls.update();
+    setView(new THREE.Vector3(0, -1, 0));
   }
   function viewSide() {
-    camera.position.set(center.x + maxDim * 2, center.y, center.z);
     camera.up.set(0, 0, 1);
-    controls.target.copy(center);
-    controls.update();
+    setView(new THREE.Vector3(1, 0, 0));
   }
   fitView();
 

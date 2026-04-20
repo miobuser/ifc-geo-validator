@@ -40,6 +40,11 @@ viz = [
 web = [
     "streamlit>=1.30",
 ]
+viewer = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "python-multipart>=0.0.6",
+]
 bcf = [
     "bcf-client>=0.8",
 ]
