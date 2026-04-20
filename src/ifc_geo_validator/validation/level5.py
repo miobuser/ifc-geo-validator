@@ -31,19 +31,35 @@ from itertools import combinations
 COS_45 = np.sqrt(2.0) / 2.0  # ≈ 0.7071
 Z_AXIS = np.array([0.0, 0.0, 1.0])
 
+# Default pair-candidacy thresholds. The 1.0 m cutoff rejects AABB pairs
+# too far apart to be in structural contact; the 0.5 overlap ratio
+# distinguishes stacked from lateral pairs by demanding at least half
+# the shorter element's Z-extent be shared. Both are overridable via
+# project_config's pair_candidacy section — see core/project_config.py.
+DEFAULT_MAX_GAP_3D_M = 1.0
+DEFAULT_MIN_Z_OVERLAP_RATIO = 0.5
 
-def validate_level5(elements_data: list[dict]) -> dict:
+
+def validate_level5(elements_data: list[dict], config: dict | None = None) -> dict:
     """Evaluate geometric relationships between elements.
 
     Args:
         elements_data: list of per-element dicts, each containing:
             element_id, element_name, level1 (with bbox), mesh_data
+        config: optional dict with pair_candidacy overrides. Keys:
+            max_gap_3d_m (float, default 1.0) — AABB rejection cutoff.
+            min_z_overlap_ratio (float, default 0.5) — stacked-pair
+                discriminator.
 
     Returns:
         dict with:
             pairs: list of pair analysis dicts
             summary: aggregate statistics
     """
+    cfg = config or {}
+    max_gap = float(cfg.get("max_gap_3d_m", DEFAULT_MAX_GAP_3D_M))
+    min_overlap = float(cfg.get("min_z_overlap_ratio", DEFAULT_MIN_Z_OVERLAP_RATIO))
+
     if len(elements_data) < 2:
         return {"pairs": [], "summary": {"num_pairs": 0, "num_elements": len(elements_data)}}
 
@@ -70,7 +86,8 @@ def validate_level5(elements_data: list[dict]) -> dict:
     pairs = []
     for i, j in combinations(range(len(elem_info)), 2):
         a, b = elem_info[i], elem_info[j]
-        pair = _analyze_pair(a, b)
+        pair = _analyze_pair(a, b, max_gap_3d_m=max_gap,
+                             min_z_overlap_ratio=min_overlap)
         if pair is not None:
             pairs.append(pair)
 
@@ -91,15 +108,20 @@ def validate_level5(elements_data: list[dict]) -> dict:
 
 # ── Pair analysis ──────────────────────────────────────────────────
 
-def _analyze_pair(a: dict, b: dict) -> dict | None:
+def _analyze_pair(
+    a: dict, b: dict,
+    max_gap_3d_m: float = DEFAULT_MAX_GAP_3D_M,
+    min_z_overlap_ratio: float = DEFAULT_MIN_Z_OVERLAP_RATIO,
+) -> dict | None:
     """Analyze the geometric relationship between two elements."""
-    # Quick rejection: AABB gap > 1m
+    # Quick rejection: AABB gap exceeds the configured cutoff
     gap_3d = _bbox_gap(a["bbox_min"], a["bbox_max"], b["bbox_min"], b["bbox_max"])
-    if max(gap_3d) > 1.0:
+    if max(gap_3d) > max_gap_3d_m:
         return None
 
     # Classify using Contact Surface Normal Analysis
-    pair_type, upper, lower = _classify_pair_by_contact_normal(a, b)
+    pair_type, upper, lower = _classify_pair_by_contact_normal(
+        a, b, min_z_overlap_ratio=min_z_overlap_ratio)
 
     result = {
         "element_a_id": a["id"],
@@ -135,7 +157,7 @@ def _analyze_pair(a: dict, b: dict) -> dict | None:
 
 # ── Contact Surface Normal Classification ──────────────────────────
 
-def _classify_pair_by_contact_normal(a, b):
+def _classify_pair_by_contact_normal(a, b, min_z_overlap_ratio: float = DEFAULT_MIN_Z_OVERLAP_RATIO):
     """Classify pair using Contact Surface Normal Analysis.
 
     Algorithm:
@@ -146,6 +168,8 @@ def _classify_pair_by_contact_normal(a, b):
       5. κ > cos(π/4) → stacked, else → side_by_side
 
     Fallback: If no proximity faces found, use centroid displacement.
+    If centroids coincide, use Z-overlap with the configured
+    min_z_overlap_ratio as the side-by-side vs stacked discriminator.
     """
     mesh_a = a["mesh_data"]
     mesh_b = b["mesh_data"]
@@ -176,7 +200,7 @@ def _classify_pair_by_contact_normal(a, b):
             b_z = (float(b["bbox_min"][2]), float(b["bbox_max"][2]))
             z_overlap = max(0, min(a_z[1], b_z[1]) - max(a_z[0], b_z[0]))
             min_h = min(a_z[1] - a_z[0], b_z[1] - b_z[0])
-            kappa = 0.0 if (min_h > 0 and z_overlap / min_h > 0.5) else 1.0
+            kappa = 0.0 if (min_h > 0 and z_overlap / min_h > min_z_overlap_ratio) else 1.0
         else:
             kappa = abs(disp[2]) / d_norm
 

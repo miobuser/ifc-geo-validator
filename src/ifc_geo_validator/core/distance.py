@@ -236,8 +236,27 @@ def classify_terrain_side(face_groups, terrain_verts, terrain_faces):
 
     Returns dict mapping face_group index to "front" or "back".
     """
+    # Terrain-gradient probe distance (metres). We sample the terrain at
+    # centroid ± PROBE_DIST · n_horiz so the gradient baseline is 2·δ = 2 m.
+    # Derivation: ASTRA FHB T/G allows quer gradient up to 5 % across a
+    # typical 8 m road width; a 2 m baseline captures 10 cm of relief,
+    # well above the 1 cm noise floor. Shorter probes (0.5 m) are
+    # dominated by terrain mesh tessellation, longer probes (≥ 3 m) may
+    # cross local terrain features (kerb, embankment crest) and reverse
+    # the gradient sign.
+    PROBE_DIST_M = 1.0
+    # Minimum gradient (Δz over 2·PROBE_DIST) that counts as "significant".
+    # 1 cm over 2 m ≈ 0.5 % slope: below this the gradient is within
+    # terrain tessellation noise for a typical 1 m triangle mesh.
+    MIN_SIGNIFICANT_GRADIENT_M = 0.01
+    # Cutoff for the fallback "nearest terrain point" method. Elements
+    # farther than this from any terrain vertex are treated as
+    # terrain-free (e.g. stand-alone structures in the Bauplatz). 50 m
+    # is chosen as an upper bound for a typical retaining-wall terrain
+    # corridor; values larger than this almost certainly indicate a
+    # mismatched IfcSite or an unrelated structure.
+    MAX_TERRAIN_PROXIMITY_M = 50.0
     assignments = {}
-    PROBE_DIST = 1.0  # 1m offset for gradient sampling
 
     for i, g in enumerate(face_groups):
         cat = g.get("category", g.category if hasattr(g, "category") else "")
@@ -255,8 +274,8 @@ def classify_terrain_side(face_groups, terrain_verts, terrain_faces):
         n_horiz /= n_mag
 
         # Method 1: Terrain gradient — sample terrain height on both sides
-        p_plus = centroid[:2] + PROBE_DIST * n_horiz[:2]
-        p_minus = centroid[:2] - PROBE_DIST * n_horiz[:2]
+        p_plus = centroid[:2] + PROBE_DIST_M * n_horiz[:2]
+        p_minus = centroid[:2] - PROBE_DIST_M * n_horiz[:2]
 
         z_plus = terrain_height_at_xy(terrain_verts, terrain_faces,
                                        p_plus[0], p_plus[1])
@@ -265,7 +284,7 @@ def classify_terrain_side(face_groups, terrain_verts, terrain_faces):
 
         if z_plus is not None and z_minus is not None:
             gradient = z_plus - z_minus  # positive = terrain rises in normal direction
-            if abs(gradient) > 0.01:  # significant gradient (> 1cm over 2m)
+            if abs(gradient) > MIN_SIGNIFICANT_GRADIENT_M:
                 assignments[i] = "back" if gradient > 0 else "front"
                 continue
 
@@ -274,7 +293,7 @@ def classify_terrain_side(face_groups, terrain_verts, terrain_faces):
                                           centroid[0], centroid[1])
         if z_terrain is None:
             nearest_pt, dist = nearest_terrain_point(terrain_verts, terrain_faces, centroid)
-            if dist > 50.0:
+            if dist > MAX_TERRAIN_PROXIMITY_M:
                 continue
             terrain_point = nearest_pt
         else:

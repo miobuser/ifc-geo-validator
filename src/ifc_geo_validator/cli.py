@@ -770,7 +770,7 @@ def main():
 
     # ── Level 5: Inter-element context ─────────────────────────
     if 5 in levels and len(all_results) > 1:
-        l5 = validate_level5(all_results)
+        l5 = validate_level5(all_results, config=project_config.get("pair_candidacy"))
         if l5["pairs"]:
             print(f"\n{'='*60}")
             print(f"Level 5: Inter-Element Analysis ({l5['summary']['num_pairs']} pairs)")
@@ -821,7 +821,7 @@ def main():
     # Pre-compute L5 once (not per element)
     l5_global = None
     if 5 in levels and len(all_results) > 1:
-        l5_global = validate_level5(all_results)
+        l5_global = validate_level5(all_results, config=project_config.get("pair_candidacy"))
 
     # Pre-compute L6 once (not per element)
     l6_global = None

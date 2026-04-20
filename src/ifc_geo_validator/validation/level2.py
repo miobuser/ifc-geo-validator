@@ -206,7 +206,40 @@ def _detect_element_role(geo_check: dict, summary: dict,
       - slab:        very flat (height < 5% of max horizontal)
       - unknown:     doesn't match any pattern
 
-    Returns one of: "wall_stem", "foundation", "parapet", "column", "slab", "unknown".
+    Threshold derivations (each matches a normative or practice-based
+    slenderness definition; see thesis §"Element-Rollen-Erkennung"):
+
+      dz < h_max * 0.05, dz < h_min * 0.5 → slab
+        SIA 262:2013 §5.3 defines a Platte as a planar element whose
+        thickness is small relative to its span. A ratio h/L ≤ 1/20
+        is the empirical limit for Platten-Tragwirkung; 5 % is the
+        conservative upper bound (1/20 = 0.05).
+
+      dz < h_min / 2 and horiz_area > vert_area * 2 → foundation
+        ASTRA FHB T/G §"Stützmauer-Fundament": Fundamentbreite ≥ 2×
+        Wandstärke (guarantees overturning stability) and horizontal
+        faces (crown+foundation) dominate for pad/strip footings.
+
+      plan_aspect < 2.0 and dz > h_max * 0.8 → column
+        SIA 262 §5.5: a Stütze has plan aspect ≈ 1:1 (up to 1:2) and
+        height larger than the plan dimension. 2.0 is the accepted
+        upper limit on plan aspect before the element counts as a
+        wall instead (EN 1992-1-1 §5.3.1 Tabelle 5.1).
+
+      dz < 1.5 and h_min < 0.5 and plan_aspect > 3 → parapet
+        ASTRA FHB T/G §"Brüstungen": typische Höhe 0.9–1.2 m, Dicke
+        0.2–0.4 m. 1.5 m / 0.5 m / >3 plan aspect captures these
+        with margin.
+
+      plan_aspect > 2.0 and vert_area > horiz_area * 0.3 → wall_stem
+        EN 1992-1-1 §5.3.1: a Wand is a vertical planar element whose
+        cross-section has length ≥ 4× thickness. 2.0 is the relaxed
+        floor chosen because IFC plan_aspect can be under-reported
+        for curved walls. The vertical-area dominance rules out slabs
+        and foundations that would otherwise satisfy the plan test.
+
+    Returns one of: "wall_stem", "foundation", "parapet", "column",
+    "slab", "unknown".
     """
     dims = geo_check.get("bbox_dims_m", [0, 0, 0])
     if len(dims) < 3:

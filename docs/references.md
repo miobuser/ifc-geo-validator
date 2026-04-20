@@ -25,6 +25,11 @@ document identifier is given in place of an author name.
   `core/ifc_parser.py` via IfcOpenShell.
 - **SN EN 1990:2002/A1:2005 + AC:2010**. *Grundlagen der Tragwerksplanung.* —
   Background for tolerance derivations referenced in the thesis.
+- **SN EN 1992-1-1:2004 + AC:2010**. *Bemessung und Konstruktion von
+  Stahlbeton- und Spannbetontragwerken — Teil 1-1.* — §5.3.1 Tabelle 5.1
+  defines the geometric boundary between a column (Stütze) and a wall
+  (Wand) as plan aspect ≈ 4:1; used in
+  `validation/level2._detect_element_role`.
 
 ## Mesh geometry and topology
 
