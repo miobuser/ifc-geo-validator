@@ -13,7 +13,8 @@ References:
 import numpy as np
 
 
-def min_mesh_distance(verts_a, faces_a, verts_b, faces_b) -> float:
+def min_mesh_distance(verts_a: np.ndarray, faces_a: np.ndarray,
+                      verts_b: np.ndarray, faces_b: np.ndarray) -> float:
     """Minimum distance between two triangle meshes.
 
     Uses face-centroid-to-face-centroid distance as a fast approximation.
@@ -33,7 +34,7 @@ def min_mesh_distance(verts_a, faces_a, verts_b, faces_b) -> float:
     return min_dist
 
 
-def min_vertex_distance(verts_a, verts_b) -> float:
+def min_vertex_distance(verts_a: np.ndarray, verts_b: np.ndarray) -> float:
     """Minimum distance between two vertex sets.
 
     Uses vectorized NumPy for performance. For N_A, N_B < 1000,
@@ -138,7 +139,8 @@ class _TerrainGrid:
 _terrain_grid_cache: dict[int, _TerrainGrid] = {}
 
 
-def terrain_height_at_xy(terrain_verts, terrain_faces, x, y) -> float | None:
+def terrain_height_at_xy(terrain_verts: np.ndarray, terrain_faces: np.ndarray,
+                         x: float, y: float) -> float | None:
     """Query terrain height at (x, y) via barycentric interpolation.
 
     Uses a spatial hash grid for O(1) amortized lookups instead of
@@ -158,7 +160,11 @@ def terrain_height_at_xy(terrain_verts, terrain_faces, x, y) -> float | None:
     return grid.query(float(x), float(y))
 
 
-def nearest_terrain_point(terrain_verts, terrain_faces, point_3d):
+def nearest_terrain_point(
+    terrain_verts: np.ndarray,
+    terrain_faces: np.ndarray,
+    point_3d: np.ndarray,
+) -> tuple[np.ndarray, float]:
     """Find the nearest point on the terrain mesh to a 3D query point.
 
     Returns (nearest_point, distance).
@@ -177,7 +183,11 @@ def nearest_terrain_point(terrain_verts, terrain_faces, point_3d):
     return nearest_pt, distance
 
 
-def vertical_clearance_crown_to_terrain(crown_verts, terrain_verts, terrain_faces) -> dict:
+def vertical_clearance_crown_to_terrain(
+    crown_verts: np.ndarray,
+    terrain_verts: np.ndarray,
+    terrain_faces: np.ndarray,
+) -> dict:
     """Compute vertical clearance from crown vertices to terrain surface.
 
     For each crown vertex, queries the terrain height at the same XY
@@ -202,7 +212,10 @@ def vertical_clearance_crown_to_terrain(crown_verts, terrain_verts, terrain_face
     }
 
 
-def horizontal_distance_xy(bbox_a_min, bbox_a_max, bbox_b_min, bbox_b_max) -> float:
+def horizontal_distance_xy(
+    bbox_a_min: np.ndarray, bbox_a_max: np.ndarray,
+    bbox_b_min: np.ndarray, bbox_b_max: np.ndarray,
+) -> float:
     """Horizontal (XY-only) gap between two axis-aligned bounding boxes.
 
     Returns 0 if the bounding boxes overlap in XY.
@@ -212,7 +225,11 @@ def horizontal_distance_xy(bbox_a_min, bbox_a_max, bbox_b_min, bbox_b_max) -> fl
     return float(np.sqrt(gap_x**2 + gap_y**2))
 
 
-def classify_terrain_side(face_groups, terrain_verts, terrain_faces):
+def classify_terrain_side(
+    face_groups: list,
+    terrain_verts: np.ndarray,
+    terrain_faces: np.ndarray,
+) -> dict[int, str]:
     """Classify front/back faces using terrain gradient direction.
 
     Determines which side of the wall faces the earth (terrain rises)

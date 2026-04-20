@@ -56,9 +56,9 @@ def validate_level4(
     level1_result: dict,
     level3_result: dict,
     ruleset: dict,
-    level5_context: dict = None,
-    level6_context: dict = None,
-    level2_result: dict = None,
+    level2_result: dict | None = None,
+    level5_context: dict | None = None,
+    level6_context: dict | None = None,
 ) -> dict:
     """Evaluate rules from the ruleset against computed values.
 

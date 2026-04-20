@@ -147,9 +147,9 @@ def extract_cross_section(
 
 def plot_cross_section(
     section: dict,
-    title: str = None,
+    title: str | None = None,
     show_dims: bool = True,
-    output: str = None,
+    output: str | None = None,
     show: bool = True,
 ) -> None:
     """Plot a 2D cross-section profile with dimensions.
@@ -233,8 +233,8 @@ def plot_multi_sections(
     mesh_data: dict,
     centerline,
     n_sections: int = 5,
-    title: str = None,
-    output: str = None,
+    title: str | None = None,
+    output: str | None = None,
     show: bool = True,
 ) -> None:
     """Plot multiple cross-sections along the wall in a single figure."""

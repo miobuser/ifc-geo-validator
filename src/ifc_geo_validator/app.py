@@ -44,8 +44,8 @@ from ifc_geo_validator.rules.variables import VARIABLE_CATALOG
 
 def _run_variable_reference():
     """Show all available YAML variables."""
-    st.title("📖 Variablen-Referenz")
-    st.caption("Alle verfügbaren Variablen für YAML-Regeln")
+    st.title(f"📖 {t('variable_reference')}")
+    st.caption(t("all_available_variables"))
     for category, vars_dict in VARIABLE_CATALOG.items():
         st.subheader(category)
         rows = [{"Variable": f"`{v}`", "Typ": t, "Einheit": u, "Beschreibung": d}
@@ -56,23 +56,26 @@ def _run_variable_reference():
 def _run_ruleset_editor():
     """Visual ruleset editor."""
     import yaml as yaml_mod
-    st.title("📐 Ruleset Editor")
-    st.caption("Validierungsregeln visuell erstellen")
+    # Import t() locally — at module top it has a chicken-and-egg with
+    # the Streamlit page config below.
+    from ifc_geo_validator.i18n import t as _t
+    st.title(f"📐 {_t('ruleset_editor')}")
+    st.caption(_t("all_available_variables"))
 
-    rs_name = st.text_input("Ruleset-Name", "Mein Ruleset")
+    rs_name = st.text_input(_t("ruleset_name"), "Mein Ruleset")
 
     if "editor_rules" not in st.session_state:
         st.session_state.editor_rules = []
 
     # Variable reference
-    with st.expander("📖 Verfügbare Variablen"):
+    with st.expander(f"📖 {_t('available_variables')}"):
         for cat, vars_dict in VARIABLE_CATALOG.items():
             st.markdown(f"**{cat}**")
-            for v, (t, u, d) in vars_dict.items():
-                st.text(f"  {v} ({t}, {u}) — {d}")
+            for v, (typ, u, d) in vars_dict.items():
+                st.text(f"  {v} ({typ}, {u}) — {d}")
 
     # Add rule
-    st.subheader("Neue Regel")
+    st.subheader(_t("new_rule"))
     all_vars = {}
     for cat, vd in VARIABLE_CATALOG.items():
         for v, info in vd.items():
@@ -80,19 +83,19 @@ def _run_ruleset_editor():
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        sel = st.selectbox("Variable", list(all_vars.keys()))
+        sel = st.selectbox(_t("variable"), list(all_vars.keys()))
         var = all_vars[sel]
     with c2:
-        op = st.selectbox("Operator", [">=", "<=", ">", "<", "=="])
-        val = st.number_input("Schwellwert", value=300.0)
+        op = st.selectbox(_t("operator"), [">=", "<=", ">", "<", "=="])
+        val = st.number_input(_t("threshold"), value=300.0)
     with c3:
-        sev = st.selectbox("Severity", ["ERROR", "WARNING", "INFO"])
+        sev = st.selectbox(_t("severity"), ["ERROR", "WARNING", "INFO"])
         name = st.text_input("Name", f"{var} Check")
 
     check = f"{var} {op} {val}"
     st.code(f'check: "{check}"')
 
-    if st.button("Regel hinzufügen", type="primary"):
+    if st.button(_t("add_rule"), type="primary"):
         st.session_state.editor_rules.append({
             "id": f"CUSTOM-{len(st.session_state.editor_rules)+1:03d}",
             "name": name, "check": check, "severity": sev,
@@ -100,7 +103,7 @@ def _run_ruleset_editor():
 
     # Show rules
     if st.session_state.editor_rules:
-        st.subheader(f"Regeln ({len(st.session_state.editor_rules)})")
+        st.subheader(f"{_t('rules_count')} ({len(st.session_state.editor_rules)})")
         for i, r in enumerate(st.session_state.editor_rules):
             cols = st.columns([8, 1])
             cols[0].text(f"[{r['severity']}] {r['id']}: {r['check']}")
@@ -116,7 +119,7 @@ def _run_ruleset_editor():
     }
     yaml_out = yaml_mod.dump(rs, default_flow_style=False, allow_unicode=True, sort_keys=False)
     st.code(yaml_out, language="yaml")
-    st.download_button("📥 YAML herunterladen", yaml_out,
+    st.download_button(f"📥 {_t('download_yaml')}", yaml_out,
                         f"{rs_name.replace(' ','_')}.yaml", "text/yaml",
                         use_container_width=True)
 
@@ -145,7 +148,7 @@ set_language({"Deutsch": "de", "Français": "fr", "Italiano": "it"}[lang])
 # ── Navigation ──────────────────────────────────────────────────────
 
 page = st.sidebar.radio(
-    "Navigation",
+    t("navigation"),
     [f"🏗️ {t('validation')}", f"📐 {t('ruleset_editor')}", f"📖 {t('variable_reference')}"],
     index=0,
 )
@@ -159,67 +162,66 @@ elif t("variable_reference") in page:
 
 # ── Sidebar (Validierung) ────────────────────────────────────────────
 
-st.sidebar.title("IFC Geometry Validator")
-st.sidebar.caption("Dateien werden nicht gespeichert. Verarbeitung nur im Arbeitsspeicher.")
+st.sidebar.title(t("app_title"))
+st.sidebar.caption(t("files_not_stored"))
 from ifc_geo_validator import get_version
 st.sidebar.caption(f"v{get_version()} — BSc Thesis BFH")
 
 uploaded_file = st.sidebar.file_uploader(
-    "Upload IFC file",
+    t("upload_ifc"),
     type=["ifc"],
-    help="IFC 4x3 model with geometric elements",
+    help=t("upload_ifc_help"),
 )
 
 entity_types = st.sidebar.multiselect(
-    "Entity types",
+    t("entity_types"),
     ["IfcWall", "IfcSlab", "IfcColumn", "IfcBeam", "IfcMember",
      "IfcFooting", "IfcBuildingElementProxy", "IfcPlate", "IfcRailing"],
     default=["IfcWall"],
-    help="Select one or more IFC entity types to validate",
+    help=t("entity_types_help"),
 )
 
 predefined_type = st.sidebar.text_input(
-    "Predefined type filter (optional)",
+    t("predefined_type"),
     value="",
     help="e.g. RETAININGWALL",
 )
 
 # Ruleset selector: built-in or custom
 ruleset_choice = st.sidebar.selectbox(
-    "Ruleset",
-    list(BUILTIN_RULESETS.keys()) + ["Custom (upload)"],
+    t("ruleset"),
+    list(BUILTIN_RULESETS.keys()) + [t("custom_upload")],
     index=0,
 )
 ruleset_file = None
-if ruleset_choice == "Custom (upload)":
+if ruleset_choice == t("custom_upload"):
     ruleset_file = st.sidebar.file_uploader(
-        "Custom ruleset (YAML)",
+        t("custom_ruleset_upload"),
         type=["yaml", "yml"],
     )
 
 # ── Main area ────────────────────────────────────────────────────────
 
 if not uploaded_file:
-    st.title("IFC Geometry Validator")
+    st.title(t("app_title"))
+    st.markdown(t("intro_text"))
+    st.markdown(f"**{t('pipeline_title')}**")
+    l_col = t("level_col")
+    d_col = t("description_col")
+    o_col = t("output_col")
     st.markdown(
-        """
-        Geometric validation of IFC infrastructure models against configurable
-        requirements (ASTRA FHB T/G — Stützmauern).
-
-        **Validation pipeline:**
-
-        | Level | Description | Output |
+        f"""
+        | {l_col} | {d_col} | {o_col} |
         |-------|-------------|--------|
-        | L1 | Mesh metrics | Volume, area, bbox, watertight |
-        | L2 | Face classification | Coplanar clustering, semantic groups |
-        | L3 | Measurements | Crown width, slope, thickness, inclination |
-        | L4 | Rule checks | PASS / FAIL against ruleset |
-        | L5 | Inter-element | Stacking, gaps, offsets |
-        | L6 | Terrain context | Terrain clearance, element distances |
-
-        Upload an IFC file in the sidebar to begin.
+        | L1 | {t('geometry_l1')} | {t('volume')}, {t('surface_area')}, BBox, {t('watertight')} |
+        | L2 | {t('face_classification_l2')} | {t('crown')} / {t('foundation')} / {t('front')} / {t('back')} |
+        | L3 | {t('measurements_l3')} | {t('crown_width')}, {t('inclination')}, {t('wall_thickness')} |
+        | L4 | {t('rule_checks_l4')} | {t('passed')} / {t('failed')} |
+        | L5 | {t('inter_element_l5')} | Stacking, Gaps, Offsets |
+        | L6 | {t('terrain_context_l6')} | {t('terrain')}, {t('embedment_depth')} |
         """
     )
+    st.info(t("upload_to_begin"))
     st.stop()
 
 
@@ -352,21 +354,20 @@ if uploaded_file:
             file_bytes, uploaded_file.name, etypes_str, pred, rs_bytes, ruleset_choice
         )
     except IFCLoadError as exc:
-        st.error(f"IFC-Datei konnte nicht geladen werden: {exc}")
+        st.error(f"{t('err_ifc_load')}: {exc}")
         st.stop()
     except MeshExtractionError as exc:
-        st.error(f"Geometrie-Extraktion fehlgeschlagen: {exc}")
+        st.error(f"{t('err_mesh_extract')}: {exc}")
         st.stop()
 
     if not results:
-        st.error(f"No elements found for types: {etypes_str}. "
-                 f"Try different entity types in the sidebar.")
+        st.error(f"{t('err_no_elements')}: {etypes_str}")
         st.stop()
 
-    st.title(f"Validation: {uploaded_file.name}")
+    st.title(f"{t('validation')}: {uploaded_file.name}")
     if ruleset:
         st.caption(
-            f"Ruleset: {ruleset['metadata']['name']} "
+            f"{t('ruleset')}: {ruleset['metadata']['name']} "
             f"v{ruleset['metadata'].get('version', '?')}"
         )
     # Surface the IFC coordinate system so users always know the frame.
@@ -375,19 +376,19 @@ if uploaded_file:
         crs_label = crs.get("name", "—")
         if crs.get("vertical_datum"):
             crs_label += f" / {crs['vertical_datum']}"
-        st.caption(f"Koordinatensystem: **{crs_label}**")
+        st.caption(f"{t('coordinate_system')}: **{crs_label}**")
     else:
-        st.caption("Koordinatensystem: *keine IfcProjectedCRS im Modell deklariert*")
+        st.caption(f"{t('coordinate_system')}: *{t('crs_not_declared')}*")
 
     # ── Summary metrics ──────────────────────────────────────────
     valid_results = [r for r in results if "error" not in r]
     error_results = [r for r in results if "error" in r]
 
     col1, col2, col3, col4, col5 = st.columns(5)
-    col1.metric("Elements", len(results))
-    col2.metric("Validated", len(valid_results))
-    col3.metric("Errors", len(error_results))
-    col4.metric("Terrain", "Detected" if has_terrain else "None")
+    col1.metric(t("elements"), len(results))
+    col2.metric(t("validated"), len(valid_results))
+    col3.metric(t("errors"), len(error_results))
+    col4.metric(t("terrain"), t("detected") if has_terrain else t("none"))
 
     if valid_results and "level4" in valid_results[0]:
         total_checks = sum(
@@ -398,10 +399,10 @@ if uploaded_file:
             r["level4"]["summary"]["passed"]
             for r in valid_results if "level4" in r
         )
-        col5.metric("Rules passed", f"{total_passed}/{total_checks}")
+        col5.metric(t("rules_passed"), f"{total_passed}/{total_checks}")
 
     # ── Summary table (all elements at a glance) ────────────────
-    st.subheader("Element Overview")
+    st.subheader(t("element_overview"))
     summary_rows = []
     for r in results:
         row = {
@@ -428,7 +429,7 @@ if uploaded_file:
     st.dataframe(summary_rows, use_container_width=True, hide_index=True)
 
     # ── 3D Viewer (Three.js with pre-extracted meshes) ──────────
-    st.subheader("3D Viewer")
+    st.subheader(f"🏗️ 3D {t('ifc_model_view')}")
     try:
         from ifc_geo_validator.viz.mesh_viewer import render_mesh_viewer
 
@@ -462,9 +463,11 @@ if uploaded_file:
         if l6_result and l6_result.get("terrain_mesh"):
             terrain_for_viewer = l6_result["terrain_mesh"]
 
-        render_mesh_viewer(viewer_elements, height=650, terrain_mesh=terrain_for_viewer)
+        render_mesh_viewer(viewer_elements, height=650,
+                           terrain_mesh=terrain_for_viewer,
+                           lang=get_language())
     except Exception as e:
-        st.error(f"3D Viewer konnte nicht geladen werden: {e}")
+        st.error(f"{t('err_viewer_failed')}: {e}")
 
     # ── Element selector (when multiple elements) ───────────────
     if len(valid_results) > 1:
@@ -513,7 +516,7 @@ if uploaded_file:
             expanded=len(results) == 1,
         ):
             # ── L1: Geometry ─────────────────────────────────
-            st.subheader("Geometry (L1)")
+            st.subheader(t("geometry_l1"))
             c1, c2, c3 = st.columns(3)
             c1.metric("Volume", f"{l1['volume']:.3f} m³")
             c2.metric("Surface area", f"{l1['total_area']:.3f} m²")
@@ -545,7 +548,7 @@ if uploaded_file:
                 st.warning(" | ".join(warnings))
 
             # ── L2: Face classification ──────────────────────
-            st.subheader("Face Classification (L2)")
+            st.subheader(t("face_classification_l2"))
             st.caption(f"{l2['num_groups']} groups detected")
 
             group_data = []
@@ -572,7 +575,7 @@ if uploaded_file:
                     cinfo_cols[2].metric("Measurement", cmethod)
 
             # ── L3: Measurements ─────────────────────────────
-            st.subheader("Measurements (L3)")
+            st.subheader(t("measurements_l3"))
             mc1, mc2, mc3, mc4 = st.columns(4)
 
             cw = l3.get("crown_width_mm")
@@ -660,11 +663,11 @@ if uploaded_file:
                                 st.dataframe(slope_df, use_container_width=True, hide_index=True)
             except Exception as exc:
                 # Slope analysis is optional — log rather than hide
-                st.caption(f"ℹ️ Kronen-Gefälle-Analyse übersprungen: {exc}")
+                st.caption(f"ℹ️ {t('err_slope_skipped')}: {exc}")
 
             # ── L4: Rule checks ──────────────────────────────
             if l4:
-                st.subheader("Rule Checks (L4)")
+                st.subheader(t("rule_checks_l4"))
                 s = l4["summary"]
                 rc1, rc2, rc3, rc4 = st.columns(4)
                 rc1.metric("Passed", s["passed"])
@@ -688,7 +691,7 @@ if uploaded_file:
 
     # ── L5: Inter-element analysis ─────────────────────────────
     if l5_result and l5_result.get("pairs"):
-        st.subheader("Inter-Element Analysis (L5)")
+        st.subheader(t("inter_element_l5"))
         st.caption(f"{l5_result['summary']['num_pairs']} pair(s) analysed")
         l5_rows = []
         for p in l5_result["pairs"]:
@@ -708,7 +711,7 @@ if uploaded_file:
 
     # ── L6: Terrain context & distances ─────────────────────────
     if l6_result:
-        st.subheader("Terrain & Distance Checks (L6)")
+        st.subheader(t("terrain_context_l6"))
         st.caption(f"Terrain: {'Detected' if has_terrain else 'Not found'}")
 
         # Terrain side assignments
@@ -780,11 +783,11 @@ if uploaded_file:
                         else:
                             st.info(a["message"])
     except Exception as exc:
-        st.caption(f"ℹ️ Anomaly-Erkennung übersprungen: {exc}")
+        st.caption(f"ℹ️ {t('err_anomaly_skipped')}: {exc}")
 
     # ── Project metadata + HTML report ──────────────────────────
     st.divider()
-    st.subheader("Prüfprotokoll")
+    st.subheader(t("check_report"))
     pcol1, pcol2 = st.columns(2)
     project_name = pcol1.text_input("Projektname", "", key="proj_name")
     author_name = pcol2.text_input("Prüfer/in", "", key="author_name")
@@ -807,7 +810,7 @@ if uploaded_file:
                 use_container_width=True,
             )
         except Exception as exc:
-            st.warning(f"HTML-Prüfprotokoll konnte nicht erstellt werden: {exc}")
+            st.warning(f"{t('err_html_failed')}: {exc}")
 
     # ── CSV export ───────────────────────────────────────────────
     try:
@@ -854,7 +857,7 @@ if uploaded_file:
                 use_container_width=True,
             )
     except Exception as exc:
-        st.warning(f"CSV-Export fehlgeschlagen: {exc}")
+        st.warning(f"{t('err_csv_failed')}: {exc}")
 
     # ── Download report ──────────────────────────────────────────
     st.divider()

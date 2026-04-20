@@ -70,7 +70,7 @@ def generate_report(
     return report
 
 
-def write_report(report: dict, output_path: str):
+def write_report(report: dict, output_path: str) -> None:
     """Write report to JSON file."""
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, ensure_ascii=False, default=json_default)

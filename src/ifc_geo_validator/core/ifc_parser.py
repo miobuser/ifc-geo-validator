@@ -22,7 +22,7 @@ class IFCLoadError(Exception):
     pass
 
 
-def get_coordinate_system(model) -> dict:
+def get_coordinate_system(model: ifcopenshell.file) -> dict:
     """Extract the IFC geographic reference declaration.
 
     Reads IfcProjectedCRS (IFC 4.0+) and IfcMapConversion (linear offset
@@ -107,7 +107,9 @@ def load_model(path: str) -> ifcopenshell.file:
         raise IFCLoadError(f"Failed to parse IFC file '{path}': {e}") from e
 
 
-def get_elements(model, entity_type="IfcWall", predefined_type=None) -> list:
+def get_elements(model: ifcopenshell.file,
+                 entity_type: str = "IfcWall",
+                 predefined_type: str | None = None) -> list:
     """Filter IFC elements by entity type and optional PredefinedType.
 
     For IfcWall, PredefinedType may be set directly on the element or
@@ -144,7 +146,7 @@ def _get_predefined_type(element) -> str | None:
     return ptype  # May still be USERDEFINED/NOTDEFINED/None
 
 
-def get_alignments(model) -> list[dict]:
+def get_alignments(model: ifcopenshell.file) -> list[dict]:
     """Extract horizontal alignments from the model.
 
     Searches for IfcAlignment entities (IFC 4.3) and tessellates their
@@ -273,7 +275,7 @@ def _extract_horizontal_alignment(horiz_align) -> "np.ndarray | None":
     return np.array(points)
 
 
-def get_terrain_mesh(model) -> dict | None:
+def get_terrain_mesh(model: ifcopenshell.file) -> dict | None:
     """Extract terrain mesh from IfcSite geometry, if available.
 
     Searches all IfcSite elements for one with a Representation attribute.

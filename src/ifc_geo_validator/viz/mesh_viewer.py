@@ -52,6 +52,7 @@ def render_mesh_viewer(
     elements: list,
     height: int = 650,
     terrain_mesh: dict | None = None,
+    lang: str | None = None,
 ) -> None:
     """Render pre-extracted meshes with rich Three.js viewer.
 
@@ -67,7 +68,21 @@ def render_mesh_viewer(
             - level4: dict (checks list)
         height: viewer height in pixels.
         terrain_mesh: optional terrain mesh dict.
+        lang: optional language code (de/fr/it). Defaults to the active
+            process language from i18n.get_language(). Toolbar labels,
+            tooltips, panel headings and metric names render in that
+            language — the trilingual claim is load-bearing here.
     """
+    # Resolve language: explicit > i18n active > default "de"
+    from ifc_geo_validator.i18n import t as _t, get_language, set_language
+    if lang in ("de", "fr", "it"):
+        # Temporarily switch to requested language for metric-label translation,
+        # then restore. This keeps the call site ergonomic.
+        prev_lang = get_language()
+        set_language(lang)
+    else:
+        prev_lang = None
+
     payload = []
     for el in elements:
         mesh = el.get("mesh_data")
@@ -89,30 +104,30 @@ def render_mesh_viewer(
                 if 0 <= fi < n_faces:
                     face_cats[fi] = cat
 
-        # L1 / L3 metrics
+        # L1 / L3 metrics — labels from the i18n catalog so FR/IT users
+        # see translated metric names in the properties panel.
         l1 = el.get("level1") or {}
         l3 = el.get("level3") or {}
         metrics = {
-            "Volume (m³)": _fmt(l1.get("volume"), 3),
-            "Oberfläche (m²)": _fmt(l1.get("total_area"), 3),
-            "Wasserdicht": "Ja" if l1.get("is_watertight") else "Nein",
-            "Triangles": l1.get("num_triangles"),
-            "BBox H (m)": _fmt((l1.get("bbox", {}) or {}).get("size", [0, 0, 0])[2], 2),
+            _t("m_volume_m3"): _fmt(l1.get("volume"), 3),
+            _t("m_surface_m2"): _fmt(l1.get("total_area"), 3),
+            _t("m_watertight"): _t("yes") if l1.get("is_watertight") else _t("no"),
+            _t("triangles"): l1.get("num_triangles"),
         }
         # Add L3 measurements that are present
         l3_mapping = {
-            "crown_width_mm": "Kronenbreite (mm)",
-            "crown_slope_percent": "Kronenneigung (%)",
-            "min_wall_thickness_mm": "Wandstärke min (mm)",
-            "wall_height_m": "Wandhöhe (m)",
-            "front_inclination_ratio": "Anzug (n:1)",
-            "min_radius_m": "Min. Radius (m)",
-            "front_plumbness_deg": "Lotabweichung (°)",
+            "crown_width_mm": "m_crown_width_mm",
+            "crown_slope_percent": "m_crown_slope_pct",
+            "min_wall_thickness_mm": "m_min_thickness_mm",
+            "wall_height_m": "m_wall_height_m",
+            "front_inclination_ratio": "m_inclination_ratio",
+            "min_radius_m": "m_min_radius_m",
+            "front_plumbness_deg": "m_plumbness_deg",
         }
-        for key, label in l3_mapping.items():
+        for key, label_key in l3_mapping.items():
             v = l3.get(key)
             if v is not None:
-                metrics[label] = _fmt(v, 2)
+                metrics[_t(label_key)] = _fmt(v, 2)
 
         # L4 checks
         checks = []
@@ -150,10 +165,65 @@ def render_mesh_viewer(
                 "indices": tf.flatten().tolist(),
             }
 
+    # Localised labels for all toolbar buttons, panel headings,
+    # tooltips and status messages. Rendered into the template as a
+    # top-level JS constant so no string is hardcoded in the HTML.
+    labels = {
+        "group_color": _t("tb_group_color"),
+        "group_view": _t("tb_group_view"),
+        "group_display": _t("tb_group_display"),
+        "group_tool": _t("tb_group_tool"),
+        "group_section": _t("tb_group_section"),
+        "group_focus": _t("tb_group_focus"),
+        "status": _t("tb_status"), "faces": _t("tb_faces"),
+        "role": _t("tb_role"), "solid": _t("tb_solid"),
+        "fit": _t("tb_fit"), "iso": _t("tb_iso"),
+        "top": _t("tb_top"), "front": _t("tb_front"), "side": _t("tb_side"),
+        "wire": _t("tb_wire"), "edges": _t("tb_edges"),
+        "terrain": _t("tb_terrain"), "ghost": _t("tb_ghost"),
+        "measure": _t("tb_measure"),
+        "section_x": "X", "section_y": "Y", "section_z": "Z",
+        "section_flip": _t("tb_flip"), "section_off": _t("tb_section_off"),
+        "zoom_sel": _t("tb_zoom_selection"), "clear": _t("tb_clear"),
+        "tt_status_mode": _t("tt_status_mode"),
+        "tt_faces_mode": _t("tt_faces_mode"),
+        "tt_role_mode": _t("tt_role_mode"),
+        "tt_solid_mode": _t("tt_solid_mode"),
+        "tt_ghost_tip": _t("tt_ghost_tip"),
+        "tt_measure_tip": _t("tt_measure_tip"),
+        "tt_sections_clear": _t("tt_sections_clear"),
+        "tt_flip_dir": _t("tt_flip_dir"),
+        "tt_zoom_selection": _t("tt_zoom_selection"),
+        "tt_clear_selection": _t("tt_clear_selection"),
+        "panel_elements": _t("panel_elements"),
+        "panel_properties": _t("panel_properties"),
+        "panel_collapse": _t("panel_collapse"),
+        "panel_expand_elements": _t("panel_expand_elements"),
+        "panel_expand_props": _t("panel_expand_props"),
+        "click_element": _t("click_element_to_inspect"),
+        "measurements": _t("measurements_section"),
+        "rule_checks": _t("rule_checks_section"),
+        "no_rules": _t("no_rules_evaluated"),
+        "no_mesh": _t("no_mesh_data"),
+        "empty_bbox": _t("empty_bbox"),
+        "loading": _t("loading_threejs"),
+        "building": _t("building_scene"),
+        "distance": _t("distance_label"),
+        "no_rule": _t("legend_no_rule"),
+        "err_prefix": _t("error_prefix"),
+        "control_hint": _t("control_hint"),
+        "value_actual": _t("value_actual"),
+        "value_expected": _t("value_expected"),
+        "role_label": _t("role"),
+        "status_label": _t("status"),
+        "unknown_role": _t("unknown"),
+    }
+
     data_json = json.dumps({
         "elements": payload,
         "terrain": terrain_payload,
         "category_colors": CATEGORY_COLORS,
+        "labels": labels,
     }, ensure_ascii=True)
     # Neutralise every sequence that could prematurely terminate the
     # enclosing <script type="module"> tag or start an HTML comment.
@@ -169,6 +239,10 @@ def render_mesh_viewer(
 
     html = _VIEWER_HTML.replace("__DATA_JSON__", data_json)
     html = html.replace("__HEIGHT__", str(height))
+
+    # Restore caller's language context
+    if prev_lang is not None:
+        set_language(prev_lang)
 
     components.html(html, height=height + 10, scrolling=False)
 
@@ -563,16 +637,98 @@ function setStatus(msg, isError) {
 }
 
 try {
+  // First paint shows the German placeholder; the language label replaces
+  // it a tick later after DATA is parsed and hydrateLabels runs.
   setStatus('Lade Three.js...');
   const THREE = await import('https://esm.sh/three@0.160.0');
   const { OrbitControls } = await import('https://esm.sh/three@0.160.0/examples/jsm/controls/OrbitControls.js');
-  setStatus('Baue Szene...');
 
   const DATA = __DATA_JSON__;
   const HEIGHT = __HEIGHT__;
+  const LABELS = DATA.labels || {};
+  const _L = (k, fallback) => LABELS[k] || fallback || k;
+
+  // ── Hydrate static labels from LABELS dict ────────────────────
+  // The HTML template ships with German placeholders for fast visual
+  // feedback during loading; on ready we rewrite every user-facing
+  // string with the caller's language so FR/IT users see their UI.
+  function hydrateLabels() {
+    const setText = (sel, key) => {
+      const el = document.querySelector(sel);
+      if (el && LABELS[key]) el.textContent = LABELS[key];
+    };
+    const setTitle = (sel, key) => {
+      const el = document.querySelector(sel);
+      if (el && LABELS[key]) el.title = LABELS[key];
+    };
+    // Group labels
+    const groupLabels = document.querySelectorAll('.tb-group-label');
+    const groupKeys = ['group_color', 'group_view', 'group_display',
+                       'group_tool', 'group_section', 'group_focus'];
+    groupLabels.forEach((el, i) => {
+      if (groupKeys[i] && LABELS[groupKeys[i]]) el.textContent = LABELS[groupKeys[i]];
+    });
+    // Color-mode buttons
+    document.querySelectorAll('button.tb[data-mode]').forEach(btn => {
+      const lblKey = { 'status': 'status', 'category': 'faces',
+                       'role': 'role', 'solid': 'solid' }[btn.dataset.mode];
+      const titleKey = { 'status': 'tt_status_mode', 'category': 'tt_faces_mode',
+                         'role': 'tt_role_mode', 'solid': 'tt_solid_mode' }[btn.dataset.mode];
+      const span = btn.querySelector('span');
+      if (span && lblKey && LABELS[lblKey]) span.textContent = LABELS[lblKey];
+      if (titleKey && LABELS[titleKey]) btn.title = LABELS[titleKey];
+    });
+    // View buttons
+    [['v-fit', 'fit'], ['v-iso', 'iso'], ['v-top', 'top'],
+     ['v-front', 'front'], ['v-side', 'side']].forEach(([id, key]) => {
+      const btn = document.getElementById(id);
+      if (btn) {
+        const span = btn.querySelector('span');
+        if (span && LABELS[key]) span.textContent = LABELS[key];
+      }
+    });
+    // Display toggles
+    [['t-wire', 'wire'], ['t-edges', 'edges'],
+     ['t-terrain', 'terrain'], ['t-ghost', 'ghost']].forEach(([id, key]) => {
+      const btn = document.getElementById(id);
+      if (btn) {
+        const span = btn.querySelector('span');
+        if (span && LABELS[key]) span.textContent = LABELS[key];
+      }
+    });
+    setTitle('#t-ghost', 'tt_ghost_tip');
+    // Tool & section & focus
+    [['tool-measure', 'measure', 'tt_measure_tip'],
+     ['sec-x', 'section_x', null], ['sec-y', 'section_y', null],
+     ['sec-z', 'section_z', null],
+     ['sec-flip', 'section_flip', 'tt_flip_dir'],
+     ['sec-clear', 'section_off', 'tt_sections_clear'],
+     ['v-zoom-sel', 'zoom_sel', 'tt_zoom_selection'],
+     ['s-clear', 'clear', 'tt_clear_selection']].forEach(([id, key, tt]) => {
+      const btn = document.getElementById(id);
+      if (btn) {
+        const span = btn.querySelector('span');
+        if (span && LABELS[key]) span.textContent = LABELS[key];
+        if (tt && LABELS[tt]) btn.title = LABELS[tt];
+      }
+    });
+    // Panel headers
+    document.querySelectorAll('#element-list .panel-header h4').forEach(h =>
+      { if (LABELS['panel_elements']) h.textContent = LABELS['panel_elements']; });
+    document.querySelectorAll('#props-panel .panel-header h4').forEach(h =>
+      { if (LABELS['panel_properties']) h.textContent = LABELS['panel_properties']; });
+    setTitle('#collapse-left', 'panel_collapse');
+    setTitle('#collapse-right', 'panel_collapse');
+    setTitle('#left-toggle', 'panel_expand_elements');
+    setTitle('#right-toggle', 'panel_expand_props');
+    // Control-hint strip
+    const info = document.getElementById('info');
+    if (info && LABELS['control_hint']) info.textContent = LABELS['control_hint'];
+  }
+  hydrateLabels();
 
   if (!DATA.elements || DATA.elements.length === 0) {
-    setStatus('Keine Mesh-Daten verfügbar', true);
+    setStatus(_L('no_mesh', 'Keine Mesh-Daten verfügbar'), true);
     throw new Error('no elements');
   }
 
@@ -723,7 +879,7 @@ try {
   }
 
   if (worldBox.isEmpty()) {
-    setStatus('Bounding-Box leer', true);
+    setStatus(_L('empty_bbox', 'Bounding-Box leer'), true);
     throw new Error('empty bbox');
   }
 
@@ -783,7 +939,7 @@ try {
     if (mode === 'status') {
       items = [
         ['#4CAF50', 'PASS'], ['#F44336', 'FAIL'],
-        ['#FF9800', 'WARN'], ['#90A4AE', 'Keine Regel'],
+        ['#FF9800', 'WARN'], ['#90A4AE', _L('no_rule', 'Keine Regel')],
       ];
     } else if (mode === 'category') {
       items = Object.entries(DATA.category_colors || {}).map(([k, v]) => [v, k]);
@@ -849,22 +1005,30 @@ try {
 
   function renderProps(em) {
     if (!em) {
-      propsContent.innerHTML = '<div class="empty">Element anklicken zum Inspizieren</div>';
+      propsContent.innerHTML = '<div class="empty">' +
+        esc(_L('click_element', 'Element anklicken zum Inspizieren')) + '</div>';
       return;
     }
     // Every user-controlled string below runs through esc() before
     // interpolation — XSS-safe. Numeric fields are coerced to String.
     const safeName = esc(em.name);
-    const safeRole = esc(em.role || 'unbekannt');
+    const safeRole = esc(em.role || _L('unknown_role', 'unbekannt'));
     const safeStatus = esc(em.status);
     const statusColor = STATUS_COLORS[em.status] ? '#' + STATUS_COLORS[em.status].toString(16).padStart(6, '0') : '#fff';
+    const lblRole = esc(_L('role_label', 'Rolle'));
+    const lblStatus = esc(_L('status_label', 'Status'));
+    const lblMeasurements = esc(_L('measurements', 'Messwerte'));
+    const lblRuleChecks = esc(_L('rule_checks', 'Regelprüfung'));
+    const lblActual = esc(_L('value_actual', 'Ist'));
+    const lblExpected = esc(_L('value_expected', 'Soll'));
+    const lblNoRules = esc(_L('no_rules', 'Keine Regeln evaluiert'));
 
     let html = '<h3>#' + em.id + ' ' + safeName + '</h3>';
-    html += '<div style="margin-bottom:8px;color:#909090">Rolle: ' + safeRole +
-            ' | Status: <strong style="color:' + statusColor + '">' +
+    html += '<div style="margin-bottom:8px;color:#909090">' + lblRole + ': ' + safeRole +
+            ' | ' + lblStatus + ': <strong style="color:' + statusColor + '">' +
             safeStatus + '</strong></div>';
 
-    html += '<h4>Messwerte</h4>';
+    html += '<h4>' + lblMeasurements + '</h4>';
     for (const [k, v] of Object.entries(em.metrics)) {
       if (v === null || v === undefined) continue;
       html += '<div class="prop-row"><span class="prop-key">' + esc(k) +
@@ -872,14 +1036,14 @@ try {
     }
 
     if (em.checks && em.checks.length > 0) {
-      html += '<h4>Regelprüfung (' + em.checks.length + ')</h4>';
+      html += '<h4>' + lblRuleChecks + ' (' + em.checks.length + ')</h4>';
       for (const c of em.checks) {
         const cls = c.status === 'PASS' ? 'PASS' : (c.status === 'FAIL' ? 'FAIL' : 'SKIP');
         html += '<div class="check-row ' + cls + '">';
         html += '<div class="check-name">[' + esc(c.status) + '] ' + esc(c.name) + '</div>';
         if (c.actual !== null && c.actual !== undefined) {
-          html += '<div class="check-detail">Ist: ' + esc(c.actual) +
-                  ' | Soll: ' + esc(c.expected) + '</div>';
+          html += '<div class="check-detail">' + lblActual + ': ' + esc(c.actual) +
+                  ' | ' + lblExpected + ': ' + esc(c.expected) + '</div>';
         }
         if (c.message) {
           html += '<div class="check-detail" style="color:#bbb">' + esc(c.message) + '</div>';
@@ -887,7 +1051,7 @@ try {
         html += '</div>';
       }
     } else {
-      html += '<h4>Regelprüfung</h4><div class="empty">Keine Regeln evaluiert</div>';
+      html += '<h4>' + lblRuleChecks + '</h4><div class="empty">' + lblNoRules + '</div>';
     }
     propsContent.innerHTML = html;
   }
@@ -1265,7 +1429,7 @@ try {
       scene.add(measureLine);
       const dist = p1.distanceTo(p2);
       const unit = dist >= 1 ? (dist.toFixed(3) + ' m') : ((dist * 1000).toFixed(1) + ' mm');
-      measureLabelDiv.textContent = 'Distanz: ' + unit;
+      measureLabelDiv.textContent = _L('distance', 'Distanz') + ': ' + unit;
       // Position label at screen midpoint
       const mid = p1.clone().lerp(p2, 0.5);
       mid.project(camera);
@@ -1360,7 +1524,8 @@ try {
   statusDiv.style.display = 'none';
 
 } catch (err) {
-  setStatus('Fehler: ' + (err.message || err), true);
+  const prefix = (DATA && DATA.labels && DATA.labels.err_prefix) || 'Fehler';
+  setStatus(prefix + ': ' + (err.message || err), true);
 }
 </script>
 </body>
