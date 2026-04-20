@@ -40,3 +40,4 @@ viz_output/
 # OS-specific
 .DS_Store
 Thumbs.db
+_bench_outputs/
