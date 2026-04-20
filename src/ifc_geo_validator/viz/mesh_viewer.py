@@ -154,7 +154,18 @@ def render_mesh_viewer(
         "elements": payload,
         "terrain": terrain_payload,
         "category_colors": CATEGORY_COLORS,
-    })
+    }, ensure_ascii=True)
+    # Neutralise every sequence that could prematurely terminate the
+    # enclosing <script type="module"> tag or start an HTML comment.
+    # json.dumps does not escape these; we do it here so that an IFC
+    # element named "</script>" or containing "<!--" can never break
+    # out of the payload context.
+    data_json = (
+        data_json
+        .replace("</", "<\\/")
+        .replace("<!--", "<\\!--")
+        .replace("-->", "--\\>")
+    )
 
     html = _VIEWER_HTML.replace("__DATA_JSON__", data_json)
     html = html.replace("__HEIGHT__", str(height))
@@ -772,6 +783,22 @@ try {
 
   applyColorMode('status');
 
+  // HTML-escape any string that we interpolate into innerHTML. IFC
+  // element names are user-authored (AutoCAD/Revit text boxes) and can
+  // contain &lt;/script&gt;, quotes, or event-handler-like fragments. Without
+  // escaping, a malicious IFC could run arbitrary JS inside the iframe.
+  // This is the single sanitisation hop for everything that appears in
+  // the element list, properties panel, and tooltip.
+  function esc(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   // ── Element list ──────────────────────────────────────────────
   const listDiv = document.getElementById('el-rows');
   const elCountEl = document.getElementById('el-count');
@@ -781,9 +808,10 @@ try {
       const c = STATUS_COLORS[em.status] || STATUS_COLORS['—'];
       const colorHex = '#' + c.toString(16).padStart(6, '0');
       const sel = em.id === selectedId ? ' selected' : '';
+      const safeName = esc(em.name);
       return '<div class="el-row' + sel + '" data-id="' + em.id + '">' +
         '<div class="el-dot" style="background:' + colorHex + '"></div>' +
-        '<div class="el-name" title="' + em.name + '">#' + em.id + ' ' + em.name + '</div>' +
+        '<div class="el-name" title="' + safeName + '">#' + em.id + ' ' + safeName + '</div>' +
         '</div>';
     }).join('');
     listDiv.querySelectorAll('.el-row').forEach(row => {
@@ -805,15 +833,23 @@ try {
       propsContent.innerHTML = '<div class="empty">Element anklicken zum Inspizieren</div>';
       return;
     }
-    let html = '<h3>#' + em.id + ' ' + em.name + '</h3>';
-    html += '<div style="margin-bottom:8px;color:#909090">Rolle: ' + (em.role || 'unbekannt') +
-            ' | Status: <strong style="color:' + (STATUS_COLORS[em.status] ? '#' + STATUS_COLORS[em.status].toString(16).padStart(6, '0') : '#fff') + '">' +
-            em.status + '</strong></div>';
+    // Every user-controlled string below runs through esc() before
+    // interpolation — XSS-safe. Numeric fields are coerced to String.
+    const safeName = esc(em.name);
+    const safeRole = esc(em.role || 'unbekannt');
+    const safeStatus = esc(em.status);
+    const statusColor = STATUS_COLORS[em.status] ? '#' + STATUS_COLORS[em.status].toString(16).padStart(6, '0') : '#fff';
+
+    let html = '<h3>#' + em.id + ' ' + safeName + '</h3>';
+    html += '<div style="margin-bottom:8px;color:#909090">Rolle: ' + safeRole +
+            ' | Status: <strong style="color:' + statusColor + '">' +
+            safeStatus + '</strong></div>';
 
     html += '<h4>Messwerte</h4>';
     for (const [k, v] of Object.entries(em.metrics)) {
       if (v === null || v === undefined) continue;
-      html += '<div class="prop-row"><span class="prop-key">' + k + '</span><span class="prop-val">' + v + '</span></div>';
+      html += '<div class="prop-row"><span class="prop-key">' + esc(k) +
+              '</span><span class="prop-val">' + esc(v) + '</span></div>';
     }
 
     if (em.checks && em.checks.length > 0) {
@@ -821,12 +857,13 @@ try {
       for (const c of em.checks) {
         const cls = c.status === 'PASS' ? 'PASS' : (c.status === 'FAIL' ? 'FAIL' : 'SKIP');
         html += '<div class="check-row ' + cls + '">';
-        html += '<div class="check-name">[' + c.status + '] ' + c.name + '</div>';
+        html += '<div class="check-name">[' + esc(c.status) + '] ' + esc(c.name) + '</div>';
         if (c.actual !== null && c.actual !== undefined) {
-          html += '<div class="check-detail">Ist: ' + c.actual + ' | Soll: ' + c.expected + '</div>';
+          html += '<div class="check-detail">Ist: ' + esc(c.actual) +
+                  ' | Soll: ' + esc(c.expected) + '</div>';
         }
         if (c.message) {
-          html += '<div class="check-detail" style="color:#bbb">' + c.message + '</div>';
+          html += '<div class="check-detail" style="color:#bbb">' + esc(c.message) + '</div>';
         }
         html += '</div>';
       }

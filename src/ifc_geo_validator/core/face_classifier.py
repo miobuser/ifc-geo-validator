@@ -487,6 +487,14 @@ def _build_face_adjacency(faces):
     # connects the entire edge-cluster. Previously we only recorded
     # the first consecutive pair via the `used` set, which orphaned
     # the 3rd+ face and broke clustering on Boolean operands.
+    # Emit a star-graph per edge group: connect every face in the group
+    # to the first face. This produces O(k) pairs instead of O(k²) while
+    # still giving Union-Find a spanning subgraph that connects every
+    # face in the cluster. For a typical manifold edge (k=2) we emit the
+    # single pair as before. For a non-manifold edge where k faces share
+    # the edge (CSG artifacts), we emit k-1 pairs — enough for clustering,
+    # but bounded linearly so a maliciously authored IFC with a star of
+    # 10 000 faces cannot blow up into 50M adjacency tuples.
     pairs = []
     n = len(sorted_keys)
     i = 0
@@ -494,14 +502,12 @@ def _build_face_adjacency(faces):
         j = i
         while j < n and sorted_keys[j] == sorted_keys[i]:
             j += 1
-        # Faces sharing edge_keys[i] are sorted_faces[i:j]
         group = sorted_faces[i:j]
         if len(group) >= 2:
-            # Deduplicate and emit all unordered pairs
             uniq = list({int(f) for f in group})
-            for a in range(len(uniq)):
-                for b in range(a + 1, len(uniq)):
-                    pairs.append((uniq[a], uniq[b]))
+            first = uniq[0]
+            for b in range(1, len(uniq)):
+                pairs.append((first, uniq[b]))
         i = j
 
     return pairs

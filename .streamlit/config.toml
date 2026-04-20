@@ -2,9 +2,12 @@
 headless = true
 port = 8501
 enableCORS = false
+# Real-world IFC retaining-wall models routinely exceed Streamlit's 200 MB
+# default (a large Stützmauer model can be 500-1000 MB).
+maxUploadSize = 1000
 
 [theme]
-primaryColor = "#2196F3"
+primaryColor = "#CB0231"           # B+S corporate red (matches viewer accent)
 backgroundColor = "#0e1117"
 secondaryBackgroundColor = "#1a1a2e"
 textColor = "#e0e0e0"
