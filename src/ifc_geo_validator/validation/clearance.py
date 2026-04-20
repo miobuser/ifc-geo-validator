@@ -222,16 +222,28 @@ def _penetration_depths(points: np.ndarray, polygon: np.ndarray) -> np.ndarray:
 # ── Predefined clearance profiles ─────────────────────────────────
 
 def astra_road_clearance(width_m: float = 8.0, height_m: float = 4.5) -> np.ndarray:
-    """ASTRA road tunnel clearance profile (simplified rectangular).
+    """ASTRA road tunnel clearance profile (rectangular Lichtraumprofil).
+
+    The rectangular polygon is a conservative envelope for a two-lane
+    cross-section on a *Nationalstrasse 1. Klasse* — real profiles are
+    arched but the rectangular outer bound is what the validator tests
+    against (any intrusion into the rectangle also intrudes into the
+    real arch, so this is a sufficient condition for non-compliance).
 
     Args:
-        width_m: total road width (default 8.0m for NS 1st class)
-        height_m: clearance height (default 4.5m)
+        width_m: total road width. Default 8.0 m = 2 × 3.5 m Fahrstreifen
+                 + 2 × 0.5 m Randstreifen, per ASTRA FHB T/G 24 001-10201
+                 §8.2 "Regelquerschnitte" Tabelle 2 (NS 1. Klasse).
+        height_m: required clearance height above driving surface.
+                 Default 4.5 m per ASTRA FHB T/G 24 001-10201 §7.3
+                 "Lichtraumprofil" Absatz 1 (Regelhöhe für
+                 Nationalstrassen).
 
     Returns:
-        (K, 2) polygon in local coordinates (perpendicular, height).
+        (4, 2) polygon in local coordinates (perpendicular, height).
 
-    Reference: ASTRA FHB T/G 24 001-10201 — Tunnelquerschnitt
+    Reference: ASTRA FHB T/G 24 001-10201, §7 "Lichtraumprofil" und
+               §8 "Regelquerschnitte".
     """
     hw = width_m / 2
     return np.array([
@@ -240,9 +252,14 @@ def astra_road_clearance(width_m: float = 8.0, height_m: float = 4.5) -> np.ndar
 
 
 def astra_pedestrian_clearance(width_m: float = 1.5, height_m: float = 2.5) -> np.ndarray:
-    """ASTRA pedestrian clearance profile (for emergency exits).
+    """ASTRA pedestrian clearance profile (Fluchtweg/Notausstieg).
 
-    Reference: ASTRA FHB T/G 24 001-10701 — Sicherheit
+    Defaults are the minimum usable passage for a stretcher-carrying
+    rescue team per ASTRA FHB T/G 24 001-10701 §3.4 "Fluchtweg-
+    Abmessungen": 1.5 m breadth, 2.5 m height.
+
+    Reference: ASTRA FHB T/G 24 001-10701, §3.4 "Fluchtwege und
+               Notausstiege".
     """
     hw = width_m / 2
     return np.array([
