@@ -14,6 +14,7 @@ def generate_report(
     ifc_path: str,
     elements_results: list[dict],
     ruleset: dict = None,
+    coordinate_system: dict = None,
 ) -> dict:
     """Generate a structured validation report.
 
@@ -21,17 +22,31 @@ def generate_report(
         ifc_path: Path to the validated IFC file.
         elements_results: list of per-element result dicts from the CLI pipeline.
         ruleset: optional parsed YAML ruleset dict.
+        coordinate_system: dict from ifc_parser.get_coordinate_system().
+            When provided, is recorded in the report so every measurement
+            carries the frame it was taken in (critical for Swiss LV95
+            infrastructure models).
 
     Returns:
         dict: Complete report structure.
     """
+    try:
+        from ifc_geo_validator import get_version
+        version = get_version()
+    except Exception:
+        version = "unknown"
+
     report = {
         "report": {
             "generator": "ifc-geo-validator",
-            "version": "1.0.0",
+            "version": version,
             "timestamp": datetime.now().isoformat(),
             "ifc_file": str(Path(ifc_path).name),
             "ifc_path": str(ifc_path),
+        },
+        "coordinate_system": coordinate_system or {
+            "name": "unspecified",
+            "has_crs": False,
         },
         "ruleset": None,
         "elements": [],

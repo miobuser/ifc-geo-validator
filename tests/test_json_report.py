@@ -101,7 +101,9 @@ class TestWriteReport:
             write_report(report, tmp)
             with open(tmp, encoding="utf-8") as f:
                 data = json.load(f)  # Must not raise
-            assert data["report"]["version"] == "1.0.0"
+            # Version now resolved from package metadata; just check it's a string.
+            assert isinstance(data["report"]["version"], str)
+            assert len(data["report"]["version"]) > 0
         finally:
             os.unlink(tmp)
 

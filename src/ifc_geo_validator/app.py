@@ -331,7 +331,9 @@ def run_validation(_file_bytes, file_name, entity_types_str, predefined_type, _r
                 r["level4"] = validate_level4(l1, l3, ruleset, level5_context=l5_ctx,
                                               level6_context=l6_ctx, level2_result=r.get("level2"))
 
-    report = generate_report(file_name, all_results, ruleset)
+    from ifc_geo_validator.core.ifc_parser import get_coordinate_system
+    crs = get_coordinate_system(model)
+    report = generate_report(file_name, all_results, ruleset, coordinate_system=crs)
     return all_results, report, ruleset, l5_result, l6_result, terrain is not None
 
 
@@ -356,6 +358,15 @@ if uploaded_file:
             f"Ruleset: {ruleset['metadata']['name']} "
             f"v{ruleset['metadata'].get('version', '?')}"
         )
+    # Surface the IFC coordinate system so users always know the frame.
+    crs = report.get("coordinate_system", {})
+    if crs.get("has_crs"):
+        crs_label = crs.get("name", "—")
+        if crs.get("vertical_datum"):
+            crs_label += f" / {crs['vertical_datum']}"
+        st.caption(f"Koordinatensystem: **{crs_label}**")
+    else:
+        st.caption("Koordinatensystem: *keine IfcProjectedCRS im Modell deklariert*")
 
     # ── Summary metrics ──────────────────────────────────────────
     valid_results = [r for r in results if "error" not in r]

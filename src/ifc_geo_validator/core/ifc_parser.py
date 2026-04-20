@@ -1,4 +1,17 @@
-"""IFC file loading and element filtering."""
+"""IFC file loading, element filtering, and geographic reference extraction.
+
+All geometric measurements returned by this validator are in the IFC's native
+coordinate system. For Swiss infrastructure this is typically LV95 (EPSG:2056)
+with height reference LN02 or LHN95 — a fact that is load-bearing for any
+downstream GIS integration. Use :func:`get_coordinate_system` to extract the
+declared frame so every report carries its provenance.
+
+References:
+  - Krijnen, T. & Beetz, J. (2020). IfcOpenShell documentation.
+  - buildingSMART International (2024). IFC 4.3 ADD2 §8.8 IfcRepresentationResource
+    (IfcMapConversion, IfcProjectedCRS).
+  - swisstopo (2023). *Das Schweizerische Bezugssystem LV95.*
+"""
 
 import os
 import ifcopenshell
@@ -7,6 +20,75 @@ import ifcopenshell
 class IFCLoadError(Exception):
     """Raised when an IFC file cannot be loaded."""
     pass
+
+
+def get_coordinate_system(model) -> dict:
+    """Extract the IFC geographic reference declaration.
+
+    Reads IfcProjectedCRS (IFC 4.0+) and IfcMapConversion (linear offset
+    from local engineering coordinates to the projected CRS). For files
+    without an explicit CRS declaration, reports "unspecified" so the
+    downstream report does not silently claim a frame that is not in
+    the IFC.
+
+    Returns a dict with:
+        name:         str — e.g. "EPSG:2056" (Swiss LV95) or "unspecified"
+        description:  str — human-readable CRS label
+        geodetic_datum: str — e.g. "CH1903+"
+        vertical_datum: str — e.g. "LN02" or "LHN95"
+        map_unit:     str — e.g. "METRE"
+        eastings_offset:  float | None — additive X offset (metres)
+        northings_offset: float | None — additive Y offset (metres)
+        orthogonal_height_offset: float | None — additive Z offset (metres)
+        has_crs:      bool — True if a CRS was declared in the IFC
+    """
+    result = {
+        "name": "unspecified",
+        "description": "No IfcProjectedCRS or IfcMapConversion declared",
+        "geodetic_datum": None,
+        "vertical_datum": None,
+        "map_unit": None,
+        "eastings_offset": None,
+        "northings_offset": None,
+        "orthogonal_height_offset": None,
+        "has_crs": False,
+    }
+    try:
+        crs_list = model.by_type("IfcProjectedCRS")
+    except Exception:
+        crs_list = []
+    if crs_list:
+        crs = crs_list[0]
+        result["name"] = getattr(crs, "Name", None) or "unspecified"
+        result["description"] = getattr(crs, "Description", None) or result["name"]
+        result["geodetic_datum"] = getattr(crs, "GeodeticDatum", None)
+        result["vertical_datum"] = getattr(crs, "VerticalDatum", None)
+        map_unit = getattr(crs, "MapUnit", None)
+        if map_unit is not None:
+            result["map_unit"] = getattr(map_unit, "Name", None) or str(map_unit)
+        result["has_crs"] = True
+
+    try:
+        mc_list = model.by_type("IfcMapConversion")
+    except Exception:
+        mc_list = []
+    if mc_list:
+        mc = mc_list[0]
+        result["eastings_offset"] = _as_float(getattr(mc, "Eastings", None))
+        result["northings_offset"] = _as_float(getattr(mc, "Northings", None))
+        result["orthogonal_height_offset"] = _as_float(
+            getattr(mc, "OrthogonalHeight", None))
+    return result
+
+
+def _as_float(v):
+    """Coerce to float, return None on failure."""
+    if v is None:
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
 
 
 def load_model(path: str) -> ifcopenshell.file:

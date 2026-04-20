@@ -408,6 +408,17 @@ def main():
     # Load model
     model = load_model(ifc_file)
 
+    # Print declared IFC coordinate reference (LV95 / EPSG:2056 for Swiss infra)
+    from ifc_geo_validator.core.ifc_parser import get_coordinate_system
+    crs = get_coordinate_system(model)
+    if crs["has_crs"]:
+        crs_label = crs["name"]
+        if crs.get("vertical_datum"):
+            crs_label += f" / {crs['vertical_datum']}"
+        print(f"CRS: {crs_label}")
+    else:
+        print("CRS: none declared (IFC has no IfcProjectedCRS)")
+
     # --auto: auto-configure entity types and ruleset
     if args.auto:
         entity_types, ruleset = _apply_auto_config(args, model, ruleset, entity_types)
