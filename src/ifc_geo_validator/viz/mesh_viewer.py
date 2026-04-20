@@ -346,6 +346,7 @@ _VIEWER_HTML = r"""
     font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-size: 13px;
     width: 100%; height: __HEIGHT__px;
+    position: relative;       /* containing block for app-shell */
   }
 
   /* Canvas fills its grid cell. The CSS gradient shows through because
@@ -369,10 +370,10 @@ _VIEWER_HTML = r"""
      │ FOOTER (red · B+S AG · Weltpoststrasse · Telefon)          │
      └───────────────────────────────────────────────────────────┘ */
   .app-shell {
-    position: absolute; inset: 0;
+    width: 100%; height: 100%;
     display: grid;
     grid-template-columns: 260px 1fr 320px;
-    grid-template-rows: 56px 1fr 32px;
+    grid-template-rows: 56px minmax(0, 1fr) 32px;
     grid-template-areas:
       "header header  header"
       "left   main    right"
@@ -478,8 +479,15 @@ _VIEWER_HTML = r"""
   #main-area {
     grid-area: main;
     position: relative;
-    display: flex; flex-direction: column;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
     background: var(--bg-primary);
+    overflow: hidden;
+    min-width: 0;
+  }
+  #canvas-wrap {
+    position: relative;
+    width: 100%; height: 100%;
     overflow: hidden;
   }
 
@@ -806,7 +814,7 @@ _VIEWER_HTML = r"""
   </div><!-- /toolbar -->
 
   <!-- 3D Canvas fills the remaining space of the main area -->
-  <div id="canvas-wrap" style="flex:1; position:relative;">
+  <div id="canvas-wrap">
     <canvas id="c"></canvas>
   </div>
 </main>
