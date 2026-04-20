@@ -177,69 +177,149 @@ _VIEWER_HTML = r"""
 <html>
 <head>
 <style>
+  :root {
+    /* B+S Corporate Style — exact tokens from IFC-Editor */
+    --bg-primary: #1a1a1a;
+    --bg-secondary: #222222;
+    --bg-tertiary: #2a2a2a;
+    --text-primary: #e0e0e0;
+    --text-secondary: #909090;
+    --accent: #CB0231;
+    --accent-hover: #e0033a;
+    --accent-light: rgba(203, 2, 49, 0.15);
+    --border: #404040;
+    --success: #4ec9b0;
+    --warning: #dcdcaa;
+    --error: #f14c4c;
+    --highlight: #CB0231;
+    --radius-sm: 2px; --radius-md: 4px; --radius-lg: 6px;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 8px rgba(0,0,0,0.4);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+    --duration-fast: 0.15s; --duration-base: 0.2s;
+    --transition: all 0.15s ease;
+  }
   html, body {
     margin: 0; padding: 0; overflow: hidden;
-    background: #1a1a1a; color: #e0e0e0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg-primary); color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
     font-size: 12px;
     width: 100%; height: __HEIGHT__px;
   }
   #c { display: block; width: 100%; height: __HEIGHT__px; }
 
-  /* Top toolbar */
+  /* Top toolbar — grouped containers with labels above buttons */
   #toolbar {
-    position: absolute; top: 0; left: 0; right: 0; height: 38px;
-    background: rgba(34,34,34,0.95); border-bottom: 1px solid #404040;
-    display: flex; align-items: center; padding: 0 8px;
+    position: absolute; top: 0; left: 0; right: 0; min-height: 64px;
+    background: linear-gradient(180deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: stretch; padding: 6px 12px;
     gap: 4px; z-index: 50; user-select: none;
+    overflow-x: auto; overflow-y: hidden;
   }
-  .group {
-    display: flex; align-items: center; gap: 2px;
-    padding: 0 6px; border-right: 1px solid #404040;
-    height: 100%;
+  #toolbar::-webkit-scrollbar { height: 4px; }
+  #toolbar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .tb-group {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 4px 8px; gap: 2px;
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    border-radius: 6px; flex-shrink: 0;
   }
-  .group:last-child { border-right: none; }
-  .group-label {
-    font-size: 10px; color: #909090;
-    margin-right: 4px; text-transform: uppercase; letter-spacing: 0.5px;
+  .tb-group-label {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--text-secondary); font-weight: 600;
   }
+  .tb-group-buttons { display: flex; gap: 2px; align-items: center; }
   button.tb {
-    background: transparent; color: #e0e0e0; border: 1px solid transparent;
-    padding: 4px 10px; font-size: 11px; cursor: pointer; border-radius: 3px;
-    height: 26px; min-width: 28px;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 6px 10px;
+    background: transparent; color: var(--text-primary);
+    border: 1px solid transparent; border-radius: 4px;
+    cursor: pointer; font-size: 10px; font-weight: 500;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    min-width: 48px;
   }
-  button.tb:hover { background: #2a2a2a; border-color: #505050; }
-  button.tb.active { background: #CB0231; color: #fff; border-color: #CB0231; }
-  button.tb.active:hover { background: #e0033a; border-color: #e0033a; }
+  button.tb svg { width: 18px; height: 18px; flex-shrink: 0; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  button.tb:hover { background: var(--bg-tertiary); border-color: var(--border); }
+  button.tb.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.tb.active:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  button.tb:disabled { opacity: 0.4; cursor: not-allowed; }
 
+  button.panel-btn {
+    background: transparent; color: var(--text-secondary);
+    border: 1px solid transparent; border-radius: 3px; cursor: pointer;
+    padding: 3px 5px; transition: var(--transition);
+    display: flex; align-items: center;
+  }
+  button.panel-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); border-color: var(--border); }
   /* Left element list */
   #element-list {
-    position: absolute; top: 46px; left: 8px; width: 220px;
-    max-height: calc(100% - 60px); overflow-y: auto;
-    background: rgba(34,34,34,0.92); border: 1px solid #404040; border-radius: 4px;
-    padding: 6px; z-index: 30; font-size: 11px;
+    position: absolute; top: 76px; left: 8px; width: 230px;
+    max-height: calc(100% - 76px); overflow-y: auto;
+    background: rgba(34,34,34,0.94); border: 1px solid var(--border);
+    border-radius: 6px; padding: 0; z-index: 30; font-size: 11px;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   }
-  #element-list h4 {
-    margin: 0 0 6px 0; font-size: 11px; text-transform: uppercase;
-    color: #909090; letter-spacing: 0.5px;
+  #element-list.collapsed { transform: translateX(calc(-100% - 16px)); opacity: 0; }
+  .panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 10px; border-bottom: 1px solid var(--border);
+    background: rgba(0,0,0,0.15); border-top-left-radius: 6px; border-top-right-radius: 6px;
   }
+  .panel-header h4 {
+    margin: 0; font-size: 10px; text-transform: uppercase;
+    color: var(--text-secondary); letter-spacing: 0.6px; font-weight: 600;
+  }
+  .panel-header .count {
+    font-size: 10px; color: var(--text-secondary);
+    background: var(--bg-tertiary); padding: 1px 6px; border-radius: 8px;
+  }
+  .panel-body { padding: 6px; }
   .el-row {
-    padding: 4px 6px; cursor: pointer; border-radius: 2px;
-    display: flex; align-items: center; gap: 6px;
-    border: 1px solid transparent;
+    padding: 6px 8px; cursor: pointer; border-radius: 3px;
+    display: flex; align-items: center; gap: 8px;
+    border: 1px solid transparent; margin-bottom: 2px;
+    transition: var(--transition);
   }
-  .el-row:hover { background: #2a2a2a; }
-  .el-row.selected { background: #CB0231; color: #fff; border-color: #CB0231; }
+  .el-row:hover { background: var(--bg-tertiary); }
+  .el-row.selected { background: var(--accent); color: #fff; border-color: var(--accent); }
   .el-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
   .el-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+  /* Floating collapse toggle for left panel */
+  #left-toggle {
+    position: absolute; top: 76px; left: 8px;
+    width: 28px; height: 28px;
+    background: rgba(34,34,34,0.94); border: 1px solid var(--border);
+    color: var(--text-secondary); cursor: pointer; border-radius: 6px;
+    display: none; align-items: center; justify-content: center; z-index: 31;
+    transition: var(--transition);
+  }
+  #left-toggle:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+  #element-list.collapsed ~ #left-toggle { display: flex; }
+
   /* Right properties panel */
   #props-panel {
-    position: absolute; top: 46px; right: 8px; width: 280px;
-    max-height: calc(100% - 60px); overflow-y: auto;
-    background: rgba(34,34,34,0.92); border: 1px solid #404040; border-radius: 4px;
-    padding: 10px; z-index: 30; font-size: 11px;
+    position: absolute; top: 76px; right: 8px; width: 300px;
+    max-height: calc(100% - 76px); overflow-y: auto;
+    background: rgba(34,34,34,0.94); border: 1px solid var(--border);
+    border-radius: 6px; padding: 0; z-index: 30; font-size: 11px;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   }
+  #props-panel.collapsed { transform: translateX(calc(100% + 16px)); opacity: 0; }
+  #right-toggle {
+    position: absolute; top: 76px; right: 8px;
+    width: 28px; height: 28px;
+    background: rgba(34,34,34,0.94); border: 1px solid var(--border);
+    color: var(--text-secondary); cursor: pointer; border-radius: 6px;
+    display: none; align-items: center; justify-content: center; z-index: 31;
+    transition: var(--transition);
+  }
+  #right-toggle:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+  #props-panel.collapsed ~ #right-toggle { display: flex; }
+  #props-panel .panel-body { padding: 10px; }
   #props-panel h4 {
     margin: 0 0 8px 0; font-size: 11px; text-transform: uppercase;
     color: #909090; letter-spacing: 0.5px; border-bottom: 1px solid #404040;
@@ -295,47 +375,122 @@ _VIEWER_HTML = r"""
 
 <!-- Toolbar -->
 <div id="toolbar">
-  <div class="group">
-    <span class="group-label">Farbe</span>
-    <button class="tb active" data-mode="status" id="m-status" title="Validierungs-Status">Status</button>
-    <button class="tb" data-mode="category" id="m-category" title="Flächen-Klassifikation (L2)">Flächen</button>
-    <button class="tb" data-mode="role" id="m-role" title="Element-Rolle (L2)">Rolle</button>
-    <button class="tb" data-mode="solid" id="m-solid" title="Einheitliche Farbe">Solid</button>
+  <div class="tb-group">
+    <div class="tb-group-label">Farbe</div>
+    <div class="tb-group-buttons">
+      <button class="tb active" data-mode="status" title="Validierungs-Status">
+        <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <span>Status</span>
+      </button>
+      <button class="tb" data-mode="category" title="Flächen-Klassifikation (L2)">
+        <svg viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+        <span>Flächen</span>
+      </button>
+      <button class="tb" data-mode="role" title="Element-Rolle (L2)">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        <span>Rolle</span>
+      </button>
+      <button class="tb" data-mode="solid" title="Einheitliche Farbe">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>
+        <span>Solid</span>
+      </button>
+    </div>
   </div>
-  <div class="group">
-    <span class="group-label">Ansicht</span>
-    <button class="tb" id="v-fit" title="Modell einpassen (F)">Fit</button>
-    <button class="tb" id="v-iso" title="Isometrisch (I)">Iso</button>
-    <button class="tb" id="v-top" title="Draufsicht (T)">Top</button>
-    <button class="tb" id="v-front" title="Vorne (1)">Vorne</button>
-    <button class="tb" id="v-side" title="Seite (3)">Seite</button>
+  <div class="tb-group">
+    <div class="tb-group-label">Ansicht</div>
+    <div class="tb-group-buttons">
+      <button class="tb" id="v-fit" title="Einpassen (F)">
+        <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+        <span>Fit</span>
+      </button>
+      <button class="tb" id="v-iso" title="Isometrisch (I)">
+        <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+        <span>Iso</span>
+      </button>
+      <button class="tb" id="v-top" title="Draufsicht (T)">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg>
+        <span>Top</span>
+      </button>
+      <button class="tb" id="v-front" title="Vorne (1)">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="15" x2="21" y2="15"/></svg>
+        <span>Vorne</span>
+      </button>
+      <button class="tb" id="v-side" title="Seite (3)">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+        <span>Seite</span>
+      </button>
+    </div>
   </div>
-  <div class="group">
-    <span class="group-label">Anzeige</span>
-    <button class="tb" id="t-wire" title="Wireframe (W)">Wire</button>
-    <button class="tb" id="t-edges" title="Kanten (E)">Kanten</button>
-    <button class="tb active" id="t-terrain" title="Terrain ein/aus">Terrain</button>
-    <button class="tb" id="t-ghost" title="Andere ausblenden (G)">Ghost</button>
+  <div class="tb-group">
+    <div class="tb-group-label">Anzeige</div>
+    <div class="tb-group-buttons">
+      <button class="tb" id="t-wire" title="Wireframe (W)">
+        <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        <span>Wire</span>
+      </button>
+      <button class="tb" id="t-edges" title="Kanten (E)">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="3" x2="21" y2="21" stroke-width="1"/></svg>
+        <span>Kanten</span>
+      </button>
+      <button class="tb active" id="t-terrain" title="Terrain">
+        <svg viewBox="0 0 24 24"><path d="M3 20l6-8 5 6 3-4 4 6H3z"/></svg>
+        <span>Terrain</span>
+      </button>
+      <button class="tb" id="t-ghost" title="Andere ausblenden (G)">
+        <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        <span>Ghost</span>
+      </button>
+    </div>
   </div>
-  <div class="group">
-    <span class="group-label">Auswahl</span>
-    <button class="tb" id="s-clear" title="Auswahl löschen (Esc)">Clear</button>
+  <div class="tb-group">
+    <div class="tb-group-label">Fokus</div>
+    <div class="tb-group-buttons">
+      <button class="tb" id="v-zoom-sel" title="Zu Auswahl zoomen (Z)">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        <span>Zoom</span>
+      </button>
+      <button class="tb" id="s-clear" title="Auswahl löschen (Esc)">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        <span>Clear</span>
+      </button>
+    </div>
   </div>
 </div>
 
 <!-- Element list (left) -->
 <div id="element-list">
-  <h4>Elemente</h4>
-  <div id="el-rows"></div>
+  <div class="panel-header">
+    <h4>Elemente</h4>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="count" id="el-count">0</span>
+      <button class="panel-btn" id="collapse-left" title="Einklappen">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="panel-body"><div id="el-rows"></div></div>
 </div>
+<button id="left-toggle" title="Elemente anzeigen">
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+</button>
 
 <!-- Properties panel (right) -->
 <div id="props-panel">
-  <h4>Eigenschaften</h4>
-  <div id="props-content">
-    <div class="empty">Element anklicken zum Inspizieren</div>
+  <div class="panel-header">
+    <h4>Eigenschaften</h4>
+    <button class="panel-btn" id="collapse-right" title="Einklappen">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  </div>
+  <div class="panel-body">
+    <div id="props-content">
+      <div class="empty">Element anklicken zum Inspizieren</div>
+    </div>
   </div>
 </div>
+<button id="right-toggle" title="Eigenschaften anzeigen">
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+</button>
 
 <!-- Legend -->
 <div id="legend"></div>
@@ -409,7 +564,14 @@ try {
 
   const camera = new THREE.PerspectiveCamera(45, getWidth() / HEIGHT, 0.01, 100000);
   const controls = new OrbitControls(camera, canvas);
+  // OrbitControls tuning from IFC-Editor production viewer
   controls.enableDamping = true;
+  controls.dampingFactor = 0.15;
+  controls.zoomSpeed = 1.5;
+  controls.rotateSpeed = 1.0;
+  controls.panSpeed = 1.0;
+  controls.zoomToCursor = true;
+  controls.minDistance = 0.001;
 
   // 4-light setup mirroring the IFC-Editor (ambient + 2 directionals + fill
   // from below). MeshLambertMaterial is used throughout for consistency —
@@ -575,7 +737,9 @@ try {
 
   // ── Element list ──────────────────────────────────────────────
   const listDiv = document.getElementById('el-rows');
+  const elCountEl = document.getElementById('el-count');
   function renderList() {
+    elCountEl.textContent = elementMeshes.length;
     listDiv.innerHTML = elementMeshes.map(em => {
       const c = STATUS_COLORS[em.status] || STATUS_COLORS['—'];
       const colorHex = '#' + c.toString(16).padStart(6, '0');
@@ -589,6 +753,7 @@ try {
       row.addEventListener('click', () => {
         const id = parseInt(row.dataset.id);
         selectElement(id);
+        zoomToElement(id);
       });
     });
   }
@@ -736,15 +901,40 @@ try {
     return (radius / Math.sin(effectiveFov / 2)) * 1.2;
   }
 
-  function setView(dir) {
-    const d = fitDistance();
-    const nd = dir.clone().normalize();
-    camera.position.copy(center).addScaledVector(nd, d);
-    controls.target.copy(center);
-    controls.update();
+  // Smooth camera animation (cubic ease-in-out over ~400ms).
+  // Preserves spatial continuity — users don't lose their mental map
+  // when the camera jumps to a new element.
+  let cameraAnim = null;
+  function animateCameraTo(targetPos, targetLookAt, duration) {
+    duration = duration || 420;
+    const startPos = camera.position.clone();
+    const startLookAt = controls.target.clone();
+    const t0 = performance.now();
+    cameraAnim = (now) => {
+      const t = Math.min(1.0, (now - t0) / duration);
+      // Cubic ease-in-out
+      const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      camera.position.lerpVectors(startPos, targetPos, e);
+      controls.target.lerpVectors(startLookAt, targetLookAt, e);
+      controls.update();
+      if (t >= 1.0) cameraAnim = null;
+    };
   }
 
-  function fitView() { setView(new THREE.Vector3(1, 0.7, 1)); }
+  function setView(dir, animate) {
+    const d = fitDistance();
+    const nd = dir.clone().normalize();
+    const target = center.clone().add(nd.clone().multiplyScalar(d));
+    if (animate === false) {
+      camera.position.copy(target);
+      controls.target.copy(center);
+      controls.update();
+    } else {
+      animateCameraTo(target, center.clone());
+    }
+  }
+
+  function fitView(animate) { setView(new THREE.Vector3(1, 0.7, 1), animate); }
   function viewIso() { setView(new THREE.Vector3(1, 1, 1)); }
   function viewTop() {
     camera.up.set(0, 1, 0);
@@ -758,7 +948,27 @@ try {
     camera.up.set(0, 0, 1);
     setView(new THREE.Vector3(1, 0, 0));
   }
-  fitView();
+  fitView(false);  // instant on initial load
+
+  // Zoom to a single element's bounding sphere (used on list-click and double-click).
+  function zoomToElement(id) {
+    const em = elementMeshes.find(e => e.id === id);
+    if (!em) return;
+    const box = new THREE.Box3().setFromObject(em.mesh);
+    if (box.isEmpty()) return;
+    const sph = new THREE.Sphere();
+    box.getBoundingSphere(sph);
+    const r = Math.max(sph.radius, 0.1);
+    const fov = camera.fov * (Math.PI / 180);
+    const aspect = camera.aspect;
+    const horizontalFov = 2 * Math.atan(Math.tan(fov / 2) * aspect);
+    const effFov = Math.min(fov, horizontalFov);
+    const dist = (r / Math.sin(effFov / 2)) * 1.4;
+    // Keep current viewing direction
+    const dir = camera.position.clone().sub(controls.target).normalize();
+    const target = sph.center.clone().add(dir.multiplyScalar(dist));
+    animateCameraTo(target, sph.center.clone());
+  }
 
   // ── Toolbar wiring ────────────────────────────────────────────
   document.querySelectorAll('button.tb[data-mode]').forEach(btn => {
@@ -797,15 +1007,46 @@ try {
   document.getElementById('s-clear').onclick = clearSelection;
 
   // ── Keyboard shortcuts ────────────────────────────────────────
+  // Keyboard shortcuts (IFC-Editor parity — A/I/H/F/Z/W/E/G/Esc)
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'f' || e.key === 'F') fitView();
-    else if (e.key === 'i' || e.key === 'I') viewIso();
-    else if (e.key === 't' || e.key === 'T') viewTop();
-    else if (e.key === 'w' || e.key === 'W') document.getElementById('t-wire').click();
-    else if (e.key === 'e' || e.key === 'E') document.getElementById('t-edges').click();
-    else if (e.key === 'g' || e.key === 'G') document.getElementById('t-ghost').click();
-    else if (e.key === 'Escape') clearSelection();
+    // Never steal keys from inputs/textareas (there are none today,
+    // but this keeps the contract clean for future additions)
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+    const k = e.key;
+    if (k === 'f' || k === 'F') fitView();
+    else if (k === 'i' || k === 'I') viewIso();
+    else if (k === 't' || k === 'T') viewTop();
+    else if (k === 'z' || k === 'Z') { if (selectedId !== null) zoomToElement(selectedId); }
+    else if (k === 'w' || k === 'W') document.getElementById('t-wire').click();
+    else if (k === 'e' || k === 'E') document.getElementById('t-edges').click();
+    else if (k === 'g' || k === 'G') document.getElementById('t-ghost').click();
+    else if (k === 'Escape') clearSelection();
   });
+
+  // Double-click on a mesh zooms to it (IFC-Editor pattern)
+  canvas.addEventListener('dblclick', (event) => {
+    getMouseNDC(event);
+    raycaster.setFromCamera(mouse, camera);
+    const meshes = elementMeshes.map(e => e.mesh);
+    const hits = raycaster.intersectObjects(meshes, false);
+    if (hits.length > 0) {
+      const id = hits[0].object.userData.elementId;
+      selectElement(id);
+      zoomToElement(id);
+    }
+  });
+
+  document.getElementById('v-zoom-sel').onclick = () => {
+    if (selectedId !== null) zoomToElement(selectedId);
+  };
+
+  // Panel collapse/expand
+  const leftPanel = document.getElementById('element-list');
+  const rightPanel = document.getElementById('props-panel');
+  document.getElementById('collapse-left').onclick = () => leftPanel.classList.add('collapsed');
+  document.getElementById('left-toggle').onclick = () => leftPanel.classList.remove('collapsed');
+  document.getElementById('collapse-right').onclick = () => rightPanel.classList.add('collapsed');
+  document.getElementById('right-toggle').onclick = () => rightPanel.classList.remove('collapsed');
 
   // ── Resize ────────────────────────────────────────────────────
   function resize() {
@@ -818,8 +1059,9 @@ try {
   window.addEventListener('resize', resize);
 
   // ── Render loop ───────────────────────────────────────────────
-  function animate() {
+  function animate(now) {
     requestAnimationFrame(animate);
+    if (cameraAnim) cameraAnim(now || performance.now());
     controls.update();
     renderer.render(scene, camera);
   }
