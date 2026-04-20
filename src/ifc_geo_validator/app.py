@@ -343,9 +343,20 @@ if uploaded_file:
     pred = predefined_type.strip() or ""
     etypes_str = ",".join(entity_types) if entity_types else "IfcWall"
 
-    results, report, ruleset, l5_result, l6_result, has_terrain = run_validation(
-        file_bytes, uploaded_file.name, etypes_str, pred, rs_bytes, ruleset_choice
-    )
+    # Catch our own exception types at the UI boundary so the user sees
+    # a clean domain-specific message instead of a Streamlit traceback.
+    from ifc_geo_validator.core.ifc_parser import IFCLoadError
+    from ifc_geo_validator.core.mesh_converter import MeshExtractionError
+    try:
+        results, report, ruleset, l5_result, l6_result, has_terrain = run_validation(
+            file_bytes, uploaded_file.name, etypes_str, pred, rs_bytes, ruleset_choice
+        )
+    except IFCLoadError as exc:
+        st.error(f"IFC-Datei konnte nicht geladen werden: {exc}")
+        st.stop()
+    except MeshExtractionError as exc:
+        st.error(f"Geometrie-Extraktion fehlgeschlagen: {exc}")
+        st.stop()
 
     if not results:
         st.error(f"No elements found for types: {etypes_str}. "

@@ -73,7 +73,7 @@ def generate_report(
 def write_report(report: dict, output_path: str):
     """Write report to JSON file."""
     with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(report, f, indent=2, ensure_ascii=False, default=_json_default)
+        json.dump(report, f, indent=2, ensure_ascii=False, default=json_default)
 
 
 def _process_element(elem: dict) -> dict:
@@ -193,11 +193,6 @@ def _safe_ratio(value):
     if isinstance(value, float) and math.isinf(value):
         return "vertical"
     return _round(value)
-
-
-def _json_default(obj):
-    """Handle non-serialisable types."""
-    return json_default(obj)
 
 
 def json_default(obj):

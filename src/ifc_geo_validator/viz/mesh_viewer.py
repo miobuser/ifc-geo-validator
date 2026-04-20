@@ -598,10 +598,29 @@ try {
   // ── Three.js setup ─────────────────────────────────────────────
   const canvas = document.getElementById('c');
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(window.devicePixelRatio);
+  // Cap pixel ratio at 2 — 4K/retina displays otherwise report 3+,
+  // tripling fragment shader work for no perceptible quality gain.
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   // Enable local clipping so section planes only affect our meshes
   // (not helpers like the grid or the measurement line).
   renderer.localClippingEnabled = true;
+
+  // Register cleanup for Streamlit re-renders: when the iframe is torn
+  // down, dispose of WebGL resources to avoid CONTEXT_LOST churn on
+  // frequent dashboard refreshes.
+  window.addEventListener('beforeunload', () => {
+    for (const em of elementMeshes) {
+      if (em.geom) em.geom.dispose();
+      if (em.mesh && em.mesh.material) em.mesh.material.dispose();
+      if (em.edges && em.edges.geometry) em.edges.geometry.dispose();
+      if (em.edges && em.edges.material) em.edges.material.dispose();
+    }
+    if (terrainMesh) {
+      if (terrainMesh.geometry) terrainMesh.geometry.dispose();
+      if (terrainMesh.material) terrainMesh.material.dispose();
+    }
+    renderer.dispose();
+  });
 
   function getWidth() {
     return Math.max(canvas.clientWidth, window.innerWidth, 800);
@@ -940,21 +959,39 @@ try {
     }
   });
 
-  canvas.addEventListener('mousemove', (event) => {
-    getMouseNDC(event);
+  // Cache the pickable-mesh array so we don't rebuild it every frame;
+  // only rebuild if elements are added/removed (which never happens
+  // once the viewer is rendered — the payload is static).
+  const pickableMeshes = elementMeshes.map(e => e.mesh);
+
+  // Throttle hover picking to one raycast per animation frame. Without
+  // throttling a 60 Hz mousemove on a 10 000-element model turns into
+  // 60 × O(N × T) raycasts per second and pegs the main thread.
+  let hoverEvent = null;
+  let hoverScheduled = false;
+  function runHoverPick() {
+    hoverScheduled = false;
+    if (!hoverEvent) return;
+    getMouseNDC(hoverEvent);
     raycaster.setFromCamera(mouse, camera);
-    const meshes = elementMeshes.map(e => e.mesh);
-    const hits = raycaster.intersectObjects(meshes, false);
+    const hits = raycaster.intersectObjects(pickableMeshes, false);
     if (hits.length > 0) {
       const em = elementMeshes.find(e => e.id === hits[0].object.userData.elementId);
       tooltip.textContent = '#' + em.id + ' ' + em.name + ' [' + em.status + ']';
       tooltip.style.display = 'block';
-      tooltip.style.left = (event.clientX + 12) + 'px';
-      tooltip.style.top = (event.clientY + 12) + 'px';
-      canvas.style.cursor = 'pointer';
+      tooltip.style.left = (hoverEvent.clientX + 12) + 'px';
+      tooltip.style.top = (hoverEvent.clientY + 12) + 'px';
+      if (!measureMode) canvas.style.cursor = 'pointer';
     } else {
       tooltip.style.display = 'none';
-      canvas.style.cursor = 'default';
+      if (!measureMode) canvas.style.cursor = 'default';
+    }
+  }
+  canvas.addEventListener('mousemove', (event) => {
+    hoverEvent = event;
+    if (!hoverScheduled) {
+      hoverScheduled = true;
+      requestAnimationFrame(runHoverPick);
     }
   });
 
@@ -1299,12 +1336,23 @@ try {
   }
 
   // ── Render loop ───────────────────────────────────────────────
+  // Any exception inside the frame is logged ONCE (not 60×/s) so a
+  // transient shader-compile failure doesn't destroy the console.
+  let frameError = null;
   function animate(now) {
     requestAnimationFrame(animate);
-    if (cameraAnim) cameraAnim(now || performance.now());
-    controls.update();
-    updateMeasureLabel();
-    renderer.render(scene, camera);
+    try {
+      if (cameraAnim) cameraAnim(now || performance.now());
+      controls.update();
+      updateMeasureLabel();
+      renderer.render(scene, camera);
+    } catch (err) {
+      const msg = (err && err.message) ? err.message : String(err);
+      if (frameError !== msg) {
+        frameError = msg;
+        console.error('[mesh_viewer] render frame:', err);
+      }
+    }
   }
   animate();
 
