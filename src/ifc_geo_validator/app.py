@@ -227,116 +227,139 @@ if not uploaded_file:
 
 # ── Run validation ───────────────────────────────────────────────────
 
-@st.cache_data(show_spinner="Loading IFC model...")
+@st.cache_data(show_spinner="Loading IFC model...", ttl=600)
 def run_validation(_file_bytes, file_name, entity_types_str, predefined_type, _ruleset_bytes, ruleset_choice):
-    """Run the full validation pipeline and return structured results."""
-    # Write uploaded file to temp location
-    with tempfile.NamedTemporaryFile(suffix=".ifc", delete=False) as tmp:
-        tmp.write(_file_bytes)
-        tmp_path = tmp.name
+    """Run the full validation pipeline and return structured results.
 
-    model = load_model(tmp_path)
-    pred_filter = predefined_type if predefined_type else None
+    Privacy contract: every temporary file created by this function is
+    deleted before the function returns. The TTL on the Streamlit cache
+    is bounded (10 min) so re-uploaded content is not held indefinitely.
+    The sidebar claim "Dateien werden nicht gespeichert" is load-bearing
+    — any new tempfile.NamedTemporaryFile call here MUST be guarded by
+    a `try/finally: os.unlink(path)` to keep the claim true.
+    """
+    import os as _os
+    _created_paths: list[str] = []
 
-    # Collect elements from all selected entity types
-    e_types = entity_types_str.split(",") if entity_types_str else ["IfcWall"]
-    elements = []
-    for etype in e_types:
-        elements.extend(get_elements(model, etype.strip(), pred_filter))
+    try:
+        # Write uploaded file to temp location (IfcOpenShell requires a path)
+        with tempfile.NamedTemporaryFile(suffix=".ifc", delete=False) as tmp:
+            tmp.write(_file_bytes)
+            tmp_path = tmp.name
+        _created_paths.append(tmp_path)
 
-    # Load ruleset (built-in or custom upload)
-    if _ruleset_bytes:
-        with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False, mode="wb") as rs_tmp:
-            rs_tmp.write(_ruleset_bytes)
-            rs_path = rs_tmp.name
-        ruleset = load_ruleset(rs_path)
-    elif ruleset_choice in BUILTIN_RULESETS and BUILTIN_RULESETS[ruleset_choice].exists():
-        ruleset = load_ruleset(str(BUILTIN_RULESETS[ruleset_choice]))
-    elif DEFAULT_RULESET.exists():
-        ruleset = load_ruleset(str(DEFAULT_RULESET))
-    else:
-        ruleset = None
+        model = load_model(tmp_path)
+        pred_filter = predefined_type if predefined_type else None
 
-    all_results = []
-    for elem in elements:
-        name = getattr(elem, "Name", None) or "Unnamed"
-        try:
-            mesh = extract_mesh(elem)
-            l1 = validate_level1(mesh)
-            l2 = validate_level2(mesh)
-            l3 = validate_level3(mesh, l2)
-            # L4 evaluated after L5/L6 below; store None for now
-            l4 = None
+        # Collect elements from all selected entity types
+        e_types = entity_types_str.split(",") if entity_types_str else ["IfcWall"]
+        elements = []
+        for etype in e_types:
+            elements.extend(get_elements(model, etype.strip(), pred_filter))
 
-            result = {
-                "element_id": elem.id(),
-                "element_name": name,
-                "level1": l1,
-                "level2": l2,
-                "level3": l3,
-                "mesh_data": mesh,
-            }
-            if l4:
-                result["level4"] = l4
-            all_results.append(result)
-        except Exception as e:
-            all_results.append({
-                "element_id": elem.id(),
-                "element_name": name,
-                "error": str(e),
-            })
+        # Load ruleset (built-in or custom upload)
+        if _ruleset_bytes:
+            with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False, mode="wb") as rs_tmp:
+                rs_tmp.write(_ruleset_bytes)
+                rs_path = rs_tmp.name
+            _created_paths.append(rs_path)
+            ruleset = load_ruleset(rs_path)
+        elif ruleset_choice in BUILTIN_RULESETS and BUILTIN_RULESETS[ruleset_choice].exists():
+            ruleset = load_ruleset(str(BUILTIN_RULESETS[ruleset_choice]))
+        elif DEFAULT_RULESET.exists():
+            ruleset = load_ruleset(str(DEFAULT_RULESET))
+        else:
+            ruleset = None
 
-    # L5: Inter-element analysis
-    l5_result = None
-    if len(all_results) > 1:
-        valid = [r for r in all_results if "error" not in r and "mesh_data" in r]
-        if len(valid) > 1:
-            l5_result = validate_level5(valid)
+        all_results = []
+        for elem in elements:
+            name = getattr(elem, "Name", None) or "Unnamed"
+            try:
+                mesh = extract_mesh(elem)
+                l1 = validate_level1(mesh)
+                l2 = validate_level2(mesh)
+                l3 = validate_level3(mesh, l2)
+                # L4 evaluated after L5/L6 below; store None for now
+                l4 = None
 
-    # L6: Terrain context & distances
-    terrain = get_terrain_mesh(model)
-    l6_result = None
-    valid_for_l6 = [r for r in all_results if "error" not in r and "mesh_data" in r]
-    if valid_for_l6:
-        l6_result = validate_level6(valid_for_l6, terrain_mesh=terrain)
+                result = {
+                    "element_id": elem.id(),
+                    "element_name": name,
+                    "level1": l1,
+                    "level2": l2,
+                    "level3": l3,
+                    "mesh_data": mesh,
+                }
+                if l4:
+                    result["level4"] = l4
+                all_results.append(result)
+            except Exception as e:
+                all_results.append({
+                    "element_id": elem.id(),
+                    "element_name": name,
+                    "error": str(e),
+                })
 
-    # L4: Rule evaluation WITH L5/L6 context
-    if ruleset:
-        for r in all_results:
-            if "error" in r:
-                continue
-            l1 = r.get("level1")
-            l3 = r.get("level3")
-            if l1 and l3:
-                l5_ctx = {}
-                if l5_result:
-                    for p in l5_result.get("pairs", []):
-                        if p.get("element_a_id") == r.get("element_id") or \
-                           p.get("element_b_id") == r.get("element_id"):
-                            if p["pair_type"] == "stacked":
-                                l5_ctx["foundation_extends_beyond_wall"] = p.get("foundation_extends_beyond_wall", False)
-                                l5_ctx["wall_foundation_gap_mm"] = p.get("vertical_gap_mm", 0)
-                l6_ctx = {}
-                if terrain:
-                    l6_ctx["earth_side_determined"] = bool(l6_result and l6_result.get("terrain_side"))
-                    # Foundation embedment from L6 embedments
-                    if l6_result:
-                        for emb in l6_result.get("embedments", []):
-                            if emb.get("element_id") == r.get("element_id"):
-                                l6_ctx["foundation_embedment_m"] = emb["foundation_embedment_m"]
-                                break
-                # Store context for property writer / report
-                if l5_ctx:
-                    r["level5_context"] = l5_ctx
-                if l6_ctx:
-                    r["level6_context"] = l6_ctx
-                r["level4"] = validate_level4(l1, l3, ruleset, level5_context=l5_ctx,
-                                              level6_context=l6_ctx, level2_result=r.get("level2"))
+        # L5: Inter-element analysis
+        l5_result = None
+        if len(all_results) > 1:
+            valid = [r for r in all_results if "error" not in r and "mesh_data" in r]
+            if len(valid) > 1:
+                l5_result = validate_level5(valid)
 
-    from ifc_geo_validator.core.ifc_parser import get_coordinate_system
-    crs = get_coordinate_system(model)
-    report = generate_report(file_name, all_results, ruleset, coordinate_system=crs)
-    return all_results, report, ruleset, l5_result, l6_result, terrain is not None
+        # L6: Terrain context & distances
+        terrain = get_terrain_mesh(model)
+        l6_result = None
+        valid_for_l6 = [r for r in all_results if "error" not in r and "mesh_data" in r]
+        if valid_for_l6:
+            l6_result = validate_level6(valid_for_l6, terrain_mesh=terrain)
+
+        # L4: Rule evaluation WITH L5/L6 context
+        if ruleset:
+            for r in all_results:
+                if "error" in r:
+                    continue
+                l1 = r.get("level1")
+                l3 = r.get("level3")
+                if l1 and l3:
+                    l5_ctx = {}
+                    if l5_result:
+                        for p in l5_result.get("pairs", []):
+                            if p.get("element_a_id") == r.get("element_id") or \
+                               p.get("element_b_id") == r.get("element_id"):
+                                if p["pair_type"] == "stacked":
+                                    l5_ctx["foundation_extends_beyond_wall"] = p.get("foundation_extends_beyond_wall", False)
+                                    l5_ctx["wall_foundation_gap_mm"] = p.get("vertical_gap_mm", 0)
+                    l6_ctx = {}
+                    if terrain:
+                        l6_ctx["earth_side_determined"] = bool(l6_result and l6_result.get("terrain_side"))
+                        if l6_result:
+                            for emb in l6_result.get("embedments", []):
+                                if emb.get("element_id") == r.get("element_id"):
+                                    l6_ctx["foundation_embedment_m"] = emb["foundation_embedment_m"]
+                                    break
+                    if l5_ctx:
+                        r["level5_context"] = l5_ctx
+                    if l6_ctx:
+                        r["level6_context"] = l6_ctx
+                    r["level4"] = validate_level4(
+                        l1, l3, ruleset,
+                        level2_result=r.get("level2"),
+                        level5_context=l5_ctx, level6_context=l6_ctx,
+                    )
+
+        from ifc_geo_validator.core.ifc_parser import get_coordinate_system
+        crs = get_coordinate_system(model)
+        report = generate_report(file_name, all_results, ruleset, coordinate_system=crs)
+        return all_results, report, ruleset, l5_result, l6_result, terrain is not None
+    finally:
+        # Guarantee: every tempfile we created above is removed, regardless
+        # of success, exception, or early return. Honors the privacy claim.
+        for p in _created_paths:
+            try:
+                _os.unlink(p)
+            except OSError:
+                pass  # File already removed / never written — best effort
 
 
 if uploaded_file:
@@ -825,10 +848,11 @@ if uploaded_file:
             l3r = r.get("level3", {})
             l4r = r.get("level4", {})
             l2r = r.get("level2", {})
+            from ifc_geo_validator.cli import _sanitize_csv_cell
             row = {
                 "element_id": r.get("element_id"),
-                "element_name": r.get("element_name"),
-                "role": l2r.get("element_role", ""),
+                "element_name": _sanitize_csv_cell(r.get("element_name")),
+                "role": _sanitize_csv_cell(l2r.get("element_role", "")),
                 "confidence": l2r.get("confidence", ""),
                 "volume_m3": l1r.get("volume"),
                 "crown_width_mm": l3r.get("crown_width_mm"),
@@ -891,7 +915,8 @@ if uploaded_file:
         use_container_width=True,
     )
 
-    # Enriched IFC download
+    # Enriched IFC download — guaranteed tempfile cleanup (privacy claim)
+    enrich_tmp = None
     try:
         from ifc_geo_validator.report.ifc_property_writer import inject_all
 
@@ -920,12 +945,21 @@ if uploaded_file:
     except Exception:
         dl2.button("Enriched IFC (unavailable)", disabled=True,
                    use_container_width=True)
+    finally:
+        if enrich_tmp:
+            try:
+                os.unlink(enrich_tmp)
+            except OSError:
+                pass
 
-    # BCF download
+    # BCF download — same cleanup discipline, and drop the deprecated
+    # tempfile.mktemp() (TOCTOU race) in favour of NamedTemporaryFile.
+    bcf_tmp = None
     try:
         from ifc_geo_validator.report.bcf_export import export_bcf
 
-        bcf_tmp = tempfile.mktemp(suffix=".bcf")
+        with tempfile.NamedTemporaryFile(suffix=".bcf", delete=False) as tmp:
+            bcf_tmp = tmp.name
         export_bcf(results, bcf_tmp, ifc_name=uploaded_file.name)
 
         with open(bcf_tmp, "rb") as f:
@@ -941,3 +975,9 @@ if uploaded_file:
     except Exception:
         dl3.button("BCF Issues (unavailable)", disabled=True,
                    use_container_width=True)
+    finally:
+        if bcf_tmp:
+            try:
+                os.unlink(bcf_tmp)
+            except OSError:
+                pass

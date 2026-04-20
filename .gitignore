@@ -1,15 +1,42 @@
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Distribution / packaging
 *.egg-info/
 dist/
 build/
 .eggs/
+
+# Test & coverage artifacts
 .pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Environments
 .venv/
 venv/
+env/
+.env
+.env.*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# IFC test models stay tracked, everything else IFC is ignored
 *.ifc
 !tests/test_models/*.ifc
-.env
+
+# Ad-hoc output
 validation_report.json
 viz_output/
+*.log
+
+# OS-specific
+.DS_Store
+Thumbs.db

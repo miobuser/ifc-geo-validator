@@ -15,6 +15,7 @@ References:
     BIM rule checking development. Automation in Construction, 53, 69-82.
 """
 
+import ast
 import yaml
 from dataclasses import dataclass
 from pathlib import Path
@@ -368,29 +369,106 @@ class _MissingVariable(Exception):
 def _safe_eval(expr: str, context: dict) -> bool:
     """Evaluate a simple comparison expression safely.
 
-    Supports: >=, <=, >, <, ==, !=, and, or, true, false
+    Supports: >=, <=, >, <, ==, !=, and, or, true, false, abs(x)
     Variables are resolved from context dict.
     Raises _MissingVariable only if the expression references a None variable.
+
+    Security: uses an AST whitelist walker, not ``eval()``. The classic
+    ``eval(expr, {"__builtins__": {}}, namespace)`` sandbox is trivially
+    escaped via attribute traversal on object literals
+    (``().__class__.__bases__[0].__subclasses__()[…]``). Since custom
+    rulesets are uploaded by end users, an ``eval``-based evaluator
+    would be a remote-code-execution sink. The whitelist below only
+    accepts comparisons, boolean combinators, the unary/binary ops
+    needed for arithmetic checks, a single ``abs()`` call, and
+    constant/variable lookups.
     """
-    # Replace 'true'/'false' literals
     expr_clean = expr.replace("true", "True").replace("false", "False")
 
-    # Build namespace — skip None values so they raise NameError on access
     namespace = {}
-    none_keys = set()
     for key, val in context.items():
-        if val is None:
-            none_keys.add(key)
-        else:
+        if val is not None:
             namespace[key] = val
 
-    safe_builtins = {"True": True, "False": False, "abs": abs}
     try:
-        return eval(expr_clean, {"__builtins__": safe_builtins}, namespace)
-    except NameError as e:
-        # Extract variable name from NameError message
-        var = str(e).split("'")[1] if "'" in str(e) else str(e)
-        raise _MissingVariable(var)
+        tree = ast.parse(expr_clean, mode="eval")
+    except SyntaxError as exc:
+        raise ValueError(f"Invalid rule expression {expr!r}: {exc}") from exc
+
+    return _safe_eval_node(tree.body, namespace)
+
+
+# AST node types permitted in rule expressions. Anything else raises.
+_ALLOWED_CMP_OPS = (ast.Lt, ast.LtE, ast.Gt, ast.GtE, ast.Eq, ast.NotEq)
+_ALLOWED_BOOL_OPS = (ast.And, ast.Or)
+_ALLOWED_BIN_OPS = (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Mod, ast.Pow,
+                    ast.FloorDiv)
+_ALLOWED_UNARY_OPS = (ast.UAdd, ast.USub, ast.Not)
+_ALLOWED_CALLS = {"abs": abs}
+
+
+def _safe_eval_node(node, ns):
+    """Evaluate an AST node against a name-to-value namespace.
+
+    Returns the evaluated value or raises _MissingVariable for
+    unbound names. Any AST construct outside the whitelist raises
+    ValueError with the unsupported node type — never executes.
+    """
+    if isinstance(node, ast.Constant):
+        return node.value
+    if isinstance(node, ast.Name):
+        if node.id == "True":
+            return True
+        if node.id == "False":
+            return False
+        if node.id in ns:
+            return ns[node.id]
+        raise _MissingVariable(node.id)
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, _ALLOWED_UNARY_OPS):
+        operand = _safe_eval_node(node.operand, ns)
+        if isinstance(node.op, ast.UAdd): return +operand
+        if isinstance(node.op, ast.USub): return -operand
+        if isinstance(node.op, ast.Not):  return not operand
+    if isinstance(node, ast.BinOp) and isinstance(node.op, _ALLOWED_BIN_OPS):
+        left = _safe_eval_node(node.left, ns)
+        right = _safe_eval_node(node.right, ns)
+        if isinstance(node.op, ast.Add):      return left + right
+        if isinstance(node.op, ast.Sub):      return left - right
+        if isinstance(node.op, ast.Mult):     return left * right
+        if isinstance(node.op, ast.Div):      return left / right
+        if isinstance(node.op, ast.Mod):      return left % right
+        if isinstance(node.op, ast.Pow):      return left ** right
+        if isinstance(node.op, ast.FloorDiv): return left // right
+    if isinstance(node, ast.Compare) and all(
+        isinstance(op, _ALLOWED_CMP_OPS) for op in node.ops
+    ):
+        left = _safe_eval_node(node.left, ns)
+        for op, comparator in zip(node.ops, node.comparators):
+            right = _safe_eval_node(comparator, ns)
+            ok = (
+                (isinstance(op, ast.Lt)  and left <  right) or
+                (isinstance(op, ast.LtE) and left <= right) or
+                (isinstance(op, ast.Gt)  and left >  right) or
+                (isinstance(op, ast.GtE) and left >= right) or
+                (isinstance(op, ast.Eq)  and left == right) or
+                (isinstance(op, ast.NotEq) and left != right)
+            )
+            if not ok:
+                return False
+            left = right
+        return True
+    if isinstance(node, ast.BoolOp) and isinstance(node.op, _ALLOWED_BOOL_OPS):
+        values = [_safe_eval_node(v, ns) for v in node.values]
+        return all(values) if isinstance(node.op, ast.And) else any(values)
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+        fn = _ALLOWED_CALLS.get(node.func.id)
+        if fn is None:
+            raise ValueError(f"Function not allowed in rule expression: {node.func.id}")
+        args = [_safe_eval_node(a, ns) for a in node.args]
+        if node.keywords:
+            raise ValueError("Keyword arguments not supported in rule expressions")
+        return fn(*args)
+    raise ValueError(f"AST node not allowed in rule expression: {type(node).__name__}")
 
 
 def _check_uncertainty_margin(check_expr: str, actual: float, uncertainty_mm: float,

@@ -227,14 +227,17 @@ def render_mesh_viewer(
     }, ensure_ascii=True)
     # Neutralise every sequence that could prematurely terminate the
     # enclosing <script type="module"> tag or start an HTML comment.
-    # json.dumps does not escape these; we do it here so that an IFC
-    # element named "</script>" or containing "<!--" can never break
-    # out of the payload context.
+    # We escape `<` to its valid JSON Unicode form `\u003c` — that alone
+    # breaks </script>, <!--, and <script injection patterns without
+    # relying on browser leniency (previous `\!` and `\>` sequences were
+    # spec-invalid JSON). Per json.dumps(ensure_ascii=True) the `>`
+    # character is already safe (not a JSON string-delimiter), but we
+    # also neutralise `-->` end-of-comment defensively via a valid
+    # Unicode escape for `>`.
     data_json = (
         data_json
-        .replace("</", "<\\/")
-        .replace("<!--", "<\\!--")
-        .replace("-->", "--\\>")
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
     )
 
     html = _VIEWER_HTML.replace("__DATA_JSON__", data_json)

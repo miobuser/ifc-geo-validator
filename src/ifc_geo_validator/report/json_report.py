@@ -36,13 +36,17 @@ def generate_report(
     except Exception:
         version = "unknown"
 
+    # Privacy: record the IFC basename only. The absolute path would
+    # leak the server's tempfile location (e.g. "/tmp/tmpXXXX.ifc") to
+    # everyone downloading the report — confirming the caller ran us
+    # in a tempfile-mediated context and defeating the "files are not
+    # stored" claim visually.
     report = {
         "report": {
             "generator": "ifc-geo-validator",
             "version": version,
             "timestamp": datetime.now().isoformat(),
             "ifc_file": str(Path(ifc_path).name),
-            "ifc_path": str(ifc_path),
         },
         "coordinate_system": coordinate_system or {
             "name": "unspecified",

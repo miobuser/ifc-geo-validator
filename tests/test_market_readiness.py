@@ -174,3 +174,63 @@ def test_default_config_has_reproducibility_sections():
         assert key in DEFAULT_CONFIG, f"missing reproducibility section: {key}"
     # Spot-check a known value
     assert DEFAULT_CONFIG["pair_candidacy"]["max_gap_3d_m"] == DEFAULT_MAX_GAP_3D_M
+
+
+# ── Security regression tests (pre-release audit) ─────────────────
+
+def test_rule_expression_rejects_attribute_traversal():
+    """A malicious ruleset cannot escape the sandbox via attribute chain.
+
+    The classic eval()-sandbox bypass
+    ``().__class__.__bases__[0].__subclasses__()`` must be refused.
+    """
+    from ifc_geo_validator.validation.level4 import _safe_eval as _evaluate_check
+    # Attribute access is not a whitelisted AST node → ValueError
+    with pytest.raises(ValueError):
+        _evaluate_check(
+            "().__class__.__bases__[0].__subclasses__() != None",
+            {"dummy": 1.0},
+        )
+
+
+def test_rule_expression_rejects_arbitrary_function_call():
+    """Only whitelisted builtins (currently `abs`) can be called."""
+    from ifc_geo_validator.validation.level4 import _safe_eval as _evaluate_check
+    with pytest.raises(ValueError):
+        _evaluate_check("open('foo') != None", {"dummy": 1.0})
+    with pytest.raises(ValueError):
+        _evaluate_check("__import__('os') != None", {"dummy": 1.0})
+
+
+def test_rule_expression_still_evaluates_legitimate_checks():
+    """Safe evaluator must keep passing the same checks the old one did."""
+    from ifc_geo_validator.validation.level4 import _safe_eval as _evaluate_check
+    ctx = {"crown_width_mm": 305.0, "crown_slope_percent": 2.8}
+    assert _evaluate_check("crown_width_mm >= 300", ctx) is True
+    assert _evaluate_check("crown_width_mm < 300", ctx) is False
+    assert _evaluate_check(
+        "crown_width_mm >= 300 and crown_slope_percent <= 3",
+        ctx,
+    ) is True
+    assert _evaluate_check("abs(crown_slope_percent) <= 3", ctx) is True
+
+
+def test_csv_injection_sanitizer():
+    """Leader characters for Excel formula injection get neutralised."""
+    from ifc_geo_validator.cli import _sanitize_csv_cell
+    assert _sanitize_csv_cell("=HYPERLINK(\"http://evil\",\"x\")").startswith("'=")
+    assert _sanitize_csv_cell("+cmd|'/c calc'!A1").startswith("'+")
+    assert _sanitize_csv_cell("-2+3").startswith("'-")
+    assert _sanitize_csv_cell("@SUM(A:A)").startswith("'@")
+    # Regular names stay untouched
+    assert _sanitize_csv_cell("Wall_A1_Segment_03") == "Wall_A1_Segment_03"
+    assert _sanitize_csv_cell(None) is None
+    assert _sanitize_csv_cell(42) == 42
+
+
+def test_json_report_does_not_leak_tempfile_path():
+    """The report must record only the IFC basename, never the server path."""
+    from ifc_geo_validator.report.json_report import generate_report
+    r = generate_report("/tmp/tmp_secret_path.ifc", elements_results=[])
+    assert "ifc_path" not in r["report"]
+    assert r["report"]["ifc_file"] == "tmp_secret_path.ifc"

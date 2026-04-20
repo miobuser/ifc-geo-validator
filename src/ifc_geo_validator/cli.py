@@ -169,6 +169,20 @@ def _run_compare_mode(args, ifc_file, entity_types):
                       f"(Δ{d['difference']:.2f} {d['unit']}, tol={d['tolerance']})")
 
 
+def _sanitize_csv_cell(value):
+    """Prefix Excel / LibreOffice formula-injection leader characters.
+
+    A CSV field that begins with = + - @ \\t or \\r is interpreted as a
+    formula when the file is opened in a spreadsheet. An IFC element named
+    ``=HYPERLINK(...)`` would otherwise execute on the user's machine
+    (OWASP CSV Injection). Prefixing with a single quote neutralises the
+    cell without changing the displayed text in most tools.
+    """
+    if isinstance(value, str) and value and value[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + value
+    return value
+
+
 def _export_csv(path: str, all_results: list) -> None:
     """Write per-element measurements to a CSV file for Excel/Power BI."""
     import csv as csv_mod
@@ -183,8 +197,8 @@ def _export_csv(path: str, all_results: list) -> None:
         slope = r.get("slope_analysis", {})
         row = {
             "element_id": r.get("element_id"),
-            "element_name": r.get("element_name"),
-            "role": l2.get("element_role", ""),
+            "element_name": _sanitize_csv_cell(r.get("element_name")),
+            "role": _sanitize_csv_cell(l2.get("element_role", "")),
             "confidence": l2.get("confidence", ""),
             "volume_m3": l1.get("volume"),
             "total_area_m2": l1.get("total_area"),

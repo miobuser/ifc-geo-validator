@@ -10,7 +10,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [
-    { name = "Mio Buser" },
+    { name = "Mio Buser", email = "mio.buser@baghira.ch" },
 ]
 keywords = ["IFC", "BIM", "geometry", "validation", "infrastructure", "ASTRA"]
 classifiers = [
@@ -18,8 +18,19 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Scientific/Engineering :: Civil Engineering",
+    "Operating System :: OS Independent",
 ]
+
+[project.urls]
+Homepage = "https://github.com/miobuser/ifc-geo-validator"
+Repository = "https://github.com/miobuser/ifc-geo-validator"
+Issues = "https://github.com/miobuser/ifc-geo-validator/issues"
+Documentation = "https://github.com/miobuser/ifc-geo-validator/blob/master/docs/"
 
 dependencies = [
     "ifcopenshell>=0.8.0",
@@ -36,9 +47,13 @@ viz = [
     "pyvista>=0.40",
     "matplotlib>=3.7",
     "scipy>=1.10",
+    "plotly>=5.0",
 ]
 web = [
-    "streamlit>=1.30",
+    # streamlit 1.37 fixed CVE-2024-42474 (XSRF/CORS bypass); do not
+    # permit any earlier version via the floor.
+    "streamlit>=1.37",
+    "plotly>=5.0",
 ]
 viewer = [
     "fastapi>=0.110",
@@ -47,6 +62,10 @@ viewer = [
 ]
 bcf = [
     "bcf-client>=0.8",
+    # Transitive dep of bcf-client, but imported directly by
+    # ifc_geo_validator.report.bcf_export — declare explicitly so an
+    # environment that pins bcf-client without xsdata still works.
+    "xsdata>=24.0",
 ]
 
 [project.scripts]
