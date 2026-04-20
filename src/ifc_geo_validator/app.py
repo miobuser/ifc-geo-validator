@@ -31,6 +31,8 @@ RULESETS_DIR = Path(__file__).parent / "rules" / "rulesets"
 BUILTIN_RULESETS = {
     "ASTRA FHB T/G — Komplett (alle Regeln)": RULESETS_DIR / "astra_fhb_komplett.yaml",
     "ASTRA FHB T/G — Stützmauern": RULESETS_DIR / "astra_fhb_stuetzmauer.yaml",
+    "ASTRA FHB T/G — Brückenwiderlager": RULESETS_DIR / "astra_fhb_widerlager.yaml",
+    "ASTRA FHB T/G — Lärmschutzwände": RULESETS_DIR / "astra_fhb_laermschutz.yaml",
     "ASTRA FHB T/G — Tunnel": RULESETS_DIR / "astra_fhb_tunnel.yaml",
     "SIA 262 — Stützmauern": RULESETS_DIR / "sia_262_stuetzmauer.yaml",
 }

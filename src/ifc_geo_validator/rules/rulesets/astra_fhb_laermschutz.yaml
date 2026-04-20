@@ -1,0 +1,88 @@
+# =============================================================================
+# ASTRA FHB T/G — Prüfregeln für Lärmschutzwände
+# Basierend auf: ASTRA 24 001-17001 "Lärmschutz" §4 "Geometrische Ausführung"
+#                und SN 671 250 "Lärmschutzbauten Strassen"
+# =============================================================================
+#
+# Lärmschutzwände (LSW) unterscheiden sich geometrisch von Stützmauern:
+# - keine Erddrucklast → geringere Wandstärke zulässig
+# - zwingend vertikal → Anzug unzulässig (sonst reduzierte Schallreflexion)
+# - Höhe in der Regel 2-8 m über Fahrbahn
+# - Fundament flacher (nur Windlast + Eigengewicht, keine Erddrucklast)
+# =============================================================================
+
+metadata:
+  name: "ASTRA FHB T/G — Lärmschutzwände"
+  version: "1.0.0"
+  source: "ASTRA 24 001-17001 V2.01 + SN 671 250:2013"
+  scope: "Geometrische Validierung von Lärmschutzwänden an Nationalstrassen"
+  ifc_filter:
+    entity: "IfcWall"
+    predefined_type: "USERDEFINED"
+
+classification_thresholds:
+  horizontal_deg: 45.0
+  coplanar_deg: 5.0
+  lateral_deg: 45.0
+
+# =============================================================================
+# Level 1
+# =============================================================================
+
+level_1:
+  - id: ASTRA-LSW-L1-001
+    name: "Volumen Plausibilität"
+    description: "LSW-Volumen > 0.05 m³ (dünnwandiges Bauteil zulässig)"
+    check: "volume > 0.05"
+    severity: ERROR
+
+# =============================================================================
+# Level 3 — LSW-spezifische Masse
+# =============================================================================
+
+level_3:
+  - id: ASTRA-LSW-L3-001
+    name: "Wandhöhe"
+    description: "LSW-Höhe 2 m bis 8 m (Regelbereich)"
+    check: "wall_height_m >= 2.0 and wall_height_m <= 8.0"
+    severity: WARNING
+    reference: "ASTRA 24 001-17001 §4.1 'Regelhöhen'"
+    quote: "Regelhöhen für Lärmschutzwände liegen zwischen 2 m und 8 m."
+
+  - id: ASTRA-LSW-L3-002
+    name: "Wandstärke min"
+    description: "Pfosten-/Tragwand ≥ 200 mm (statische Mindestdicke)"
+    check: "min_wall_thickness_mm >= 200"
+    severity: ERROR
+    reference: "SN 671 250:2013 §5.2"
+    fix_hint: "Tragwand verdicken auf 200 mm"
+
+  - id: ASTRA-LSW-L3-003
+    name: "Lotrechte Ausführung"
+    description: "LSW zwingend vertikal (Lotabweichung ≤ 1°)"
+    check: "front_plumbness_deg <= 1.0"
+    severity: ERROR
+    reference: "ASTRA 24 001-17001 §4.2 'Geometrische Ausführung'"
+    quote: "Lärmschutzwände sind senkrecht auszuführen; Anzug ist nicht zulässig."
+    fix_hint: "Wand vertikal ausrichten, Anzug entfernen"
+
+  - id: ASTRA-LSW-L3-004
+    name: "Kein Anzug"
+    description: "Anzug-Verhältnis 0 (vertikale Ausführung vorgeschrieben)"
+    check: "front_inclination_ratio >= 50.0"
+    severity: WARNING
+    reference: "SN 671 250:2013"
+    quote: "LSW haben keinen Anzug; Verhältnis ≥ 50:1 entspricht praktisch senkrecht."
+
+# =============================================================================
+# Level 6 — Fundament
+# =============================================================================
+
+level_6:
+  - id: ASTRA-LSW-L6-001
+    name: "Frostsichere Einbindung"
+    description: "Fundamentunterkante ≥ 0.6 m unter Gelände"
+    check: "foundation_embedment_m >= 0.6"
+    severity: ERROR
+    reference: "ASTRA 24 001-17001 §4.3 + SN 670 140 'Frostsicherheit'"
+    fix_hint: "Fundament tiefer einbinden"

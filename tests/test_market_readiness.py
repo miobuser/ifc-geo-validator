@@ -382,6 +382,52 @@ def test_alignment_radius_ratio_straight_alignment_returns_none():
     assert ctx["alignment_radius_ratio"] is None  # no curvature → no ratio
 
 
+def test_ids_export_produces_valid_xml():
+    """IDS export round-trips through the XML parser and contains
+    the expected buildingSMART schema elements."""
+    import tempfile, os
+    from ifc_geo_validator.report.ids_export import export_ids
+    from xml.etree import ElementTree as ET
+
+    ruleset = {
+        "metadata": {
+            "name": "Test Ruleset",
+            "version": "1.0.0",
+            "source": "Test",
+            "ifc_filter": {"entity": "IfcWall", "predefined_type": "RETAININGWALL"},
+        },
+        "level_3": [
+            {
+                "id": "TEST-L3-001",
+                "name": "Kronenbreite",
+                "description": "Crown width >= 300 mm",
+                "check": "crown_width_mm >= 300",
+                "severity": "ERROR",
+                "reference": "ASTRA §5.1",
+            },
+        ],
+    }
+    with tempfile.NamedTemporaryFile(suffix=".ids", delete=False) as tmp:
+        out_path = tmp.name
+    try:
+        export_ids(ruleset, out_path, author="tester")
+        # Parse must succeed
+        tree = ET.parse(out_path)
+        root = tree.getroot()
+        # Root element is <ids> in the buildingSMART namespace
+        assert root.tag.endswith("}ids")
+        # At least one <specification>
+        ns = "{http://standards.buildingsmart.org/IDS}"
+        specs = root.findall(f".//{ns}specification")
+        assert len(specs) == 1
+        assert specs[0].get("name") == "Kronenbreite"
+        # Applicability names IfcWall + RETAININGWALL
+        ent = specs[0].find(f"{ns}applicability/{ns}entity/{ns}name/{ns}simpleValue")
+        assert ent is not None and ent.text == "IfcWall"
+    finally:
+        os.unlink(out_path)
+
+
 def test_alignment_no_alignments_returns_neutral_context():
     """Model without IfcAlignment yields has_alignment=False."""
     from ifc_geo_validator.validation.alignment import compute_alignment_context

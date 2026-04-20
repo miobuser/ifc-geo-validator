@@ -117,6 +117,9 @@ Mehr Dokumentation: docs/  |  https://github.com/miobuser/ifc-geo-validator
     parser.add_argument("--xlsx", default=None,
                         help="Export multi-sheet Excel workbook (Übersicht / Messwerte / "
                              "Regelprüfung / Metadaten) with PASS/FAIL colour-coding")
+    parser.add_argument("--ids", default=None,
+                        help="Export the ruleset as IDS 1.0 (buildingSMART Information "
+                             "Delivery Specification) XML for third-party checkers")
     parser.add_argument("--filter-name", default=None,
                         help="Filter elements by name pattern (e.g. '*Stütz*' or 'Mauer')")
     parser.add_argument("--compare", default=None, metavar="REFERENCE_IFC",
@@ -317,6 +320,18 @@ def _emit_outputs(args, ifc_file, model, elements, all_results, ruleset) -> None
             author=args.author or "",
         )
         print(f"\nExcel-Bericht written to: {args.xlsx}")
+
+    if args.ids:
+        if not ruleset:
+            print("WARNUNG: --ids benötigt ein Ruleset (-r oder --auto).")
+        else:
+            from ifc_geo_validator.report.ids_export import export_ids
+            export_ids(
+                ruleset, args.ids,
+                author=args.author or "ifc-geo-validator",
+                purpose="Automated geometric validation export",
+            )
+            print(f"\nIDS 1.0 written to: {args.ids}")
 
     if args.output:
         from ifc_geo_validator.report.json_report import json_default

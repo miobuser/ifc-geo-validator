@@ -1,0 +1,111 @@
+# =============================================================================
+# ASTRA FHB T/G — Prüfregeln für Brückenwiderlager
+# Basierend auf: ASTRA 24 001-11001 "Brücken, Allgemeines" und
+#                ASTRA 24 001-15101 "Stützbauwerke" §6 "Widerlager"
+# =============================================================================
+#
+# Brückenwiderlager (Abutments) werden geometrisch als Stützbauwerk mit
+# zusätzlichen Anforderungen für die Auflagerbank (Bearing Seat) und die
+# Widerlagerflügel (Wing Walls) geprüft. Die meisten L3-Variablen aus dem
+# Stützmauer-Ruleset gelten analog; spezifische Widerlager-Regeln ergänzen.
+#
+# Severity-Stufen:
+#   ERROR   — Normverstoss, muss korrigiert werden
+#   WARNING — Empfehlung, sollte geprüft werden
+#   INFO    — Hinweis, optional
+# =============================================================================
+
+metadata:
+  name: "ASTRA FHB T/G — Brückenwiderlager"
+  version: "1.0.0"
+  source: "ASTRA 24 001-11001 §5.4 + 24 001-15101 §6, 01.01.2025"
+  scope: "Geometrische Validierung von Brückenwiderlagern inkl. Flügelwände"
+  ifc_filter:
+    entity: "IfcFooting"
+    predefined_type: "ABUTMENT"
+
+classification_thresholds:
+  horizontal_deg: 45.0
+  coplanar_deg: 5.0
+  lateral_deg: 45.0
+
+# =============================================================================
+# Level 1 — Basis-Plausibilität
+# =============================================================================
+
+level_1:
+  - id: ASTRA-WL-L1-001
+    name: "Volumen Plausibilität"
+    description: "Widerlager-Volumen > 1 m³ (massives Bauteil)"
+    check: "volume > 1.0"
+    severity: ERROR
+    reference: "Plausibilität, Widerlager ist ein Massivbauteil"
+
+  - id: ASTRA-WL-L1-002
+    name: "Mesh-Validität"
+    description: "Mesh geschlossen (watertight)"
+    check: "mesh_is_watertight == true"
+    severity: WARNING
+    reference: "Voraussetzung zuverlässige Geometrieanalyse"
+
+# =============================================================================
+# Level 3 — Widerlager-spezifische Masse
+# =============================================================================
+
+level_3:
+  - id: ASTRA-WL-L3-001
+    name: "Auflagerbank-Breite"
+    description: "Auflagerbank ≥ 600 mm für Normauflager (ASTRA §5.4.3)"
+    check: "crown_width_mm >= 600"
+    severity: ERROR
+    reference: "ASTRA 24 001-11001 §5.4.3 'Auflagerabmessungen'"
+    quote: "Die Breite der Auflagerbank muss mindestens 600 mm betragen."
+    fix_hint: "Auflagerbank-Oberfläche verbreitern (Randabstand Lager ≥ 150 mm)"
+
+  - id: ASTRA-WL-L3-002
+    name: "Mindestwandstärke"
+    description: "Widerlager-Vorderwand ≥ 500 mm (Erddruck + Verkehrslasten)"
+    check: "min_wall_thickness_mm >= 500"
+    severity: ERROR
+    reference: "ASTRA 24 001-15101 §6.2 'Widerlager-Konstruktion'"
+    quote: "Die Vorderwand von Brückenwiderlagern beträgt in der Regel ≥ 500 mm."
+    fix_hint: "Widerlager-Vorderwand verdicken"
+
+  - id: ASTRA-WL-L3-003
+    name: "Wandhöhe"
+    description: "Widerlager-Höhe ≥ 2 m über Fundamentoberkante"
+    check: "wall_height_m >= 2.0"
+    severity: WARNING
+    reference: "ASTRA 24 001-15101 §6.1"
+    quote: "Typische Widerlager-Höhen liegen zwischen 2 m und 15 m."
+
+  - id: ASTRA-WL-L3-004
+    name: "Lotabweichung Vorderwand"
+    description: "Widerlager-Vorderwand lotrecht (Lotabweichung ≤ 1°)"
+    check: "front_plumbness_deg <= 1.0"
+    severity: ERROR
+    reference: "ASTRA 24 001-11001 §5.4.1"
+    quote: "Die Vorderwand des Widerlagers ist lotrecht auszuführen."
+    fix_hint: "Vorderwand in die Vertikale drehen"
+
+  - id: ASTRA-WL-L3-005
+    name: "Fundamentbreite"
+    description: "Fundamentbreite ≥ 1.5× Widerlagerhöhe (Kippsicherheit)"
+    check: "foundation_width_mm >= (wall_height_m * 1500)"
+    severity: WARNING
+    reference: "ASTRA 24 001-15101 §6.3, Kippsicherheit"
+    fix_hint: "Fundament hinten verlängern"
+
+# =============================================================================
+# Level 6 — Terrain und Einbindetiefe
+# =============================================================================
+
+level_6:
+  - id: ASTRA-WL-L6-001
+    name: "Einbindetiefe ≥ Frosttiefe"
+    description: "Fundamentunterkante mindestens 0.8 m unter Gelände (Frostsicherheit)"
+    check: "foundation_embedment_m >= 0.8"
+    severity: ERROR
+    reference: "ASTRA 24 001-15101 §5.2 'Frosteinwirkungen'"
+    quote: "Die Fundamentunterkante ist frostfrei zu gründen, in der Regel ≥ 0.8 m"
+    fix_hint: "Fundament tiefer einbinden (Frostfreiheit)"

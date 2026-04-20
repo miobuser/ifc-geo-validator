@@ -7,6 +7,18 @@ All notable changes to ifc-geo-validator are documented here. Format follows
 ## [Unreleased]
 
 ### Added
+- **IDS-Export** (`report/ids_export.py`, CLI `--ids out.ids`).
+  Converts an `ifc-geo-validator` ruleset into a buildingSMART
+  IDS 1.0 XML document. Third-party checkers (Solibri, ifctester,
+  Revit IDS-Checker, BIMcollab) can ingest the file and validate
+  the same requirements without installing our tool.
+- **Neue Rulesets**:
+  - `astra_fhb_widerlager.yaml` — Brückenwiderlager (Auflagerbank
+    ≥ 600 mm, Vorderwand ≥ 500 mm, lotrecht, Fundamentbreite ≥
+    1.5× Höhe, frostsichere Einbindung ≥ 0.8 m).
+  - `astra_fhb_laermschutz.yaml` — Lärmschutzwände (Höhe 2-8 m,
+    Dicke ≥ 200 mm, zwingend vertikal, Fundament ≥ 0.6 m).
+  Both registered in the Streamlit app dropdown.
 - **IfcAlignment-Integration** (`validation/alignment.py`). For IFC 4.3
   models with a horizontal alignment, each wall now reports
   `min_alignment_distance_m` (perpendicular XY distance from centroid)
