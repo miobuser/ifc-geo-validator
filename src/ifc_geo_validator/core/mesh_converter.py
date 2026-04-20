@@ -97,6 +97,26 @@ def extract_mesh(element) -> dict:
 
     watertight = _check_watertight(faces)
 
+    # Enforce outward-normal convention via signed-volume sign check.
+    # The face classifier uses dot(normal, z) > 0 → crown, so inverted
+    # winding would swap crown and foundation. We detect inversion by
+    # computing the signed volume from the divergence theorem: a closed
+    # mesh with outward-pointing normals yields positive signed volume
+    # (Ericson 2004, §12.4). Negative → flip face winding AND the
+    # precomputed normals so every downstream consumer sees the same
+    # convention. Watertight meshes only; for open meshes the signed
+    # volume is not well-defined and we leave orientation untouched.
+    normals_flipped = False
+    if watertight and len(faces) >= 4:
+        from ifc_geo_validator.core.geometry import compute_signed_volume
+        signed_vol = compute_signed_volume(vertices, faces)
+        if signed_vol < 0:
+            # Flip the triangle winding (swap columns 1 and 2) and the
+            # corresponding face normals. Areas are unchanged.
+            faces = faces[:, [0, 2, 1]]
+            normals = -normals
+            normals_flipped = True
+
     return {
         "vertices": vertices,
         "faces": faces,
@@ -104,6 +124,7 @@ def extract_mesh(element) -> dict:
         "areas": areas,
         "is_watertight": watertight,
         "n_degenerate_filtered": n_degenerate,
+        "normals_flipped": normals_flipped,
     }
 
 

@@ -30,13 +30,28 @@ def compute_volume(vertices: np.ndarray, faces: np.ndarray) -> float:
 
     Reference: Ericson, C. (2004). Real-Time Collision Detection, §12.4.
     """
-    # Center to mean vertex position (translation-invariant)
+    return abs(compute_signed_volume(vertices, faces))
+
+
+def compute_signed_volume(vertices: np.ndarray, faces: np.ndarray) -> float:
+    """Signed volume — positive if outward-normal convention holds.
+
+    Same divergence-theorem formula as compute_volume but without the
+    final absolute value. A positive result means the face winding
+    order encodes outward-pointing normals (the standard convention
+    assumed by the face classifier: crown = dot(normal, z) > 0).
+    A negative result means the mesh has inverted winding; callers
+    can detect this and flip the normal vectors before classification.
+
+    This is the single authoritative check for normal orientation; no
+    other module should duplicate the outward-normal heuristic.
+    """
     center = vertices.mean(axis=0)
     v0 = vertices[faces[:, 0]] - center
     v1 = vertices[faces[:, 1]] - center
     v2 = vertices[faces[:, 2]] - center
     signed = np.einsum("ij,ij->i", v0, np.cross(v1, v2))
-    return abs(signed.sum() / 6.0)
+    return float(signed.sum() / 6.0)
 
 
 def compute_total_area(areas: np.ndarray) -> float:
