@@ -452,6 +452,31 @@ _VIEWER_HTML = r"""
     </div>
   </div>
   <div class="tb-group">
+    <div class="tb-group-label">Schnitt</div>
+    <div class="tb-group-buttons">
+      <button class="tb" id="sec-x" title="Schnitt-Ebene X">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="8" y1="3" x2="8" y2="21"/></svg>
+        <span>X</span>
+      </button>
+      <button class="tb" id="sec-y" title="Schnitt-Ebene Y">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="8" x2="21" y2="8"/></svg>
+        <span>Y</span>
+      </button>
+      <button class="tb" id="sec-z" title="Schnitt-Ebene Z">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="3" x2="21" y2="21"/></svg>
+        <span>Z</span>
+      </button>
+      <button class="tb" id="sec-flip" title="Richtung umkehren (F bei aktiver Ebene)">
+        <svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        <span>Flip</span>
+      </button>
+      <button class="tb" id="sec-clear" title="Alle Schnitte aufheben">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+        <span>Aus</span>
+      </button>
+    </div>
+  </div>
+  <div class="tb-group">
     <div class="tb-group-label">Fokus</div>
     <div class="tb-group-buttons">
       <button class="tb" id="v-zoom-sel" title="Zu Auswahl zoomen (Z)">
@@ -563,6 +588,9 @@ try {
   const canvas = document.getElementById('c');
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio);
+  // Enable local clipping so section planes only affect our meshes
+  // (not helpers like the grid or the measurement line).
+  renderer.localClippingEnabled = true;
 
   function getWidth() {
     return Math.max(canvas.clientWidth, window.innerWidth, 800);
@@ -1034,11 +1062,87 @@ try {
     else if (k === 'e' || k === 'E') document.getElementById('t-edges').click();
     else if (k === 'g' || k === 'G') document.getElementById('t-ghost').click();
     else if (k === 'm' || k === 'M') toggleMeasureMode();
+    else if (k === '+' || k === '=') moveActiveSection(+1);
+    else if (k === '-' || k === '_') moveActiveSection(-1);
+    else if ((k === 'r' || k === 'R') && activeAxis) flipActiveSection();
     else if (k === 'Escape') {
       if (measureMode) toggleMeasureMode();
+      else if (Object.values(sectionPlanes).some(p => p !== null)) clearAllSections();
       else clearSelection();
     }
   });
+
+  // ── Section planes ────────────────────────────────────────────
+  // One clipping plane per axis (X/Y/Z). Each plane is normalised so
+  // its constant equals the center coord on its axis; toggling sets
+  // the clip to that side. +/- keys move the active plane through the
+  // model along its normal, F flips direction.
+  const axisVectors = {
+    X: new THREE.Vector3(1, 0, 0),
+    Y: new THREE.Vector3(0, 1, 0),
+    Z: new THREE.Vector3(0, 0, 1),
+  };
+  const sectionPlanes = { X: null, Y: null, Z: null };
+  let activeAxis = null;  // which axis responds to +/- and F
+
+  function sectionStep() {
+    const bbox = worldBox;
+    if (bbox.isEmpty()) return 1.0;
+    const sz = new THREE.Vector3();
+    bbox.getSize(sz);
+    return Math.max(sz.x, sz.y, sz.z) / 50.0;  // 2% of largest dim per key press
+  }
+
+  function applyClippingToMeshes() {
+    const active = Object.values(sectionPlanes).filter(p => p !== null);
+    for (const em of elementMeshes) {
+      em.mesh.material.clippingPlanes = active.length > 0 ? active : null;
+      em.mesh.material.clipShadows = true;
+      em.mesh.material.needsUpdate = true;
+    }
+  }
+
+  function toggleSection(axis) {
+    const btn = document.getElementById('sec-' + axis.toLowerCase());
+    if (sectionPlanes[axis]) {
+      sectionPlanes[axis] = null;
+      btn.classList.remove('active');
+      if (activeAxis === axis) activeAxis = null;
+    } else {
+      // Plane normal along axis, passes through center
+      const normal = axisVectors[axis].clone();
+      const plane = new THREE.Plane();
+      plane.setFromNormalAndCoplanarPoint(normal, center);
+      sectionPlanes[axis] = plane;
+      btn.classList.add('active');
+      activeAxis = axis;
+    }
+    applyClippingToMeshes();
+  }
+
+  function flipActiveSection() {
+    if (!activeAxis || !sectionPlanes[activeAxis]) return;
+    const p = sectionPlanes[activeAxis];
+    p.normal.multiplyScalar(-1);
+    p.constant *= -1;
+    applyClippingToMeshes();
+  }
+
+  function moveActiveSection(sign) {
+    if (!activeAxis || !sectionPlanes[activeAxis]) return;
+    const p = sectionPlanes[activeAxis];
+    p.constant += sign * sectionStep();
+    applyClippingToMeshes();
+  }
+
+  function clearAllSections() {
+    for (const k of Object.keys(sectionPlanes)) {
+      sectionPlanes[k] = null;
+      document.getElementById('sec-' + k.toLowerCase()).classList.remove('active');
+    }
+    activeAxis = null;
+    applyClippingToMeshes();
+  }
 
   // ── Measurement tool ──────────────────────────────────────────
   // Two-click distance measurement with snap-to-vertex (nearest
@@ -1120,6 +1224,11 @@ try {
     if (selectedId !== null) zoomToElement(selectedId);
   };
   document.getElementById('tool-measure').onclick = toggleMeasureMode;
+  document.getElementById('sec-x').onclick = () => toggleSection('X');
+  document.getElementById('sec-y').onclick = () => toggleSection('Y');
+  document.getElementById('sec-z').onclick = () => toggleSection('Z');
+  document.getElementById('sec-flip').onclick = flipActiveSection;
+  document.getElementById('sec-clear').onclick = clearAllSections;
 
   // Panel collapse/expand
   const leftPanel = document.getElementById('element-list');
