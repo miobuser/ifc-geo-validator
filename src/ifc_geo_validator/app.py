@@ -590,19 +590,19 @@ if uploaded_file:
             # ── L1: Geometry ─────────────────────────────────
             st.subheader(t("geometry_l1"))
             c1, c2, c3 = st.columns(3)
-            c1.metric("Volume", f"{l1['volume']:.3f} m³")
-            c2.metric("Surface area", f"{l1['total_area']:.3f} m²")
+            c1.metric(t("volume"), f"{l1['volume']:.3f} m³")
+            c2.metric(t("surface_area"), f"{l1['total_area']:.3f} m²")
             bbox = l1["bbox"]["size"]
             c3.metric(
-                "Bounding box",
+                t("bounding_box"),
                 f"{bbox[0]:.2f} × {bbox[1]:.2f} × {bbox[2]:.2f} m",
             )
 
             c4, c5, c6 = st.columns(3)
-            c4.metric("Triangles", l1["num_triangles"])
-            c5.metric("Vertices", l1["num_vertices"])
-            wt_label = "Yes" if l1["is_watertight"] else "No"
-            c6.metric("Watertight", wt_label)
+            c4.metric(t("triangles"), l1["num_triangles"])
+            c5.metric(t("vertices"), l1["num_vertices"])
+            wt_label = t("yes") if l1["is_watertight"] else t("no")
+            c6.metric(t("watertight"), wt_label)
 
             # Mesh quality warnings
             n_degen = l1.get("n_degenerate_filtered", 0)
@@ -621,7 +621,7 @@ if uploaded_file:
 
             # ── L2: Face classification ──────────────────────
             st.subheader(t("face_classification_l2"))
-            st.caption(f"{l2['num_groups']} groups detected")
+            st.caption(f"{l2['num_groups']} {t('groups_detected')}")
 
             group_data = []
             for g in l2["face_groups"]:
@@ -861,8 +861,8 @@ if uploaded_file:
     st.divider()
     st.subheader(t("check_report"))
     pcol1, pcol2 = st.columns(2)
-    project_name = pcol1.text_input("Projektname", "", key="proj_name")
-    author_name = pcol2.text_input("Prüfer/in", "", key="author_name")
+    project_name = pcol1.text_input(t("project_name"), "", key="proj_name")
+    author_name = pcol2.text_input(t("inspector"), "", key="author_name")
 
     if project_name or author_name:
         try:
@@ -992,7 +992,7 @@ if uploaded_file:
             use_container_width=True,
         )
     except Exception:
-        dl2.button("Enriched IFC (unavailable)", disabled=True,
+        dl2.button(t("enriched_unavailable"), disabled=True,
                    use_container_width=True)
     finally:
         if enrich_tmp:
@@ -1022,7 +1022,7 @@ if uploaded_file:
             use_container_width=True,
         )
     except Exception:
-        dl3.button("BCF Issues (unavailable)", disabled=True,
+        dl3.button(t("bcf_unavailable"), disabled=True,
                    use_container_width=True)
     finally:
         if bcf_tmp:

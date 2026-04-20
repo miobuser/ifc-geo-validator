@@ -11,6 +11,8 @@ Geometric validation of IFC infrastructure models against configurable requireme
 
 **New here?** Start with [docs/quickstart.md](docs/quickstart.md) — zero-to-first-report in 5 minutes.
 
+**Documentation:** [Quickstart](docs/quickstart.md) · [Deployment](docs/deployment.md) · [Privacy](docs/privacy.md) · [Variable Reference](docs/variable_reference.md) · [Scientific References](docs/references.md) · [Changelog](CHANGELOG.md) · [Security Policy](SECURITY.md) · [License](LICENSE)
+
 ## Overview
 
 `ifc-geo-validator` analyses the geometry of IFC building elements and validates them against configurable YAML rulesets. It extracts triangulated meshes via IfcOpenShell/OpenCASCADE, classifies faces by surface normal direction, computes geometric properties, and checks them against normative requirements.

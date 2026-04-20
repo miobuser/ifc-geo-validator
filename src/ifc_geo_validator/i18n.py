@@ -349,6 +349,82 @@ TRANSLATIONS = {
         "fr": "Problèmes BCF (pour Revit / Navisworks)",
         "it": "Problemi BCF (per Revit / Navisworks)",
     },
+    "enriched_unavailable": {
+        "de": "Angereicherte IFC (nicht verfügbar)",
+        "fr": "IFC enrichi (indisponible)",
+        "it": "IFC arricchito (non disponibile)",
+    },
+    "bcf_unavailable": {
+        "de": "BCF-Issues (nicht verfügbar)",
+        "fr": "Problèmes BCF (indisponible)",
+        "it": "Problemi BCF (non disponibile)",
+    },
+    "groups_detected": {
+        "de": "Gruppen erkannt",
+        "fr": "groupes détectés",
+        "it": "gruppi rilevati",
+    },
+    "category_col": {"de": "Kategorie", "fr": "Catégorie", "it": "Categoria"},
+    "area_col": {"de": "Fläche (m²)", "fr": "Surface (m²)", "it": "Area (m²)"},
+    "triangles_col": {"de": "Dreiecke", "fr": "Triangles", "it": "Triangoli"},
+    "normal_col": {"de": "Normale", "fr": "Normale", "it": "Normale"},
+    "wall_length": {
+        "de": "Wandlänge",
+        "fr": "Longueur du mur",
+        "it": "Lunghezza del muro",
+    },
+    "foundation_width_label": {
+        "de": "Fundamentbreite",
+        "fr": "Largeur de fondation",
+        "it": "Larghezza della fondazione",
+    },
+    "profile_consistency": {
+        "de": "Profilkonsistenz (CV)",
+        "fr": "Cohérence du profil (CV)",
+        "it": "Coerenza del profilo (CV)",
+    },
+    "uniform": {"de": "konstant", "fr": "uniforme", "it": "uniforme"},
+    "variable_label": {"de": "variabel", "fr": "variable", "it": "variabile"},
+    "rules_result": {
+        "de": "Regelprüfung",
+        "fr": "Résultat des règles",
+        "it": "Risultato regole",
+    },
+    "rule_col": {"de": "Regel", "fr": "Règle", "it": "Regola"},
+    "name_col": {"de": "Name", "fr": "Nom", "it": "Nome"},
+    "severity_col": {"de": "Schweregrad", "fr": "Sévérité", "it": "Severità"},
+    "message_col": {"de": "Meldung", "fr": "Message", "it": "Messaggio"},
+    "terrain_col": {
+        "de": "Terrain: Erkannt",
+        "fr": "Terrain : détecté",
+        "it": "Terreno: rilevato",
+    },
+    "terrain_col_none": {
+        "de": "Terrain: Nicht erkannt",
+        "fr": "Terrain : non détecté",
+        "it": "Terreno: non rilevato",
+    },
+    "terrain_side_heading": {
+        "de": "Terrain-basierte Front-/Rückseiten-Zuordnung",
+        "fr": "Affectation face avant / arrière basée sur le terrain",
+        "it": "Assegnazione fronte/retro basata sul terreno",
+    },
+    "crown_clearance_heading": {
+        "de": "Abstand Krone ↔ Terrain",
+        "fr": "Distance couronnement ↔ terrain",
+        "it": "Distanza coronamento ↔ terreno",
+    },
+    "foundation_embedment_heading": {
+        "de": "Einbindetiefe Fundament",
+        "fr": "Profondeur d'encastrement de la fondation",
+        "it": "Profondità d'infissione della fondazione",
+    },
+    "inter_element_distances_heading": {
+        "de": "Abstände zwischen Elementen",
+        "fr": "Distances entre éléments",
+        "it": "Distanze tra elementi",
+    },
+    "result_col": {"de": "Ergebnis", "fr": "Résultat", "it": "Risultato"},
 
     # ── Summary panel ────────────────────────────────────
     "validated": {"de": "Validiert", "fr": "Validé", "it": "Validato"},
