@@ -393,7 +393,8 @@ def _compute_crown_width_sliced(vertices, faces, crown_groups, centerline, eps=1
         "width_median_mm": float(np.median(widths_arr)),
         "width_max_mm": float(widths_arr.max()),
         "width_cv": round(cv, 6),
-        "method": "slice_local_frame_p10",
+        "method": "slice_local_frame",
+        "representative": "p10",
     }
 
 
@@ -486,7 +487,8 @@ def _compute_foundation_width_sliced(vertices, faces, foundation_groups, centerl
         "width_median_mm": float(np.median(widths_arr)),
         "width_max_mm": float(widths_arr.max()),
         "width_cv": round(cv, 6),
-        "method": "slice_local_frame_p10",
+        "method": "slice_local_frame",
+        "representative": "p10",
     }
 
 

@@ -30,148 +30,102 @@ def _bold(s): return f"\033[1m{s}\033[0m" if _COLOR else s
 from ifc_geo_validator import get_version as _get_version
 
 
-def main():
-    sys.stdout.reconfigure(encoding="utf-8")
+def _build_argparser() -> argparse.ArgumentParser:
+    """Configure the CLI argument parser.
 
+    Extracted from main() so the 140-line flag wall lives in its own
+    function — keeps main() focused on orchestration.
+    """
     parser = argparse.ArgumentParser(
         prog="ifc-geo-validator",
         description="Geometric validation of IFC infrastructure models",
     )
     parser.add_argument("ifc_file", nargs="+", help="Path to IFC file(s) or directory")
-    parser.add_argument(
-        "-r", "--ruleset",
-        help="Path to YAML ruleset file",
-        default=None,
-    )
-    parser.add_argument(
-        "-o", "--output",
-        help="Output report file (JSON)",
-        default=None,
-    )
-    parser.add_argument(
-        "--levels",
-        help="Validation levels to run (e.g., 1,2,3,4,5,6)",
-        default="1,2,3,4,5,6",
-    )
-    parser.add_argument(
-        "--filter-type",
-        help="IFC entity types, comma-separated (default: IfcWall). "
-             "Example: IfcWall,IfcSlab,IfcFooting",
-        default="IfcWall",
-    )
-    parser.add_argument(
-        "--filter-predefined",
-        help="Predefined type filter (e.g., RETAININGWALL)",
-        default=None,
-    )
-    parser.add_argument(
-        "--enrich",
-        help="Write enriched IFC with validation properties to this path",
-        default=None,
-    )
-    parser.add_argument(
-        "--bcf",
-        help="Export failed checks as BCF issues to this path",
-        default=None,
-    )
-    parser.add_argument(
-        "--html",
-        help="Generate HTML validation report to this path",
-        default=None,
-    )
-    parser.add_argument(
-        "-v", "--verbose",
-        action="store_true",
-        help="Verbose output",
-    )
-    parser.add_argument(
-        "--summary",
-        action="store_true",
-        help="Print one-line summary per element (for CI/CD)",
-    )
-    parser.add_argument(
-        "--scan",
-        action="store_true",
-        help="Scan model for all entity types with geometry and exit",
-    )
-    parser.add_argument(
-        "--centerline",
-        choices=["auto", "geometry", "alignment"],
-        default="auto",
-        help="Centerline source: auto (alignment if available, else geometry), "
-             "geometry (from crown faces), alignment (from IfcAlignment)",
-    )
-    parser.add_argument(
-        "--heatmap",
-        choices=["cross", "long", "total"],
-        default=None,
-        help="Show slope heatmap: cross (Quergefälle), long (Längsgefälle), total",
-    )
-    parser.add_argument(
-        "--cross-section",
-        type=float, nargs="?", const=0.5, default=None,
-        metavar="FRACTION",
-        help="Show cross-section at position (0.0=start, 0.5=middle, 1.0=end)",
-    )
-    parser.add_argument(
-        "--clearance",
-        type=float, nargs=2, default=None,
-        metavar=("WIDTH", "HEIGHT"),
-        help="Check clearance profile (width height in meters, e.g. --clearance 8.0 4.5)",
-    )
-    parser.add_argument(
-        "--distances",
-        action="store_true",
-        help="Compute pairwise distances between ALL elements (min vertex, horizontal, vertical)",
-    )
-    parser.add_argument(
-        "--csv",
-        default=None,
-        help="Export all measurements as CSV spreadsheet (for Excel/Power BI)",
-    )
-    parser.add_argument(
-        "--filter-name",
-        default=None,
-        help="Filter elements by name pattern (e.g. '*Stütz*' or 'Mauer')",
-    )
-    parser.add_argument(
-        "--compare",
-        default=None,
-        metavar="REFERENCE_IFC",
-        help="Compare against reference IFC (as-designed vs as-built)",
-    )
-    parser.add_argument(
-        "--auto",
-        action="store_true",
-        help="Auto-configure: detect entity types and best ruleset automatically",
-    )
-    parser.add_argument(
-        "--project",
-        default=None,
-        help="Project name/number for report header (e.g. 'A1 Bern-Zürich, Los 3')",
-    )
-    parser.add_argument(
-        "--author",
-        default=None,
-        help="Author/validator name for report signature",
-    )
-    parser.add_argument(
-        "--init",
-        action="store_true",
-        help="Create a default .igv.yaml config file in the current directory",
-    )
-    parser.add_argument(
-        "--quick",
-        action="store_true",
-        help="Quick summary: one line per element with key metrics and PASS/FAIL",
-    )
-    parser.add_argument(
-        "--heatmap-categories",
-        default="crown",
-        help="Face categories for heatmap, comma-separated (default: crown). "
-             "Use 'all' for entire mesh.",
-    )
+    parser.add_argument("-r", "--ruleset", default=None, help="Path to YAML ruleset file")
+    parser.add_argument("-o", "--output", default=None, help="Output report file (JSON)")
+    parser.add_argument("--levels", default="1,2,3,4,5,6",
+                        help="Validation levels to run (e.g., 1,2,3,4,5,6)")
+    parser.add_argument("--filter-type", default="IfcWall",
+                        help="IFC entity types, comma-separated (default: IfcWall). "
+                             "Example: IfcWall,IfcSlab,IfcFooting")
+    parser.add_argument("--filter-predefined", default=None,
+                        help="Predefined type filter (e.g., RETAININGWALL)")
+    parser.add_argument("--enrich", default=None,
+                        help="Write enriched IFC with validation properties to this path")
+    parser.add_argument("--bcf", default=None,
+                        help="Export failed checks as BCF issues to this path")
+    parser.add_argument("--html", default=None,
+                        help="Generate HTML validation report to this path")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
+    parser.add_argument("--summary", action="store_true",
+                        help="Print one-line summary per element (for CI/CD)")
+    parser.add_argument("--scan", action="store_true",
+                        help="Scan model for all entity types with geometry and exit")
+    parser.add_argument("--centerline",
+                        choices=["auto", "geometry", "alignment"], default="auto",
+                        help="Centerline source: auto (alignment if available, else geometry), "
+                             "geometry (from crown faces), alignment (from IfcAlignment)")
+    parser.add_argument("--heatmap", choices=["cross", "long", "total"], default=None,
+                        help="Show slope heatmap: cross (Quergefälle), long (Längsgefälle), total")
+    parser.add_argument("--cross-section", type=float, nargs="?", const=0.5, default=None,
+                        metavar="FRACTION",
+                        help="Show cross-section at position (0.0=start, 0.5=middle, 1.0=end)")
+    parser.add_argument("--clearance", type=float, nargs=2, default=None,
+                        metavar=("WIDTH", "HEIGHT"),
+                        help="Check clearance profile (width height in meters, e.g. --clearance 8.0 4.5)")
+    parser.add_argument("--distances", action="store_true",
+                        help="Compute pairwise distances between ALL elements (min vertex, horizontal, vertical)")
+    parser.add_argument("--csv", default=None,
+                        help="Export all measurements as CSV spreadsheet (for Excel/Power BI)")
+    parser.add_argument("--filter-name", default=None,
+                        help="Filter elements by name pattern (e.g. '*Stütz*' or 'Mauer')")
+    parser.add_argument("--compare", default=None, metavar="REFERENCE_IFC",
+                        help="Compare against reference IFC (as-designed vs as-built)")
+    parser.add_argument("--auto", action="store_true",
+                        help="Auto-configure: detect entity types and best ruleset automatically")
+    parser.add_argument("--project", default=None,
+                        help="Project name/number for report header (e.g. 'A1 Bern-Zürich, Los 3')")
+    parser.add_argument("--author", default=None,
+                        help="Author/validator name for report signature")
+    parser.add_argument("--init", action="store_true",
+                        help="Create a default .igv.yaml config file in the current directory")
+    parser.add_argument("--quick", action="store_true",
+                        help="Quick summary: one line per element with key metrics and PASS/FAIL")
+    parser.add_argument("--heatmap-categories", default="crown",
+                        help="Face categories for heatmap, comma-separated (default: crown). "
+                             "Use 'all' for entire mesh.")
+    return parser
 
+
+def _apply_project_config(args, entity_types):
+    """Merge .igv.yaml project config into parsed args. Returns entity_types."""
+    from ifc_geo_validator.core.project_config import find_config, load_config
+    config_path = find_config()
+    if not config_path:
+        return entity_types
+    config = load_config(config_path)
+    print(f"Config: {config_path}")
+    # CLI flags take precedence; config fills in defaults only
+    if not args.project and config.get("project"):
+        args.project = config["project"]
+    if not args.author and config.get("author"):
+        args.author = config["author"]
+    if args.filter_type == "IfcWall" and config.get("filter_type"):
+        ft = config["filter_type"]
+        if isinstance(ft, list):
+            args.filter_type = ",".join(ft)
+        entity_types = [t.strip() for t in args.filter_type.split(",")]
+    if config.get("auto") and not args.auto:
+        args.auto = True
+    if config.get("distances") and not args.distances:
+        args.distances = True
+    return entity_types
+
+
+def main():
+    sys.stdout.reconfigure(encoding="utf-8")
+
+    parser = _build_argparser()
     args = parser.parse_args()
     levels = [int(x) for x in args.levels.split(",")]
     entity_types = [t.strip() for t in args.filter_type.split(",")]
@@ -184,26 +138,7 @@ def main():
         print("Edit this file to configure your project settings.")
         return
 
-    # Load project config if available
-    from ifc_geo_validator.core.project_config import find_config, load_config
-    config_path = find_config()
-    if config_path:
-        config = load_config(config_path)
-        print(f"Config: {config_path}")
-        # Apply config as defaults (CLI flags override)
-        if not args.project and config.get("project"):
-            args.project = config["project"]
-        if not args.author and config.get("author"):
-            args.author = config["author"]
-        if args.filter_type == "IfcWall" and config.get("filter_type"):
-            ft = config["filter_type"]
-            if isinstance(ft, list):
-                args.filter_type = ",".join(ft)
-            entity_types = [t.strip() for t in args.filter_type.split(",")]
-        if config.get("auto") and not args.auto:
-            args.auto = True
-        if config.get("distances") and not args.distances:
-            args.distances = True
+    entity_types = _apply_project_config(args, entity_types)
 
     # Resolve input files (support directories and globs)
     import glob as globmod
