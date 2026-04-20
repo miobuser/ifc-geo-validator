@@ -1155,12 +1155,14 @@ def _main():
                 print(f"{status}\t#{eid}\t{name}\tL4({s['passed']}P/{s['failed']}F/{s['skipped']}S)")
             else:
                 print(f"SKIP\t#{eid}\t{name}\tno L4")
-        # Exit with non-zero code if any mandatory rule (ERROR severity) failed
-        if overall == "FAIL":
-            sys.exit(1)
 
     # Export BCF issues for failed checks
     _emit_outputs(args, ifc_file, model, elements, all_results, ruleset)
+
+    # Exit code 1 on FAIL regardless of --summary flag so CI pipelines
+    # work without the extra flag. Keep 0 on PASS/SKIP.
+    if overall == "FAIL":
+        sys.exit(1)
 
 
 def _scan_model(model):

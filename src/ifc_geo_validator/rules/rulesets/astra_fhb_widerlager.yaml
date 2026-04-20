@@ -96,6 +96,14 @@ level_3:
     reference: "ASTRA 24 001-15101 §6.3, Kippsicherheit"
     fix_hint: "Fundament hinten verlängern"
 
+  - id: ASTRA-WL-L3-006
+    name: "Massivitätsverhältnis"
+    description: "V/V_bbox ≥ 0.6 (massive Konstruktion, keine Hohlräume)"
+    check: "volume_fill_ratio >= 0.6"
+    severity: INFO
+    reference: "Plausibilitätsprüfung für Massivbauteil"
+    quote: "Widerlager sind in der Regel aus Stahlbeton massiv ausgeführt."
+
 # =============================================================================
 # Level 6 — Terrain und Einbindetiefe
 # =============================================================================

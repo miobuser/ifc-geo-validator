@@ -117,8 +117,8 @@ def export_xlsx(
 
         row_values = [
             r.get("element_id"),
-            r.get("element_name", ""),
-            l2.get("element_role", ""),
+            _safe_cell(r.get("element_name", "")),
+            _safe_cell(l2.get("element_role", "")),
             status,
             round(l1.get("volume", 0), 3) if l1 else None,
             round(l1.get("total_area", 0), 3) if l1 else None,
@@ -155,8 +155,8 @@ def export_xlsx(
         l6_ctx = r.get("level6_context", {})
         row_values = [
             r.get("element_id"),
-            r.get("element_name", ""),
-            l2.get("element_role", ""),
+            _safe_cell(r.get("element_name", "")),
+            _safe_cell(l2.get("element_role", "")),
             _fmt(l3.get("crown_width_mm"), 1),
             _fmt(l3.get("crown_slope_percent"), 2),
             _fmt(l3.get("min_wall_thickness_mm"), 1),
@@ -190,15 +190,15 @@ def export_xlsx(
                     else None)
             row_values = [
                 r.get("element_id"),
-                r.get("element_name", ""),
-                c.get("id", c.get("rule_id", "")),
-                c.get("name", ""),
+                _safe_cell(r.get("element_name", "")),
+                _safe_cell(c.get("id", c.get("rule_id", ""))),
+                _safe_cell(c.get("name", "")),
                 status,
-                c.get("severity", ""),
+                _safe_cell(c.get("severity", "")),
                 _fmt(c.get("actual"), 2),
-                str(c.get("expected", c.get("check_expr", ""))),
-                c.get("reference", ""),
-                c.get("message", ""),
+                _safe_cell(str(c.get("expected", c.get("check_expr", "")))),
+                _safe_cell(c.get("reference", "")),
+                _safe_cell(c.get("message", "")),
             ]
             for col_idx, v in enumerate(row_values, start=1):
                 cell = ws3.cell(row=row_idx, column=col_idx, value=v)
@@ -250,3 +250,16 @@ def _fmt(v, digits: int = 2):
         return round(float(v), digits)
     except (TypeError, ValueError):
         return v
+
+
+def _safe_cell(v):
+    """Neutralise Excel-formula-injection leader chars in a string cell.
+
+    Delegates to ``cli._sanitize_csv_cell`` so the CSV and XLSX
+    exporters share the same rule. Excel interprets `=`, `+`, `-`,
+    `@`, `\\t`, `\\r` as formula leaders — an IFC element named
+    ``=HYPERLINK("http://evil","click")`` would otherwise execute on
+    the user's machine when they open the workbook.
+    """
+    from ifc_geo_validator.cli import _sanitize_csv_cell
+    return _sanitize_csv_cell(v)

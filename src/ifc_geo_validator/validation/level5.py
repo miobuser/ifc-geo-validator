@@ -87,24 +87,13 @@ def validate_level5(elements_data: list[dict], config: dict | None = None) -> di
             "mesh_data": mesh,
         })
 
-    # Vectorised AABB prefilter: compute every pair's per-axis gap in one
-    # numpy broadcast, then keep only pairs whose largest axis gap is
-    # below max_gap. This replaces an O(N²) Python loop with a single
-    # O(N²) vectorised op — ~50× faster for N≥100, which is the regime
-    # where the previous loop dominated the pipeline.
-    N = len(elem_info)
-    if N >= 2:
-        bmin = np.array([e["bbox_min"] for e in elem_info])  # (N,3)
-        bmax = np.array([e["bbox_max"] for e in elem_info])  # (N,3)
-        # gap[i,j,k] = max(0, max(bmin[i,k], bmin[j,k]) - min(bmax[i,k], bmax[j,k]))
-        lower = np.maximum(bmin[:, None, :], bmin[None, :, :])
-        upper = np.minimum(bmax[:, None, :], bmax[None, :, :])
-        gap = np.maximum(0.0, lower - upper)            # (N,N,3)
-        max_axis_gap = gap.max(axis=2)                  # (N,N)
-        # Upper triangle only, and below cutoff
-        candidate_mask = (max_axis_gap <= max_gap)
-        candidate_mask &= np.triu(np.ones((N, N), dtype=bool), k=1)
-        ii, jj = np.nonzero(candidate_mask)
+    # Vectorised AABB prefilter via shared helper (see core/distance.
+    # aabb_pair_candidates). Replaces the previous O(N²) Python loop.
+    from ifc_geo_validator.core.distance import aabb_pair_candidates
+    if len(elem_info) >= 2:
+        bmin = np.array([e["bbox_min"] for e in elem_info])
+        bmax = np.array([e["bbox_max"] for e in elem_info])
+        ii, jj = aabb_pair_candidates(bmin, bmax, max_gap)
         candidate_pairs = list(zip(ii.tolist(), jj.tolist()))
     else:
         candidate_pairs = []

@@ -202,16 +202,10 @@ def validate_level6(
         if elements_data[i].get("mesh_data") and elements_data[i].get("level1", {}).get("bbox")
     ]
     if len(usable) >= 2:
-        idxs = [u[0] for u in usable]
+        from ifc_geo_validator.core.distance import aabb_pair_candidates
         bmin = np.array([u[1]["level1"]["bbox"]["min"] for u in usable])
         bmax = np.array([u[1]["level1"]["bbox"]["max"] for u in usable])
-        lower = np.maximum(bmin[:, None, :], bmin[None, :, :])
-        upper = np.minimum(bmax[:, None, :], bmax[None, :, :])
-        gap = np.maximum(0.0, lower - upper)       # (N,N,3)
-        max_axis_gap = gap.max(axis=2)             # (N,N)
-        candidate_mask = (max_axis_gap <= NEIGHBOR_CUTOFF_M)
-        candidate_mask &= np.triu(np.ones_like(max_axis_gap, dtype=bool), k=1)
-        ii, jj = np.nonzero(candidate_mask)
+        ii, jj = aabb_pair_candidates(bmin, bmax, NEIGHBOR_CUTOFF_M)
 
         for ii_k, jj_k in zip(ii.tolist(), jj.tolist()):
             a = usable[ii_k][1]

@@ -438,6 +438,84 @@ def test_alignment_no_alignments_returns_neutral_context():
     assert ctx["min_alignment_distance_m"] is None
 
 
+def test_fix_direction_returns_empty_for_unknown_variable():
+    """Unknown variable in _FIX_DIRECTIONS must return empty string,
+    not raise KeyError. Guards against regressions that would crash
+    the whole rule evaluation on any rule referencing a new variable
+    not yet in the fix catalog."""
+    from ifc_geo_validator.validation.level4 import _fix_direction
+    assert _fix_direction("nonexistent_metric_mm", ">=", 1.0, 0.5) == ""
+    # Also verify it doesn't raise on exotic ops
+    assert _fix_direction("unknown_var", "==", 1.0, 2.0) == ""
+
+
+def test_load_all_shipped_rulesets_parse():
+    """Every YAML ruleset in the bundled rulesets/ folder must parse,
+    have a metadata block, and contain at least one rule. Catches
+    YAML syntax errors and missing-key regressions across the whole
+    ruleset catalog — not just the two that have dedicated tests."""
+    import glob
+    from pathlib import Path
+    from ifc_geo_validator.validation.level4 import load_ruleset
+
+    rs_dir = Path(__file__).resolve().parents[1] / \
+             "src" / "ifc_geo_validator" / "rules" / "rulesets"
+    ruleset_files = list(rs_dir.glob("*.yaml"))
+    assert len(ruleset_files) >= 4, "Expected at least 4 bundled rulesets"
+
+    for rs_path in ruleset_files:
+        rs = load_ruleset(str(rs_path))
+        assert "metadata" in rs, f"{rs_path.name} missing metadata"
+        assert "name" in rs["metadata"], f"{rs_path.name} missing metadata.name"
+        # At least one rule across level_1/3/6
+        n_rules = sum(len(rs.get(k, [])) for k in ("level_1", "level_3", "level_6"))
+        assert n_rules > 0, f"{rs_path.name} has no rules"
+
+
+def test_ids_export_handles_composite_expression():
+    """A rule with `check: "a >= 1 and b <= 2"` emits a valid IDS
+    specification without crashing. Current behaviour: the regex
+    greedily matches the first comparison (``a >= 1``) and that
+    becomes the property constraint — the second clause is silently
+    dropped. Documenting this behaviour so any future IDS upgrade
+    that splits compound expressions into multiple <property>
+    elements is caught as an intentional change, not a regression."""
+    import tempfile, os
+    from xml.etree import ElementTree as ET
+    from ifc_geo_validator.report.ids_export import export_ids
+
+    ruleset = {
+        "metadata": {
+            "name": "Composite",
+            "version": "1.0",
+            "ifc_filter": {"entity": "IfcWall"},
+        },
+        "level_3": [{
+            "id": "COMP-001",
+            "name": "Height range",
+            "description": "Wall height between 2 m and 8 m",
+            "check": "wall_height_m >= 2.0 and wall_height_m <= 8.0",
+            "severity": "WARNING",
+        }],
+    }
+    with tempfile.NamedTemporaryFile(suffix=".ids", delete=False) as tmp:
+        out = tmp.name
+    try:
+        export_ids(ruleset, out)
+        tree = ET.parse(out)
+        ns = "{http://standards.buildingsmart.org/IDS}"
+        specs = tree.getroot().findall(f".//{ns}specification")
+        assert len(specs) == 1
+        # First comparison ("wall_height_m >= 2.0") is emitted as
+        # the property constraint. The AND-clause is a known
+        # limitation of the current IDS exporter.
+        base = specs[0].find(f".//{ns}baseName/{ns}simpleValue")
+        assert base is not None
+        assert base.text == "wall_height_m"
+    finally:
+        os.unlink(out)
+
+
 def test_level5_prefilter_finds_adjacent_pairs():
     """Prefilter must NOT reject pairs that are actually within cutoff."""
     # Two overlapping-bbox walls — gap should be 0, pair surviving.

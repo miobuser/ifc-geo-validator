@@ -1,0 +1,502 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ids xmlns="http://standards.buildingsmart.org/IDS" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <info>
+    <title>ASTRA FHB T/G — Komplett</title>
+    <version>2.0.0</version>
+    <purpose>Automated geometric validation export</purpose>
+    <date>2026-04-20</date>
+    <author>ifc-geo-validator</author>
+    <description>ASTRA 24 000 V3.02, 01.01.2025 (Fachhandbuch Tunnel/Geotechnik)</description>
+  </info>
+  <specifications>
+    <specification name="Volumen positiv" ifcVersion="IFC4X3_ADD2" description="Jedes Bauteil muss ein positives Volumen haben" cardinality="required">
+      <applicability minOccurs="0" maxOccurs="unbounded">
+        <entity>
+          <name>
+            <simpleValue>IfcWall,IfcSlab,IfcFooting,IfcBuildingElementProxy</simpleValue>
+          </name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property instructions="Jedes Bauteil muss ein positives Volumen haben" dataType="IFCREAL" cardinality="required">
+          <propertySet>
+            <simpleValue>Pset_GeoValidation</simpleValue>
+          </propertySet>
+          <baseName>
+            <simpleValue>volume</simpleValue>
+          </baseName>
+          <value>
+            <xs:restriction base="xs:double">
+              <xs:minExclusive value="0.001"/>
+            </xs:restriction>
+          </value>
+        </property>
+      </requirements>
+    </specification>
+    <specification name="Mesh geschlossen" ifcVersion="IFC4X3_ADD2" description="Geschlossenes Mesh für korrekte Volumenberechnung" cardinality="optional">
+      <applicability minOccurs="0" maxOccurs="unbounded">
+        <entity>
+          <name>
+            <simpleValue>IfcWall,IfcSlab,IfcFooting,IfcBuildingElementProxy</simpleValue>
+          </name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property instructions="Geschlossenes Mesh für korrekte Volumenberechnung" dataType="IFCREAL" cardinality="required">
+          <propertySet>
+            <simpleValue>Pset_GeoValidation</simpleValue>
+          </propertySet>
+          <baseName>
+            <simpleValue>mesh_is_watertight</simpleValue>
+          </baseName>
+        </property>
+      </requirements>
+    </specification>
+    <specification name="Bauteilgrösse plausibel" ifcVersion="IFC4X3_ADD2" description="Dünnste BBox-Dimension &gt; 50mm (kein degeneriertes Element)" cardinality="optional">
+      <applicability minOccurs="0" maxOccurs="unbounded">
+        <entity>
+          <name>
+            <simpleValue>IfcWall,IfcSlab,IfcFooting,IfcBuildingElementProxy</simpleValue>
+          </name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property instructions="Dünnste BBox-Dimension &gt; 50mm (kein degeneriertes Element)" dataType="IFCREAL" cardinality="required">
+          <propertySet>
+            <simpleValue>Pset_GeoValidation</simpleValue>
+          </propertySet>
+          <baseName>
+            <simpleValue>bbox_dim_min_m</simpleValue>
+          </baseName>
+          <value>
+            <xs:restriction base="xs:double">
+              <xs:minInclusive value="0.05"/>
+            </xs:restriction>
+          </value>
+        </property>
+      </requirements>
+    </specification>
+    <specification name="Vertikale Ausdehnung" ifcVersion="IFC4X3_ADD2" description="Bauteil hat messbare vertikale Ausdehnung (&gt; 10cm)" cardinality="optional">
+      <applicability minOccurs="0" maxOccurs="unbounded">
+        <entity>
+          <name>
+            <simpleValue>IfcWall,IfcSlab,IfcFooting,IfcBuildingElementProxy</simpleValue>
+          </name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property instructions="Bauteil hat messbare vertikale Ausdehnung (&gt; 10cm)" dataType="IFCREAL" cardinality="required">
+          <propertySet>
+            <simpleValue>Pset_GeoValidation</simpleValue>
+          </propertySet>
+          <baseName>
+            <simpleValue>bbox_height_m</simpleValue>
+          </baseName>
+          <value>
+            <xs:restriction base="xs:double">
+              <xs:minInclusive value="0.1"/>
+            </xs:restriction>
+          </value>
+        </property>
+      </requirements>
+    </specification>
+    <specification name="Stützmauer: Kronenbreite min. 300mm" ifcVersion="IFC4X3_ADD2" description="Mauerkrone mindestens 300 mm breit" cardinality="required">
+      <applicability minOccurs="0" maxOccurs="unbounded">
+        <entity>
+          <name>
+            <simpleValue>IfcWall,IfcSlab,IfcFooting,IfcBuildingElementProxy</simpleValue>
+          </name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property instructions="Mauerkrone mindestens 300 mm breit" dataType="IFCREAL" cardinality="required">
+          <propertySet>
+            <simpleValue>Pset_GeoValidation</simpleValue>
+          </propertySet>
+          <baseName>
+            <simpleValue>crown_width_mm</simpleValue>
+          </baseName>
+          <value>
+            <xs:restriction base="xs:double">
+              <xs:minInclusive value="300"/>
+            </xs:restriction>
+          </value>
+        </property>
+      </requirements>
+    </specification>
+    <specification name="Stützmauer: Kronenneigung 3%" ifcVersion="IFC4X3_ADD2" description="Mauerkrone 3% geneigt, in der Regel gegen den Hang" cardinality="optional">
+      <applicability minOccurs="0" maxOccurs="unbounded">
+        <entity>
+          <name>
+            <simpleValue>IfcWall,IfcSlab,IfcFooting,IfcBuildingElementProxy</simpleValue>
+          </name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property instructions="Mauerkrone 3% geneigt, in der Regel gegen den Hang" dataType="IFCREAL" cardinality="required">
+          <propertySet>
+            <simpleValue>Pset_GeoValidation</simpleValue>
+          </propertySet>
+          <baseName>
+            <simpleValue>crown_slope_percent</simpleValue>
+          </baseName>
+          <value>
+            <xs:restriction base="xs:double">
+              <xs:minInclusive value="2.5"/>
+            </xs:restriction>
+          </value>
+        </property>
+      </requirements>
+    </specification>
+    <specification name="Stützmauer: Quergefälle Krone max. 10%" ifcVersion="IFC4X3_ADD2" description="Maximales lokales Quergefälle der Mauerkrone" cardinality="optional">
+      <applicability minOccurs="0" maxOccurs="unbounded">
+        <entity>
+          <name>
+            <simpleValue>IfcWall,IfcSlab,IfcFooting,IfcBuildingElementProxy</simpleValue>
+          </name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property instructions="Maximales lokales Quergefälle der Mauerkrone" dataType="IFCREAL" cardinality="required">
+          <propertySet>
+            <simpleValue>Pset_GeoValidation</simpleValue>
+          </propertySet>
+          <baseName>
+            <simpleValue>cross_slope_max_pct</simpleValue>
+          </baseName>
+          <value>
+            <xs:restriction base="xs:double">
+              <xs:maxInclusive value="10"/>
+            </xs:restriction>
+          </value>
+        </property>
+      </requirements>
+    </specification>
+    <specification name="Stützmauer: Mindestbauteilstärke 300mm" ifcVersion="IFC4X3_ADD2" description="Konstruktive Mindestbauteilstärke (Wandstärke) von 300 mm" cardinality="required">
+      <applicability minOccurs="0" maxOccurs="unbounded">
+        <entity>
+          <name>
+            <simpleValue>IfcWall,IfcSlab,IfcFooting,IfcBuildingElementProxy</simpleValue>
+          </name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property instructions="Konstruktive Mindestbauteilstärke (Wandstärke) von 300 mm" dataType="IFCREAL" cardinality="required">
+          <propertySet>
+            <simpleValue>Pset_GeoValidation</simpleValue>
+          </propertySet>
+          <baseName>
+            <simpleValue>min_wall_thickness_mm</simpleValue>
+          </baseName>
+          <value>
+            <xs:restriction base="xs:double">
+              <xs:minInclusive value="300"/>
+            </xs:restriction>
+          </value>
+        </property>
+      </requirements>
+    </specification>
+    <specification name="Stützmauer: Empfohlene Neigung 10:1" ifcVersion="IFC4X3_ADD2" description="Neigung der Stützmauer von 10:1 wird empfohlen" cardinality="optional">
+      <applicability minOccurs="0" maxOccurs="unbounded">
+        <entity>
+          <name>
+            <simpleValue>IfcWall,IfcSlab,IfcFooting,IfcBuildingElementProxy</simpleValue>
+          </name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property instructions="Neigung der Stützmauer von 10:1 wird empfohlen" dataType="IFCREAL" cardinality="required">
+          <propertySet>
+            <simpleValue>Pset_GeoValidation</simpleValue>
+          </propertySet>
+          <baseName>
+            <simpleValue>front_inclination_ratio</simpleValue>
+          </baseName>
+          <value>
+            <xs:restriction base="xs:double">
+              <xs:minInclusive value="9"/>
+            </xs:restriction>
+          </value>
+        </property>
+      </requirements>
+    </specification>
+    <specification name="Stützmauer: Profilkonsistenz" ifcVersion="IFC4X3_ADD2" description="Kronenbreite entlang der Mauer möglichst konstant (CV ≤ 10%)" cardinality="optional">
+      <applicability minOccurs="0" maxOccurs="unbounded">
+        <entity>
+          <name>
+            <simpleValue>IfcWall,IfcSlab,IfcFooting,IfcBuildingElementProxy</simpleValue>
+          </name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property instructions="Kronenbreite entlang der Mauer möglichst konstant (CV ≤ 10%)" dataType="IFCREAL" cardinality="required">
+          <propertySet>
+            <simpleValue>Pset_GeoValidation</simpleValue>
+          </propertySet>
+          <baseName>
+            <simpleValue>crown_width_cv</simpleValue>
+          </baseName>
+          <value>
+            <xs:restriction base="xs:double">
+              <xs:maxInclusive value="0.1"/>
+            </xs:restriction>
+          </value>
+        </property>
+      </requirements>
+    </specification>
+    <specification name="Stützmauer: Fundamentbreite min. 600mm" ifcVersion="IFC4X3_ADD2" description="Fundament mindestens 600 mm breit" cardinality="optional">
+      <applicability minOccurs="0" maxOccurs="unbounded">
+        <entity>
+          <name>
+            <simpleValue>IfcWall,IfcSlab,IfcFooting,IfcBuildingElementProxy</simpleValue>
+          </name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property instructions="Fundament mindestens 600 mm breit" dataType="IFCREAL" cardinality="required">
+          <propertySet>
+            <simpleValue>Pset_GeoValidation</simpleValue>
+          </propertySet>
+          <baseName>
+            <simpleValue>foundation_width_mm</simpleValue>
+          </baseName>
+          <value>
+            <xs:restriction base="xs:double">
+              <xs:minInclusive value="600"/>
+            </xs:restriction>
+          </value>
+        </property>
+      </requirements>
+    </specification>
+    <specification name="Tunnel: Quergefälle max. 5%" ifcVersion="IFC4X3_ADD2" description="Quergefälle im Tunnel maximal 5%" cardinality="required">
+      <applicability minOccurs="0" maxOccurs="unbounded">
+        <entity>
+          <name>
+            <simpleValue>IfcWall,IfcSlab,IfcFooting,IfcBuildingElementProxy</simpleValue>
+          </name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property instructions="Quergefälle im Tunnel maximal 5%" dataType="IFCREAL" cardinality="required">
+          <propertySet>
+            <simpleValue>Pset_GeoValidation</simpleValue>
+          </propertySet>
+          <baseName>
+            <simpleValue>cross_slope_max_pct</simpleValue>
+          </baseName>
+          <value>
+            <xs:restriction base="xs:double">
+              <xs:maxInclusive value="5"/>
+            </xs:restriction>
+          </value>
+        </property>
+      </requirements>
+    </specification>
+    <specification name="Tunnel: Längsgefälle empfohlen max. 3%" ifcVersion="IFC4X3_ADD2" description="Längsgefälle im Tunnel empfohlen maximal 3%" cardinality="optional">
+      <applicability minOccurs="0" maxOccurs="unbounded">
+        <entity>
+          <name>
+            <simpleValue>IfcWall,IfcSlab,IfcFooting,IfcBuildingElementProxy</simpleValue>
+          </name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property instructions="Längsgefälle im Tunnel empfohlen maximal 3%" dataType="IFCREAL" cardinality="required">
+          <propertySet>
+            <simpleValue>Pset_GeoValidation</simpleValue>
+          </propertySet>
+          <baseName>
+            <simpleValue>long_slope_max_pct</simpleValue>
+          </baseName>
+          <value>
+            <xs:restriction base="xs:double">
+              <xs:maxInclusive value="3"/>
+            </xs:restriction>
+          </value>
+        </property>
+      </requirements>
+    </specification>
+    <specification name="Tunnel: Längsgefälle absolut max. 5%" ifcVersion="IFC4X3_ADD2" description="Längsgefälle im Tunnel maximal 5%" cardinality="optional">
+      <applicability minOccurs="0" maxOccurs="unbounded">
+        <entity>
+          <name>
+            <simpleValue>IfcWall,IfcSlab,IfcFooting,IfcBuildingElementProxy</simpleValue>
+          </name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property instructions="Längsgefälle im Tunnel maximal 5%" dataType="IFCREAL" cardinality="required">
+          <propertySet>
+            <simpleValue>Pset_GeoValidation</simpleValue>
+          </propertySet>
+          <baseName>
+            <simpleValue>long_slope_max_pct</simpleValue>
+          </baseName>
+          <value>
+            <xs:restriction base="xs:double">
+              <xs:maxInclusive value="5"/>
+            </xs:restriction>
+          </value>
+        </property>
+      </requirements>
+    </specification>
+    <specification name="Tunnel: Mindestbauteilstärke Auskleidung 200mm" ifcVersion="IFC4X3_ADD2" description="Ausbauteile/Auskleidung mindestens 200 mm Wandstärke" cardinality="required">
+      <applicability minOccurs="0" maxOccurs="unbounded">
+        <entity>
+          <name>
+            <simpleValue>IfcWall,IfcSlab,IfcFooting,IfcBuildingElementProxy</simpleValue>
+          </name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property instructions="Ausbauteile/Auskleidung mindestens 200 mm Wandstärke" dataType="IFCREAL" cardinality="required">
+          <propertySet>
+            <simpleValue>Pset_GeoValidation</simpleValue>
+          </propertySet>
+          <baseName>
+            <simpleValue>min_wall_thickness_mm</simpleValue>
+          </baseName>
+          <value>
+            <xs:restriction base="xs:double">
+              <xs:minInclusive value="200"/>
+            </xs:restriction>
+          </value>
+        </property>
+      </requirements>
+    </specification>
+    <specification name="Rampenneigung max. 6%" ifcVersion="IFC4X3_ADD2" description="Rampen bei Notausgängen max. 6% Gefälle" cardinality="optional">
+      <applicability minOccurs="0" maxOccurs="unbounded">
+        <entity>
+          <name>
+            <simpleValue>IfcWall,IfcSlab,IfcFooting,IfcBuildingElementProxy</simpleValue>
+          </name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property instructions="Rampen bei Notausgängen max. 6% Gefälle" dataType="IFCREAL" cardinality="required">
+          <propertySet>
+            <simpleValue>Pset_GeoValidation</simpleValue>
+          </propertySet>
+          <baseName>
+            <simpleValue>long_slope_max_pct</simpleValue>
+          </baseName>
+          <value>
+            <xs:restriction base="xs:double">
+              <xs:maxInclusive value="6"/>
+            </xs:restriction>
+          </value>
+        </property>
+      </requirements>
+    </specification>
+    <specification name="Mindestradius Horizontaltrassierung" ifcVersion="IFC4X3_ADD2" description="Minimaler Krümmungsradius der Elementachse" cardinality="optional">
+      <applicability minOccurs="0" maxOccurs="unbounded">
+        <entity>
+          <name>
+            <simpleValue>IfcWall,IfcSlab,IfcFooting,IfcBuildingElementProxy</simpleValue>
+          </name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property instructions="Minimaler Krümmungsradius der Elementachse" dataType="IFCREAL" cardinality="required">
+          <propertySet>
+            <simpleValue>Pset_GeoValidation</simpleValue>
+          </propertySet>
+          <baseName>
+            <simpleValue>min_radius_m</simpleValue>
+          </baseName>
+          <value>
+            <xs:restriction base="xs:double">
+              <xs:minInclusive value="125"/>
+            </xs:restriction>
+          </value>
+        </property>
+      </requirements>
+    </specification>
+    <specification name="Schlankheit (Höhe/Dicke)" ifcVersion="IFC4X3_ADD2" description="Schlankheitsverhältnis h/t soll ≤ 25 sein" cardinality="optional">
+      <applicability minOccurs="0" maxOccurs="unbounded">
+        <entity>
+          <name>
+            <simpleValue>IfcWall,IfcSlab,IfcFooting,IfcBuildingElementProxy</simpleValue>
+          </name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property instructions="Schlankheitsverhältnis h/t soll ≤ 25 sein" dataType="IFCREAL" cardinality="required">
+          <propertySet>
+            <simpleValue>Pset_GeoValidation</simpleValue>
+          </propertySet>
+          <baseName>
+            <simpleValue>slenderness_ratio</simpleValue>
+          </baseName>
+          <value>
+            <xs:restriction base="xs:double">
+              <xs:maxInclusive value="25"/>
+            </xs:restriction>
+          </value>
+        </property>
+      </requirements>
+    </specification>
+    <specification name="Stützmauer: Fundamentbreite-Verhältnis" ifcVersion="IFC4X3_ADD2" description="Fundamentbreite soll mindestens 40% der Wandhöhe betragen" cardinality="optional">
+      <applicability minOccurs="0" maxOccurs="unbounded">
+        <entity>
+          <name>
+            <simpleValue>IfcWall,IfcSlab,IfcFooting,IfcBuildingElementProxy</simpleValue>
+          </name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property instructions="Fundamentbreite soll mindestens 40% der Wandhöhe betragen" dataType="IFCREAL" cardinality="required">
+          <propertySet>
+            <simpleValue>Pset_GeoValidation</simpleValue>
+          </propertySet>
+          <baseName>
+            <simpleValue>foundation_width_ratio</simpleValue>
+          </baseName>
+          <value>
+            <xs:restriction base="xs:double">
+              <xs:minInclusive value="0.4"/>
+            </xs:restriction>
+          </value>
+        </property>
+      </requirements>
+    </specification>
+    <specification name="Erd-/Luftseite bestimmt" ifcVersion="IFC4X3_ADD2" description="Automatische Bestimmung der Erd- und Luftseite via Terrain" cardinality="optional">
+      <applicability minOccurs="0" maxOccurs="unbounded">
+        <entity>
+          <name>
+            <simpleValue>IfcWall,IfcSlab,IfcFooting,IfcBuildingElementProxy</simpleValue>
+          </name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property instructions="Automatische Bestimmung der Erd- und Luftseite via Terrain" dataType="IFCREAL" cardinality="required">
+          <propertySet>
+            <simpleValue>Pset_GeoValidation</simpleValue>
+          </propertySet>
+          <baseName>
+            <simpleValue>earth_side_determined</simpleValue>
+          </baseName>
+        </property>
+      </requirements>
+    </specification>
+    <specification name="Kronenneigung gegen Hang" ifcVersion="IFC4X3_ADD2" description="Kronenneigung zeigt gegen den Hang (Richtungsprüfung)" cardinality="optional">
+      <applicability minOccurs="0" maxOccurs="unbounded">
+        <entity>
+          <name>
+            <simpleValue>IfcWall,IfcSlab,IfcFooting,IfcBuildingElementProxy</simpleValue>
+          </name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property instructions="Kronenneigung zeigt gegen den Hang (Richtungsprüfung)" dataType="IFCREAL" cardinality="required">
+          <propertySet>
+            <simpleValue>Pset_GeoValidation</simpleValue>
+          </propertySet>
+          <baseName>
+            <simpleValue>crown_slope_towards_earth_side</simpleValue>
+          </baseName>
+        </property>
+      </requirements>
+    </specification>
+  </specifications>
+</ids>

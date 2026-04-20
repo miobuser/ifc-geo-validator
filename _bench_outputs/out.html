@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Validierungsbericht — T7_compliant.ifc</title>
+<style>
+:root { --pass: #2e7d32; --fail: #c62828; --skip: #757575; --bg: #fafafa; --border: #e0e0e0; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: #212121; padding: 20px; max-width: 1100px; margin: 0 auto; font-size: 13px; }
+h1 { font-size: 20px; margin-bottom: 8px; }
+h2 { font-size: 16px; margin: 24px 0 8px; border-bottom: 2px solid var(--border); padding-bottom: 4px; }
+h3 { font-size: 14px; margin-bottom: 8px; }
+h4 { font-size: 12px; margin: 12px 0 6px; color: #555; }
+.header { background: white; padding: 16px 20px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 16px; }
+.meta { display: flex; gap: 20px; flex-wrap: wrap; color: #666; font-size: 12px; margin: 8px 0; }
+.overall { display: inline-block; padding: 6px 16px; border-radius: 4px; font-weight: 700; font-size: 14px; margin-top: 8px; }
+.overall.pass { background: #e8f5e9; color: var(--pass); border: 1px solid #a5d6a7; }
+.overall.fail { background: #ffebee; color: var(--fail); border: 1px solid #ef9a9a; }
+.eid { color: #999; font-weight: 400; font-size: 12px; }
+table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 12px; }
+th { background: #f5f5f5; text-align: left; padding: 6px 8px; border: 1px solid var(--border); font-weight: 600; }
+td { padding: 5px 8px; border: 1px solid var(--border); }
+tr:nth-child(even) { background: #fafafa; }
+.summary td.pass { color: var(--pass); font-weight: 600; }
+.summary td.fail { color: var(--fail); font-weight: 600; }
+.summary tr.error td { background: #fff3e0; color: #e65100; }
+.rules .status { font-weight: 700; text-align: center; width: 50px; }
+.rules tr.pass .status { color: var(--pass); }
+.rules tr.fail .status { color: var(--fail); }
+.rules tr.skip .status { color: var(--skip); }
+.rules tr.fail { background: #fff8f8; }
+.rules tr.skip { color: #999; }
+.rules .msg { font-size: 11px; color: #666; max-width: 350px; }
+.element { background: white; padding: 12px 16px; border-radius: 6px; border: 1px solid var(--border); margin: 12px 0; }
+.metrics { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.metric { background: #f5f5f5; padding: 6px 12px; border-radius: 4px; min-width: 120px; }
+.metric .label { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.3px; }
+.metric .value { font-size: 14px; font-weight: 600; }
+.diag { background: #fff8e1; border-left: 3px solid #ffa000; padding: 4px 10px; margin: 4px 0; font-size: 11px; color: #795548; }
+.footer { text-align: center; color: #999; font-size: 11px; margin-top: 32px; padding-top: 12px; border-top: 1px solid var(--border); }
+@media print { body { padding: 0; } .element { break-inside: avoid; } }
+</style>
+</head>
+<body>
+
+
+    <div class="header">
+        <h1>Geometrisches Prüfprotokoll</h1>
+        <div class="meta">
+            
+            <span>Datei: <b>T7_compliant.ifc</b></span>
+            <span>Regelwerk: <b>ASTRA FHB T/G — Komplett</b></span>
+            <span>Datum: 2026-04-20 13:49</span>
+            <span>Elemente: 1</span>
+        </div>
+        <div class="overall fail">
+            FAIL — 21 bestanden, 3 fehlgeschlagen, 11 übersprungen
+        </div>
+    </div>
+    
+<h2>Übersicht</h2>
+<table class="summary"><thead><tr>
+<th>Element</th><th>ID</th><th>Vol (m³)</th><th>Fläche (m²)</th>
+<th>Wasserdicht</th><th>Confidence</th><th>Ergebnis</th></tr></thead><tbody>
+<tr><td>Stützmauer T7 -- Normkonform (10:1 Anzug, 3% Gefälle)</td><td>44</td><td>10.81</td><td>58.10</td><td>Ja</td><td>85%</td><td class="fail">21P / 3F / 11S</td></tr>
+</tbody></table>
+<div class="element"><h3>Stützmauer T7 -- Normkonform (10:1 Anzug, 3% Gefälle) <span class="eid">#44</span></h3>
+<div class="diag">Front/back faces are symmetric (asymmetry=0.001) — assignment is arbitrary without terrain context.</div>
+<div class="metrics">
+<div class="metric"><div class="label">Volumen</div><div class="value">10.81 m³</div></div>
+<div class="metric"><div class="label">Oberfläche</div><div class="value">58.10 m²</div></div>
+<div class="metric"><div class="label">Dreiecke</div><div class="value">12</div></div>
+<div class="metric"><div class="label">Confidence</div><div class="value">85%</div></div>
+<div class="metric"><div class="label">Kronenbreite</div><div class="value">300 mm</div></div>
+<div class="metric"><div class="label">Kronenneigung</div><div class="value">3.00 %</div></div>
+<div class="metric"><div class="label">Wandstärke</div><div class="value">299 mm</div></div>
+<div class="metric"><div class="label">Wandhöhe</div><div class="value">3.01 m</div></div>
+<div class="metric"><div class="label">Quergefälle</div><div class="value">3.00 %</div></div>
+<div class="metric"><div class="label">Längsgefälle</div><div class="value">0.00 %</div></div>
+</div>
+<h4>Regelprüfung</h4>
+<table class="rules"><thead><tr>
+<th>Status</th><th>Regel</th><th>Name</th><th>Severity</th><th>Details</th>
+</tr></thead><tbody>
+<tr class="pass"><td class="status">PASS</td><td>FHB-L1-001</td><td>Volumen positiv</td><td>ERROR</td><td class="msg">Check passed</td></tr>
+<tr class="pass"><td class="status">PASS</td><td>FHB-L1-002</td><td>Mesh geschlossen</td><td>WARNING</td><td class="msg">Check passed</td></tr>
+<tr class="pass"><td class="status">PASS</td><td>FHB-L1-003</td><td>Bauteilgrösse plausibel</td><td>WARNING</td><td class="msg">Check passed</td></tr>
+<tr class="pass"><td class="status">PASS</td><td>FHB-L1-004</td><td>Vertikale Ausdehnung</td><td>INFO</td><td class="msg">Check passed</td></tr>
+<tr class="pass"><td class="status">PASS</td><td>FHB-SM-L3-001</td><td>Stützmauer: Kronenbreite min. 300mm</td><td>ERROR</td><td class="msg">Check passed</td></tr>
+<tr class="pass"><td class="status">PASS</td><td>FHB-SM-L3-002</td><td>Stützmauer: Kronenneigung 3%</td><td>WARNING</td><td class="msg">Check passed</td></tr>
+<tr class="pass"><td class="status">PASS</td><td>FHB-SM-L3-003</td><td>Stützmauer: Quergefälle Krone max. 10%</td><td>WARNING</td><td class="msg">Check passed</td></tr>
+<tr class="fail"><td class="status">FAIL</td><td>FHB-SM-L3-004</td><td>Stützmauer: Mindestbauteilstärke 300mm</td><td>ERROR</td><td class="msg">FAIL: Stützmauer: Mindestbauteilstärke 300mm |   Ist: 298.51, Soll: &gt;= 300  (Δ = -1.49) |   Empfehlung: verdicken (~1...</td></tr>
+<tr class="pass"><td class="status">PASS</td><td>FHB-SM-L3-005</td><td>Stützmauer: Empfohlene Neigung 10:1</td><td>INFO</td><td class="msg">Check passed</td></tr>
+<tr class="skip"><td class="status">SKIP</td><td>FHB-SM-L3-006</td><td>Stützmauer: Profilkonsistenz</td><td>INFO</td><td class="msg">Skipped: variable 'crown_width_cv' not available</td></tr>
+<tr class="pass"><td class="status">PASS</td><td>FHB-SM-L3-007</td><td>Stützmauer: Fundamentbreite min. 600mm</td><td>WARNING</td><td class="msg">Check passed</td></tr>
+<tr class="pass"><td class="status">PASS</td><td>FHB-TN-L3-001</td><td>Tunnel: Quergefälle max. 5%</td><td>ERROR</td><td class="msg">Check passed</td></tr>
+<tr class="pass"><td class="status">PASS</td><td>FHB-TN-L3-002</td><td>Tunnel: Längsgefälle empfohlen max. 3%</td><td>INFO</td><td class="msg">Check passed</td></tr>
+<tr class="pass"><td class="status">PASS</td><td>FHB-TN-L3-003</td><td>Tunnel: Längsgefälle absolut max. 5%</td><td>WARNING</td><td class="msg">Check passed</td></tr>
+<tr class="pass"><td class="status">PASS</td><td>FHB-TN-L3-004</td><td>Tunnel: Mindestbauteilstärke Auskleidung 200mm</td><td>ERROR</td><td class="msg">Check passed</td></tr>
+<tr class="pass"><td class="status">PASS</td><td>FHB-AL-L3-001</td><td>Rampenneigung max. 6%</td><td>WARNING</td><td class="msg">Check passed</td></tr>
+<tr class="pass"><td class="status">PASS</td><td>FHB-TN-L3-005</td><td>Mindestradius Horizontaltrassierung</td><td>INFO</td><td class="msg">Check passed</td></tr>
+<tr class="pass"><td class="status">PASS</td><td>FHB-AL-L3-002</td><td>Schlankheit (Höhe/Dicke)</td><td>WARNING</td><td class="msg">Check passed</td></tr>
+<tr class="fail"><td class="status">FAIL</td><td>FHB-SM-L3-008</td><td>Stützmauer: Fundamentbreite-Verhältnis</td><td>INFO</td><td class="msg">FAIL: Stützmauer: Fundamentbreite-Verhältnis |   Ist: 0.20, Soll: &gt;= 0.4  (Δ = -0.20) |   Referenz: Konstruktive Empf...</td></tr>
+<tr class="skip"><td class="status">SKIP</td><td>FHB-L5-001</td><td>Fundament-Überstand</td><td>INFO</td><td class="msg">Skipped: variable 'foundation_extends_beyond_wall' not available</td></tr>
+<tr class="skip"><td class="status">SKIP</td><td>FHB-L5-002</td><td>Bauteil-Bauteil-Anschluss</td><td>ERROR</td><td class="msg">Skipped: variable 'wall_foundation_gap_mm' not available</td></tr>
+<tr class="skip"><td class="status">SKIP</td><td>FHB-L6-001</td><td>Erd-/Luftseite bestimmt</td><td>INFO</td><td class="msg">Skipped: variable 'earth_side_determined' not available</td></tr>
+<tr class="skip"><td class="status">SKIP</td><td>FHB-L6-002</td><td>Kronenneigung gegen Hang</td><td>WARNING</td><td class="msg">Skipped: variable 'crown_slope_towards_earth_side' not available</td></tr>
+<tr class="skip"><td class="status">SKIP</td><td>FHB-L7-001</td><td>Frostfreie Gründung</td><td>WARNING</td><td class="msg">Skipped: variable 'foundation_embedment_m' not available</td></tr>
+<tr class="skip"><td class="status">SKIP</td><td>FHB-L7-002</td><td>Mindestabstand zu Nachbarelement</td><td>ERROR</td><td class="msg">Skipped: variable 'min_distance_to_nearest_mm' not available</td></tr>
+<tr class="skip"><td class="status">SKIP</td><td>FHB-L7-003</td><td>Einbindetiefe positiv</td><td>ERROR</td><td class="msg">Skipped: variable 'foundation_embedment_m' not available</td></tr>
+<tr class="skip"><td class="status">SKIP</td><td>FHB-L7-004</td><td>Arbeitsraumbreite FZRS</td><td>WARNING</td><td class="msg">Skipped: variable 'min_distance_to_nearest_mm' not available</td></tr>
+<tr class="skip"><td class="status">SKIP</td><td>FHB-L7-005</td><td>Sichtbare Wandhöhe über Terrain</td><td>INFO</td><td class="msg">Skipped: variable 'crown_height_above_terrain_m' not available</td></tr>
+<tr class="skip"><td class="status">SKIP</td><td>FHB-L7-006</td><td>Frosttiefe Fundament</td><td>WARNING</td><td class="msg">Skipped: variable 'foundation_depth_below_terrain_m' not available</td></tr>
+<tr class="pass"><td class="status">PASS</td><td>FHB-L7-007</td><td>Volumen-Füllgrad</td><td>WARNING</td><td class="msg">Check passed</td></tr>
+<tr class="pass"><td class="status">PASS</td><td>FHB-SM-L3-009</td><td>Wanddicke bei Krone</td><td>WARNING</td><td class="msg">Check passed</td></tr>
+<tr class="pass"><td class="status">PASS</td><td>FHB-L4-001</td><td>Gesamtbewertung Mauerkrone</td><td>ERROR</td><td class="msg">All dependencies passed: FHB-SM-L3-001</td></tr>
+<tr class="fail"><td class="status">FAIL</td><td>FHB-L4-002</td><td>Gesamtbewertung Wandgeometrie</td><td>ERROR</td><td class="msg">Failed dependencies: FHB-SM-L3-004</td></tr>
+<tr class="pass"><td class="status">PASS</td><td>FHB-L4-003</td><td>Gesamtbewertung Kronenneigung</td><td>WARNING</td><td class="msg">All dependencies passed: FHB-SM-L3-002</td></tr>
+<tr class="pass"><td class="status">PASS</td><td>FHB-L4-004</td><td>Gesamtbewertung Gefälle Tunnel</td><td>ERROR</td><td class="msg">All dependencies passed: FHB-TN-L3-001, FHB-TN-L3-003</td></tr>
+</tbody></table>
+</div>
+
+    <div class="footer">
+        IFC Geometry Validator v2.0.0 — BSc Thesis BFH · Generiert: 2026-04-20 13:49
+    </div>
+    </body></html>
+    

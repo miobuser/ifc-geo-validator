@@ -212,6 +212,44 @@ def vertical_clearance_crown_to_terrain(
     }
 
 
+def aabb_pair_candidates(
+    bboxes_min: np.ndarray,
+    bboxes_max: np.ndarray,
+    cutoff_m: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Vectorised AABB pair-prefilter.
+
+    Given N axis-aligned bounding boxes and a distance cutoff, returns
+    the upper-triangular indices (i, j) with i < j whose per-axis gap
+    is ≤ cutoff on every axis. Replaces the O(N²) Python pair-loop
+    with a single numpy broadcast; shared between L5 (pair analysis)
+    and L6 (inter-element distances).
+
+    Args:
+        bboxes_min: (N, 3) array of axis-aligned bbox minima.
+        bboxes_max: (N, 3) array of axis-aligned bbox maxima.
+        cutoff_m: pairs with max-axis gap above this are rejected.
+
+    Returns:
+        (ii, jj) numpy arrays of indices of surviving pairs. Always
+        with ii[k] < jj[k] so callers can iterate without duplicates.
+
+    Reference: Arvo & Kirk 1989, AABB-to-AABB distance; the max-axis
+    gap is the correct 3D free-space separation in Chebyshev metric.
+    """
+    n = len(bboxes_min)
+    if n < 2:
+        empty = np.array([], dtype=np.int64)
+        return empty, empty
+    lower = np.maximum(bboxes_min[:, None, :], bboxes_min[None, :, :])
+    upper = np.minimum(bboxes_max[:, None, :], bboxes_max[None, :, :])
+    gap = np.maximum(0.0, lower - upper)        # (N, N, 3)
+    max_axis_gap = gap.max(axis=2)              # (N, N)
+    mask = (max_axis_gap <= cutoff_m)
+    mask &= np.triu(np.ones((n, n), dtype=bool), k=1)
+    return np.nonzero(mask)
+
+
 def horizontal_distance_xy(
     bbox_a_min: np.ndarray, bbox_a_max: np.ndarray,
     bbox_b_min: np.ndarray, bbox_b_max: np.ndarray,

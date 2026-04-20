@@ -59,20 +59,24 @@ level_3:
 
   - id: ASTRA-LSW-L3-003
     name: "Lotrechte Ausführung"
-    description: "LSW zwingend vertikal (Lotabweichung ≤ 1°)"
+    description: >-
+      LSW zwingend vertikal (Lotabweichung ≤ 1°). Die Redundanz zum
+      Anzug-Check entfällt — 1° Lot entspricht ≈ 57:1 Anzug, d.h. ein
+      vertikal geprüftes Bauteil erfüllt implizit die Anzug-freie
+      Forderung.
     check: "front_plumbness_deg <= 1.0"
     severity: ERROR
-    reference: "ASTRA 24 001-17001 §4.2 'Geometrische Ausführung'"
+    reference: "ASTRA 24 001-17001 §4.2 'Geometrische Ausführung' + SN 671 250:2013"
     quote: "Lärmschutzwände sind senkrecht auszuführen; Anzug ist nicht zulässig."
     fix_hint: "Wand vertikal ausrichten, Anzug entfernen"
 
   - id: ASTRA-LSW-L3-004
-    name: "Kein Anzug"
-    description: "Anzug-Verhältnis 0 (vertikale Ausführung vorgeschrieben)"
-    check: "front_inclination_ratio >= 50.0"
-    severity: WARNING
-    reference: "SN 671 250:2013"
-    quote: "LSW haben keinen Anzug; Verhältnis ≥ 50:1 entspricht praktisch senkrecht."
+    name: "Schlankheit"
+    description: "Höhe/Dicke ≤ 25 (Stabilität gegen Windsog ohne Erddruck)"
+    check: "slenderness_ratio <= 25.0"
+    severity: INFO
+    reference: "SN 671 250:2013 §5.3 'Stabilität'"
+    quote: "Schlanke LSW bedürfen separater Stabilitätsnachweise bei h/t &gt; 25."
 
 # =============================================================================
 # Level 6 — Fundament
