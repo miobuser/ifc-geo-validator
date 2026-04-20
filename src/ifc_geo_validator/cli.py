@@ -114,6 +114,9 @@ Mehr Dokumentation: docs/  |  https://github.com/miobuser/ifc-geo-validator
                         help="Compute pairwise distances between ALL elements (min vertex, horizontal, vertical)")
     parser.add_argument("--csv", default=None,
                         help="Export all measurements as CSV spreadsheet (for Excel/Power BI)")
+    parser.add_argument("--xlsx", default=None,
+                        help="Export multi-sheet Excel workbook (Übersicht / Messwerte / "
+                             "Regelprüfung / Metadaten) with PASS/FAIL colour-coding")
     parser.add_argument("--filter-name", default=None,
                         help="Filter elements by name pattern (e.g. '*Stütz*' or 'Mauer')")
     parser.add_argument("--compare", default=None, metavar="REFERENCE_IFC",
@@ -301,6 +304,19 @@ def _emit_outputs(args, ifc_file, model, elements, all_results, ruleset) -> None
 
     if args.csv:
         _export_csv(args.csv, all_results)
+
+    if args.xlsx:
+        from ifc_geo_validator.report.xlsx_report import export_xlsx
+        from ifc_geo_validator.core.ifc_parser import get_coordinate_system
+        export_xlsx(
+            all_results, args.xlsx,
+            ifc_filename=Path(ifc_file).name,
+            ruleset_name=ruleset["metadata"]["name"] if ruleset else "",
+            coordinate_system=get_coordinate_system(model),
+            project_name=args.project or "",
+            author=args.author or "",
+        )
+        print(f"\nExcel-Bericht written to: {args.xlsx}")
 
     if args.output:
         from ifc_geo_validator.report.json_report import json_default

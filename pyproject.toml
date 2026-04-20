@@ -67,6 +67,9 @@ bcf = [
     # environment that pins bcf-client without xsdata still works.
     "xsdata>=24.0",
 ]
+xlsx = [
+    "openpyxl>=3.1",
+]
 
 [project.scripts]
 ifc-geo-validator = "ifc_geo_validator.cli:main"

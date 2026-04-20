@@ -508,37 +508,96 @@ def _check_uncertainty_margin(check_expr: str, actual: float, uncertainty_mm: fl
 def _build_fail_message(rule: dict, actual, check_expr: str) -> str:
     """Build an actionable failure message explaining what went wrong.
 
-    Includes: actual value, expected condition, and where to look.
+    Includes: actual value, expected condition, delta to threshold, a
+    concrete fix-it hint, and the normative source. Users should be
+    able to read the message and immediately know both what broke and
+    how to correct the model.
     """
     name = rule.get("name", "")
-    desc = rule.get("description", "")
     reference = rule.get("reference", "")
     quote = rule.get("quote", "")
+    fix_hint = rule.get("fix_hint", "")  # optional per-rule override
 
     parts = [f"FAIL: {name}"]
 
-    # Show actual vs expected
+    # Show actual vs expected, plus a signed delta so the user sees
+    # exactly how far off and in which direction the measurement is.
     if actual is not None:
-        # Extract the threshold from the check expression
         for op in [">=", "<=", "!=", "==", ">", "<"]:
             if op in check_expr:
                 lhs, rhs = check_expr.split(op, 1)
                 lhs_name = lhs.strip()
                 rhs_val = rhs.strip()
-                if isinstance(actual, (int, float)):
-                    parts.append(f"  Ist: {actual:.2f}, Anforderung: {lhs_name} {op} {rhs_val}")
+                try:
+                    threshold = float(rhs_val.split()[0])
+                except (ValueError, IndexError):
+                    threshold = None
+
+                if isinstance(actual, (int, float)) and threshold is not None:
+                    delta = actual - threshold
+                    sign = "+" if delta >= 0 else ""
+                    # Direction hint: which way to move the measurement
+                    direction = _fix_direction(lhs_name, op, threshold, actual)
+                    parts.append(
+                        f"  Ist: {actual:.2f}, Soll: {op} {rhs_val}  "
+                        f"(Δ = {sign}{delta:.2f})"
+                    )
+                    if direction:
+                        parts.append(f"  Empfehlung: {direction}")
+                elif isinstance(actual, (int, float)):
+                    parts.append(f"  Ist: {actual:.2f}, Anforderung: {check_expr}")
                 else:
                     parts.append(f"  Ist: {actual}, Anforderung: {check_expr}")
                 break
         else:
             parts.append(f"  Bedingung nicht erfüllt: {check_expr}")
 
+    if fix_hint:
+        parts.append(f"  Hinweis: {fix_hint}")
     if quote:
         parts.append(f"  Quelle: \"{quote}\"")
     elif reference:
         parts.append(f"  Referenz: {reference}")
 
     return " | ".join(parts)
+
+
+# Variable-name heuristic → human-readable fix direction.
+# Extensible via the variable catalog without code changes; falls back
+# to a generic "increase / decrease" hint when the variable is unknown.
+_FIX_DIRECTIONS = {
+    "crown_width_mm":          ("verbreitern",         "verschmalen"),
+    "foundation_width_mm":     ("verbreitern",         "verschmalen"),
+    "min_wall_thickness_mm":   ("verdicken",           "verschlanken"),
+    "wall_height_m":           ("erhöhen",             "niedriger machen"),
+    "crown_slope_percent":     ("steiler neigen",      "flacher neigen"),
+    "cross_slope_max_pct":     ("Quergefälle erhöhen", "Quergefälle reduzieren"),
+    "long_slope_max_pct":      ("Längsgefälle erhöhen","Längsgefälle reduzieren"),
+    "front_inclination_ratio": ("Anzug erhöhen",       "Anzug reduzieren"),
+    "min_radius_m":            ("Radius vergrößern",   "Radius verkleinern"),
+    "foundation_embedment_m":  ("tiefer einbinden",    "höher einbinden"),
+    "min_distance_to_nearest_mm": ("Abstand vergrößern", "Abstand verringern"),
+}
+
+
+def _fix_direction(variable: str, op: str, threshold: float, actual: float) -> str:
+    """Return a German remediation hint for a failing numeric check.
+
+    Returns empty string if the variable isn't in the catalog. The
+    hint always points toward the threshold, so callers can suggest
+    ``"verbreitern um 15 mm"`` for a crown too narrow by 15 mm.
+    """
+    verbs = _FIX_DIRECTIONS.get(variable)
+    if verbs is None:
+        return ""
+    needs_increase = op in (">=", ">") and actual < threshold
+    needs_decrease = op in ("<=", "<") and actual > threshold
+    magnitude = abs(actual - threshold)
+    if needs_increase:
+        return f"{verbs[0]} (~{magnitude:.1f} Einheiten)"
+    if needs_decrease:
+        return f"{verbs[1]} (~{magnitude:.1f} Einheiten)"
+    return ""
 
 
 def _get_actual_value(expr: str, context: dict):

@@ -269,6 +269,85 @@ def test_level5_bbox_prefilter_rejects_distant_pairs():
     )
 
 
+def test_dilatation_joint_spacing_detects_gap():
+    """A 20 m spacing between two walls exceeds the 15 m ASTRA cutoff."""
+    # Two unit cubes 20 m apart along X
+    a = {
+        "element_id": 1, "element_name": "A",
+        "level1": {"bbox": {"min": [0, 0, 0], "max": [1, 1, 1],
+                            "size": [1, 1, 1]}, "volume": 1.0,
+                   "centroid": [0.5, 0.5, 0.5]},
+        "mesh_data": {"vertices": UNIT_CUBE_VERTS, "faces": UNIT_CUBE_FACES,
+                      "normals": np.zeros((12, 3)), "areas": np.ones(12)},
+    }
+    b = {
+        "element_id": 2, "element_name": "B",
+        "level1": {"bbox": {"min": [20, 0, 0], "max": [21, 1, 1],
+                            "size": [1, 1, 1]}, "volume": 1.0,
+                   "centroid": [20.5, 0.5, 0.5]},
+        "mesh_data": {"vertices": UNIT_CUBE_VERTS + np.array([20, 0, 0]),
+                      "faces": UNIT_CUBE_FACES,
+                      "normals": np.zeros((12, 3)), "areas": np.ones(12)},
+    }
+    result = validate_level5([a, b])
+    joints = result["dilatation_joints"]
+    assert len(joints) == 1
+    assert joints[0]["exceeds_max"] is True
+    assert joints[0]["spacing_m"] == pytest.approx(20.0, abs=0.001)
+    assert result["summary"]["dilatation_violations"] == 1
+
+
+def test_fix_direction_suggests_correct_verb():
+    """A narrow crown hint points toward widening, not narrowing."""
+    from ifc_geo_validator.validation.level4 import _fix_direction
+    # Crown 285 mm, need ≥ 300 → should suggest 'verbreitern'
+    msg = _fix_direction("crown_width_mm", ">=", 300.0, 285.0)
+    assert "verbreitern" in msg
+    assert "15" in msg  # magnitude of the gap
+
+    # Crown 320 mm, need ≤ 300 (hypothetical) → 'verschmalen'
+    msg = _fix_direction("crown_width_mm", "<=", 300.0, 320.0)
+    assert "verschmalen" in msg
+
+
+def test_xlsx_export_creates_four_sheets():
+    """Excel report builds with Übersicht / Messwerte / Regelprüfung / Metadaten."""
+    pytest.importorskip("openpyxl")
+    import tempfile, os
+    from ifc_geo_validator.report.xlsx_report import export_xlsx
+
+    results = [{
+        "element_id": 1,
+        "element_name": "Test Wall",
+        "level1": {"volume": 3.5, "total_area": 12.0, "is_watertight": True,
+                   "bbox": {"size": [3, 0.3, 2]}},
+        "level2": {"element_role": "wall_stem"},
+        "level3": {"crown_width_mm": 305.0, "min_wall_thickness_mm": 300.0},
+        "level4": {
+            "summary": {"total": 3, "passed": 3, "failed": 0, "skipped": 0, "errors": 0},
+            "checks": [{
+                "id": "ASTRA-SM-L3-001", "name": "Kronenbreite",
+                "status": "PASS", "severity": "ERROR",
+                "actual": 305.0, "expected": ">= 300", "reference": "ASTRA §5",
+                "message": "Check passed",
+            }],
+        },
+    }]
+    from openpyxl import load_workbook
+    with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+        out = tmp.name
+    try:
+        export_xlsx(results, out, ifc_filename="test.ifc", ruleset_name="ASTRA")
+        wb = load_workbook(out)
+        assert set(wb.sheetnames) == {"Übersicht", "Messwerte", "Regelprüfung", "Metadaten"}
+        # Overview has 1 data row with our element
+        assert wb["Übersicht"].cell(row=2, column=2).value == "Test Wall"
+        # Rule-check sheet has the PASS check
+        assert wb["Regelprüfung"].cell(row=2, column=5).value == "PASS"
+    finally:
+        os.unlink(out)
+
+
 def test_level5_prefilter_finds_adjacent_pairs():
     """Prefilter must NOT reject pairs that are actually within cutoff."""
     # Two overlapping-bbox walls — gap should be 0, pair surviving.

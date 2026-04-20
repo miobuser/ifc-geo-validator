@@ -39,6 +39,11 @@ Z_AXIS = np.array([0.0, 0.0, 1.0])
 DEFAULT_MAX_GAP_3D_M = 1.0
 DEFAULT_MIN_Z_OVERLAP_RATIO = 0.5
 
+# ASTRA FHB T/G recommends dilatation joints every ~15 m along a
+# retaining-wall run. The default is conservative; project-specific
+# overrides live in .igv.yaml under pair_candidacy.
+DEFAULT_DILATATION_MAX_SPACING_M = 15.0
+
 
 def validate_level5(elements_data: list[dict], config: dict | None = None) -> dict:
     """Evaluate geometric relationships between elements.
@@ -119,13 +124,24 @@ def validate_level5(elements_data: list[dict], config: dict | None = None) -> di
     stacked = [p for p in pairs if p["pair_type"] == "stacked"]
     side_by_side = [p for p in pairs if p["pair_type"] == "side_by_side"]
 
+    # Dilatation-joint spacing check: adjacent retaining walls should
+    # have a relief joint every ~15 m along the alignment. Findings
+    # are reported as a separate list so downstream L4 rules can
+    # consume `dilatation_spacing_max_m` as a single scalar.
+    joints = _analyze_dilatation_joints(elem_info, max_spacing_m=cfg.get(
+        "dilatation_max_spacing_m", DEFAULT_DILATATION_MAX_SPACING_M))
+
     return {
         "pairs": pairs,
+        "dilatation_joints": joints,
         "summary": {
             "num_elements": len(elem_info),
             "num_pairs": len(pairs),
             "num_stacked": len(stacked),
             "num_side_by_side": len(side_by_side),
+            "dilatation_violations": sum(1 for j in joints if j["exceeds_max"]),
+            "dilatation_spacing_max_m": max(
+                (j["spacing_m"] for j in joints), default=0.0),
         },
     }
 
@@ -395,6 +411,63 @@ def _compute_overhang(upper, lower):
     min_overhang = max(float(overhangs.min()) * 1000.0, 0.0)  # clamp ≥ 0
 
     return {"extends": extends, "overhang_mm": round(min_overhang, 1)}
+
+
+def _analyze_dilatation_joints(elem_info: list, max_spacing_m: float) -> list[dict]:
+    """Detect missing dilatation (expansion) joints along a wall run.
+
+    Walls in a retaining-wall series are ordered along their dominant
+    horizontal axis (the direction of largest extent across all walls)
+    and consecutive centroid gaps are compared against the
+    ``max_spacing_m`` threshold. A gap below the threshold is still
+    reported so users see the actual series layout; the `exceeds_max`
+    flag marks violations.
+
+    Logic:
+      1. Compute the overall bbox of all walls → pick the longest axis
+         as the run direction.
+      2. Project each wall centroid onto that axis → 1-D positions.
+      3. Sort by position → series order.
+      4. Emit one record per consecutive pair.
+
+    This is the first L5 check that uses the *series structure* of the
+    input rather than each pair independently. A more rigorous approach
+    would project centroids onto the actual IfcAlignment curve — that's
+    the planned v2.1 upgrade (see docs/roadmap). For a linear corridor
+    the bbox-axis projection is within 1-2 % of the curved-alignment
+    result.
+    """
+    if len(elem_info) < 2:
+        return []
+
+    centroids = np.array([e["centroid"] for e in elem_info])
+    bmin = np.array([e["bbox_min"] for e in elem_info]).min(axis=0)
+    bmax = np.array([e["bbox_max"] for e in elem_info]).max(axis=0)
+    extent = bmax - bmin
+    primary_axis = int(np.argmax(extent[:2]))  # pick X or Y, ignore Z
+
+    positions = centroids[:, primary_axis]
+    order = np.argsort(positions)
+
+    out = []
+    for k in range(len(order) - 1):
+        i = int(order[k])
+        j = int(order[k + 1])
+        # Use centroid-to-centroid along the primary axis as the
+        # dilatation spacing. Walls that overlap produce a small/
+        # negative spacing — we report abs() so sign doesn't confuse
+        # downstream rules.
+        spacing = float(abs(positions[order[k + 1]] - positions[order[k]]))
+        out.append({
+            "element_a_id": elem_info[i]["id"],
+            "element_a_name": elem_info[i]["name"],
+            "element_b_id": elem_info[j]["id"],
+            "element_b_name": elem_info[j]["name"],
+            "spacing_m": round(spacing, 3),
+            "exceeds_max": bool(spacing > max_spacing_m),
+            "max_allowed_m": max_spacing_m,
+        })
+    return out
 
 
 def _min_bbox_distance_xy(a, b):

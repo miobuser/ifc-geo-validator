@@ -7,14 +7,32 @@ All notable changes to ifc-geo-validator are documented here. Format follows
 ## [Unreleased]
 
 ### Added
+- **Dilatationsfugen-Spacing-Check** (L5). Walls in a retaining-wall
+  series are ordered along their primary axis; consecutive-centroid
+  spacings above 15 m (ASTRA default, `.igv.yaml` overridable) are
+  flagged as missing expansion joints. Result exposed as
+  `dilatation_joints` array and `dilatation_spacing_max_m` summary.
+- **Excel-Export** (`--xlsx`). Four-sheet workbook with PASS/FAIL
+  colour-coded overview, per-element measurements, flat rule-check
+  list, and metadata. New optional dep `openpyxl>=3.1` under the
+  `[xlsx]` extra.
+- **Fix-it-Hinweise** in FAIL messages. Every numeric rule now surfaces
+  `(Δ = ±X.XX)` plus a German remediation hint ("verbreitern",
+  "Anzug reduzieren", "tiefer einbinden" …) keyed off the variable
+  name. Rule authors can add a `fix_hint:` field for custom messages.
 - Proper open-source `LICENSE` (MIT) and this `CHANGELOG.md`.
 - `plotly` and `xsdata` declared as optional extras in `pyproject.toml`.
+- `SECURITY.md` (vulnerability disclosure) and `docs/privacy.md`
+  (data-handling policy).
 
 ### Fixed
 - `.coverage` removed from git history; `.gitignore` hardened.
 - Swiss-engineering IT/FR translations: `coronamento`, `rastremazione`,
   `infissione`, `ispettore/ispettrice`, `écart d'aplomb`, `voile` instead
   of the earlier ad-hoc equivalents.
+- Viewer JSON payload: `round(float(v), 3)` produces actual 59 %
+  savings (prior `np.round` on float32 arrays left float-noise
+  behind, reducing only 0.2 %).
 
 ## [2.0.0] - 2026-04-10
 
