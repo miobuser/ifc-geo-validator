@@ -348,6 +348,50 @@ def test_xlsx_export_creates_four_sheets():
         os.unlink(out)
 
 
+def test_alignment_context_reports_nearest_distance():
+    """Wall centroid (10, 0) → alignment along x-axis → distance 0."""
+    from ifc_geo_validator.validation.alignment import compute_alignment_context
+    alignment = {
+        "name": "A1",
+        "points_xy": np.array([[i, 0] for i in range(0, 100, 2)]),
+        "points_3d": np.array([[i, 0, 0] for i in range(0, 100, 2)]),
+    }
+    element = {
+        "level1": {"centroid": [10.0, 5.0, 0.5]},
+        "level3": {"min_radius_m": 50.0},
+    }
+    ctx = compute_alignment_context(element, [alignment])
+    assert ctx["has_alignment"] is True
+    assert ctx["min_alignment_distance_m"] == pytest.approx(5.0, abs=0.01)
+    assert ctx["nearest_alignment_name"] == "A1"
+
+
+def test_alignment_radius_ratio_straight_alignment_returns_none():
+    """A perfectly straight alignment has no defined radius → ratio is None."""
+    from ifc_geo_validator.validation.alignment import compute_alignment_context
+    straight = {
+        "name": "straight",
+        "points_xy": np.array([[0, 0], [10, 0], [20, 0], [30, 0]]),
+        "points_3d": np.array([[0, 0, 0], [10, 0, 0], [20, 0, 0], [30, 0, 0]]),
+    }
+    element = {
+        "level1": {"centroid": [15.0, 0.0, 0.0]},
+        "level3": {"min_radius_m": 50.0},
+    }
+    ctx = compute_alignment_context(element, [straight])
+    assert ctx["alignment_radius_ratio"] is None  # no curvature → no ratio
+
+
+def test_alignment_no_alignments_returns_neutral_context():
+    """Model without IfcAlignment yields has_alignment=False."""
+    from ifc_geo_validator.validation.alignment import compute_alignment_context
+    ctx = compute_alignment_context(
+        {"level1": {"centroid": [0, 0, 0]}}, alignments=[],
+    )
+    assert ctx["has_alignment"] is False
+    assert ctx["min_alignment_distance_m"] is None
+
+
 def test_level5_prefilter_finds_adjacent_pairs():
     """Prefilter must NOT reject pairs that are actually within cutoff."""
     # Two overlapping-bbox walls — gap should be 0, pair surviving.

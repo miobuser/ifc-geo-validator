@@ -7,6 +7,12 @@ All notable changes to ifc-geo-validator are documented here. Format follows
 ## [Unreleased]
 
 ### Added
+- **IfcAlignment-Integration** (`validation/alignment.py`). For IFC 4.3
+  models with a horizontal alignment, each wall now reports
+  `min_alignment_distance_m` (perpendicular XY distance from centroid)
+  and `alignment_radius_ratio` (wall radius / local alignment
+  circumradius). Existing L4 rulesets can consume either variable
+  without code changes — just reference them in `check:` expressions.
 - **Dilatationsfugen-Spacing-Check** (L5). Walls in a retaining-wall
   series are ordered along their primary axis; consecutive-centroid
   spacings above 15 m (ASTRA default, `.igv.yaml` overridable) are

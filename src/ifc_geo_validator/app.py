@@ -341,6 +341,19 @@ def run_validation(_file_bytes, file_name, entity_types_str, predefined_type, _r
 
         # L6: Terrain context & distances
         terrain = get_terrain_mesh(model)
+        # Alignment-aware context: if the IFC has one or more
+        # IfcAlignment entities, compute wall-to-alignment distance and
+        # a curvature-ratio hint per element for L4 rules to consume.
+        from ifc_geo_validator.core.ifc_parser import get_alignments
+        from ifc_geo_validator.validation.alignment import compute_alignment_context
+        alignments = get_alignments(model)
+        if alignments:
+            for r in all_results:
+                if "error" in r:
+                    continue
+                align_ctx = compute_alignment_context(r, alignments)
+                r["alignment_context"] = align_ctx
+
         l6_result = None
         valid_for_l6 = [r for r in all_results if "error" not in r and "mesh_data" in r]
         if valid_for_l6:
