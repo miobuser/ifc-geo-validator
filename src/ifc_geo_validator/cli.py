@@ -97,6 +97,180 @@ def _build_argparser() -> argparse.ArgumentParser:
     return parser
 
 
+def _resolve_ruleset(args, levels):
+    """Load the ruleset file — explicit path wins, else auto-bundled default.
+
+    Returns the parsed ruleset dict or None if Level 4 is not requested
+    and no explicit --ruleset was provided.
+    """
+    from ifc_geo_validator.validation.level4 import load_ruleset
+    if args.ruleset:
+        return load_ruleset(args.ruleset)
+    if 4 in levels:
+        default_rs = Path(__file__).parent / "rules" / "rulesets" / "astra_fhb_stuetzmauer.yaml"
+        if default_rs.exists():
+            rs = load_ruleset(str(default_rs))
+            print(f"Ruleset: {rs['metadata']['name']} v{rs['metadata']['version']}")
+            return rs
+    return None
+
+
+def _apply_auto_config(args, model, ruleset, entity_types):
+    """Run auto-configure heuristics and print the decision summary.
+
+    Returns (entity_types, ruleset) possibly updated by auto-detection.
+    """
+    from ifc_geo_validator.core.auto_config import auto_configure
+    from ifc_geo_validator.validation.level4 import load_ruleset
+    config = auto_configure(model)
+    print(f"Auto-Config: {config['description']}")
+    print(f"  Schema:     {config['schema']}")
+    found_types_str = ', '.join(f'{t}:{n}' for t, n in config['found_types'].items())
+    print(f"  Elements:   {config['element_count']} ({found_types_str})")
+    print(f"  Types:      {', '.join(config['entity_types'])}")
+    print(f"  Ruleset:    {config['ruleset']}")
+    print(f"  Terrain:    {'Ja' if config['has_terrain'] else 'Nein'}")
+    print(f"  Alignment:  {'Ja' if config['has_alignment'] else 'Nein'}")
+    print()
+
+    entity_types = config["entity_types"]
+    if not args.ruleset:
+        rs_path = Path(__file__).parent / "rules" / "rulesets" / config["ruleset"]
+        if rs_path.exists():
+            ruleset = load_ruleset(str(rs_path))
+            print(f"Ruleset: {ruleset['metadata']['name']} v{ruleset['metadata'].get('version', '?')}")
+    return entity_types, ruleset
+
+
+def _run_compare_mode(args, ifc_file, entity_types):
+    """Compare two IFC models and print per-element deviation report. Returns nothing."""
+    from ifc_geo_validator.core.ifc_compare import compare_models
+    print(f"Comparing: {ifc_file}")
+    print(f"Reference: {args.compare}")
+    print()
+    result = compare_models(args.compare, ifc_file, entity_type=entity_types[0])
+    s = result["summary"]
+    print(f"Matched: {s['total_matched']} elements")
+    print(f"Deviations: {s['with_deviations']} elements exceed tolerance ({s['tolerance_mm']}mm)")
+    if s["unmatched_a"]:
+        print(f"Only in reference: {s['unmatched_a']}")
+    if s["unmatched_b"]:
+        print(f"Only in comparison: {s['unmatched_b']}")
+    print()
+    for m in result["matched"]:
+        if "error" in m:
+            print(f"  {m['name']}: ERROR {m['error']}")
+            continue
+        status = _red("DEVIATION") if m["has_deviation"] else _green("OK")
+        print(f"  {m['name']}: {status}")
+        for d in m.get("deviations", []):
+            if d["exceeds_tolerance"]:
+                print(f"    {d['property']:>25s}: {d['value_a']} → {d['value_b']} "
+                      f"(Δ{d['difference']:.2f} {d['unit']}, tol={d['tolerance']})")
+
+
+def _export_csv(path: str, all_results: list) -> None:
+    """Write per-element measurements to a CSV file for Excel/Power BI."""
+    import csv as csv_mod
+    csv_rows = []
+    for r in all_results:
+        if "error" in r:
+            continue
+        l1 = r.get("level1", {})
+        l2 = r.get("level2", {})
+        l3 = r.get("level3", {})
+        l4 = r.get("level4", {})
+        slope = r.get("slope_analysis", {})
+        row = {
+            "element_id": r.get("element_id"),
+            "element_name": r.get("element_name"),
+            "role": l2.get("element_role", ""),
+            "confidence": l2.get("confidence", ""),
+            "volume_m3": l1.get("volume"),
+            "total_area_m2": l1.get("total_area"),
+            "num_triangles": l1.get("num_triangles"),
+            "watertight": l1.get("is_watertight"),
+            "crown_width_mm": l3.get("crown_width_mm"),
+            "crown_slope_pct": l3.get("crown_slope_percent"),
+            "min_thickness_mm": l3.get("min_wall_thickness_mm"),
+            "avg_thickness_mm": l3.get("avg_wall_thickness_mm"),
+            "wall_height_m": l3.get("wall_height_m"),
+            "inclination_ratio": l3.get("front_inclination_ratio"),
+            "foundation_width_mm": l3.get("foundation_width_mm"),
+            "is_curved": l3.get("is_curved"),
+            "min_radius_m": l3.get("min_radius_m"),
+            "cross_slope_avg_pct": slope.get("area_weighted_cross_pct"),
+            "cross_slope_max_pct": slope.get("max_cross_pct"),
+            "long_slope_max_pct": slope.get("max_long_pct"),
+            "taper_ratio": l3.get("taper_ratio"),
+            "plumbness_deg": l3.get("front_plumbness_deg"),
+            "uncertainty_mm": l3.get("measurement_uncertainty_mm"),
+            "min_distance_mm": l3.get("min_distance_to_nearest_mm"),
+        }
+        if l4:
+            s = l4.get("summary", {})
+            row["rules_passed"] = s.get("passed")
+            row["rules_failed"] = s.get("failed")
+            row["rules_skipped"] = s.get("skipped")
+        csv_rows.append(row)
+
+    if csv_rows:
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            writer = csv_mod.DictWriter(f, fieldnames=csv_rows[0].keys())
+            writer.writeheader()
+            writer.writerows(csv_rows)
+        print(f"\nCSV export written to: {path} ({len(csv_rows)} elements)")
+
+
+def _emit_outputs(args, ifc_file, model, elements, all_results, ruleset) -> None:
+    """Write all requested output files (BCF, enriched IFC, HTML, CSV, JSON)."""
+    if args.bcf:
+        from ifc_geo_validator.report.bcf_export import export_bcf
+        ifc_name = Path(ifc_file).name
+        export_bcf(all_results, args.bcf, ifc_name=ifc_name)
+        print(f"\nBCF issues written to: {args.bcf}")
+
+    if args.enrich:
+        from ifc_geo_validator.report.ifc_property_writer import inject_all
+        inject_all(model, elements, all_results, args.enrich)
+        print(f"\nEnriched IFC written to: {args.enrich}")
+
+    if args.html:
+        from ifc_geo_validator.report.html_report import generate_html_report
+        rs_name = ruleset["metadata"]["name"] if ruleset else "—"
+        html = generate_html_report(
+            all_results, ifc_filename=Path(ifc_file).name,
+            ruleset_name=rs_name,
+            project_name=args.project or "",
+            author=args.author or "",
+        )
+        with open(args.html, "w", encoding="utf-8") as f:
+            f.write(html)
+        print(f"\nHTML report written to: {args.html}")
+
+    if args.csv:
+        _export_csv(args.csv, all_results)
+
+    if args.output:
+        from ifc_geo_validator.report.json_report import json_default
+
+        def _default(obj):
+            # CLI extends the shared default with WallCenterline support
+            if hasattr(obj, "to_dict"):
+                return obj.to_dict()
+            return json_default(obj)
+
+        # Remove non-serializable objects (numpy arrays, WallCenterline)
+        for r in all_results:
+            r.pop("mesh_data", None)
+            if "level2" in r:
+                r["level2"].pop("centerline", None)
+
+        with open(args.output, "w", encoding="utf-8") as f:
+            json.dump(all_results, f, indent=2, ensure_ascii=False, default=_default)
+        print(f"\nReport written to: {args.output}")
+
+
 def _apply_project_config(args, entity_types):
     """Merge .igv.yaml project config into parsed args. Returns entity_types."""
     from ifc_geo_validator.core.project_config import find_config, load_config
@@ -204,66 +378,18 @@ def main():
     print()
 
     # Load ruleset if provided or if Level 4 requested
-    ruleset = None
-    if args.ruleset:
-        ruleset = load_ruleset(args.ruleset)
-    elif 4 in levels:
-        # Auto-detect bundled ASTRA ruleset
-        default_rs = Path(__file__).parent / "rules" / "rulesets" / "astra_fhb_stuetzmauer.yaml"
-        if default_rs.exists():
-            ruleset = load_ruleset(str(default_rs))
-            print(f"Ruleset: {ruleset['metadata']['name']} v{ruleset['metadata']['version']}")
+    ruleset = _resolve_ruleset(args, levels)
 
     # Load model
     model = load_model(ifc_file)
 
     # --auto: auto-configure entity types and ruleset
     if args.auto:
-        from ifc_geo_validator.core.auto_config import auto_configure
-        config = auto_configure(model)
-        print(f"Auto-Config: {config['description']}")
-        print(f"  Schema:     {config['schema']}")
-        print(f"  Elements:   {config['element_count']} ({', '.join(f'{t}:{n}' for t,n in config['found_types'].items())})")
-        print(f"  Types:      {', '.join(config['entity_types'])}")
-        print(f"  Ruleset:    {config['ruleset']}")
-        print(f"  Terrain:    {'Ja' if config['has_terrain'] else 'Nein'}")
-        print(f"  Alignment:  {'Ja' if config['has_alignment'] else 'Nein'}")
-        print()
-
-        # Apply auto-config
-        entity_types = config["entity_types"]
-        if not args.ruleset:
-            rs_path = Path(__file__).parent / "rules" / "rulesets" / config["ruleset"]
-            if rs_path.exists():
-                ruleset = load_ruleset(str(rs_path))
-                print(f"Ruleset: {ruleset['metadata']['name']} v{ruleset['metadata'].get('version', '?')}")
+        entity_types, ruleset = _apply_auto_config(args, model, ruleset, entity_types)
 
     # --compare: compare two models and exit
     if args.compare:
-        from ifc_geo_validator.core.ifc_compare import compare_models
-        print(f"Comparing: {ifc_file}")
-        print(f"Reference: {args.compare}")
-        print()
-        result = compare_models(args.compare, ifc_file,
-                                entity_type=entity_types[0])
-        s = result["summary"]
-        print(f"Matched: {s['total_matched']} elements")
-        print(f"Deviations: {s['with_deviations']} elements exceed tolerance ({s['tolerance_mm']}mm)")
-        if s["unmatched_a"]:
-            print(f"Only in reference: {s['unmatched_a']}")
-        if s["unmatched_b"]:
-            print(f"Only in comparison: {s['unmatched_b']}")
-        print()
-        for m in result["matched"]:
-            if "error" in m:
-                print(f"  {m['name']}: ERROR {m['error']}")
-                continue
-            status = _red("DEVIATION") if m["has_deviation"] else _green("OK")
-            print(f"  {m['name']}: {status}")
-            for d in m.get("deviations", []):
-                if d["exceeds_tolerance"]:
-                    print(f"    {d['property']:>25s}: {d['value_a']} → {d['value_b']} "
-                          f"(Δ{d['difference']:.2f} {d['unit']}, tol={d['tolerance']})")
+        _run_compare_mode(args, ifc_file, entity_types)
         return
 
     # --scan: discover all entity types with geometry, then exit
@@ -893,103 +1019,7 @@ def main():
             sys.exit(1)
 
     # Export BCF issues for failed checks
-    if args.bcf:
-        from ifc_geo_validator.report.bcf_export import export_bcf
-        ifc_name = Path(ifc_file).name
-        export_bcf(all_results, args.bcf, ifc_name=ifc_name)
-        print(f"\nBCF issues written to: {args.bcf}")
-
-    # Write enriched IFC with validation properties
-    if args.enrich:
-        from ifc_geo_validator.report.ifc_property_writer import inject_all
-        inject_all(model, elements, all_results, args.enrich)
-        print(f"\nEnriched IFC written to: {args.enrich}")
-
-    # Write HTML report if requested
-    if args.html:
-        from ifc_geo_validator.report.html_report import generate_html_report
-        rs_name = ruleset["metadata"]["name"] if ruleset else "—"
-        html = generate_html_report(
-            all_results, ifc_filename=Path(ifc_file).name,
-            ruleset_name=rs_name,
-            project_name=args.project or "",
-            author=args.author or "",
-        )
-        with open(args.html, "w", encoding="utf-8") as f:
-            f.write(html)
-        print(f"\nHTML report written to: {args.html}")
-
-    # Export measurements as CSV (for Excel/Power BI)
-    if args.csv:
-        import csv as csv_mod
-        csv_rows = []
-        for r in all_results:
-            if "error" in r:
-                continue
-            l1 = r.get("level1", {})
-            l2 = r.get("level2", {})
-            l3 = r.get("level3", {})
-            l4 = r.get("level4", {})
-            slope = r.get("slope_analysis", {})
-            row = {
-                "element_id": r.get("element_id"),
-                "element_name": r.get("element_name"),
-                "role": l2.get("element_role", ""),
-                "confidence": l2.get("confidence", ""),
-                "volume_m3": l1.get("volume"),
-                "total_area_m2": l1.get("total_area"),
-                "num_triangles": l1.get("num_triangles"),
-                "watertight": l1.get("is_watertight"),
-                "crown_width_mm": l3.get("crown_width_mm"),
-                "crown_slope_pct": l3.get("crown_slope_percent"),
-                "min_thickness_mm": l3.get("min_wall_thickness_mm"),
-                "avg_thickness_mm": l3.get("avg_wall_thickness_mm"),
-                "wall_height_m": l3.get("wall_height_m"),
-                "inclination_ratio": l3.get("front_inclination_ratio"),
-                "foundation_width_mm": l3.get("foundation_width_mm"),
-                "is_curved": l3.get("is_curved"),
-                "min_radius_m": l3.get("min_radius_m"),
-                "cross_slope_avg_pct": slope.get("area_weighted_cross_pct"),
-                "cross_slope_max_pct": slope.get("max_cross_pct"),
-                "long_slope_max_pct": slope.get("max_long_pct"),
-                "taper_ratio": l3.get("taper_ratio"),
-                "plumbness_deg": l3.get("front_plumbness_deg"),
-                "uncertainty_mm": l3.get("measurement_uncertainty_mm"),
-                "min_distance_mm": l3.get("min_distance_to_nearest_mm"),
-            }
-            if l4:
-                s = l4.get("summary", {})
-                row["rules_passed"] = s.get("passed")
-                row["rules_failed"] = s.get("failed")
-                row["rules_skipped"] = s.get("skipped")
-            csv_rows.append(row)
-
-        if csv_rows:
-            with open(args.csv, "w", newline="", encoding="utf-8") as f:
-                writer = csv_mod.DictWriter(f, fieldnames=csv_rows[0].keys())
-                writer.writeheader()
-                writer.writerows(csv_rows)
-            print(f"\nCSV export written to: {args.csv} ({len(csv_rows)} elements)")
-
-    # Write JSON report if requested
-    if args.output:
-        from ifc_geo_validator.report.json_report import json_default
-
-        def _default(obj):
-            # CLI extends the shared default with WallCenterline support
-            if hasattr(obj, "to_dict"):
-                return obj.to_dict()
-            return json_default(obj)
-
-        # Remove non-serializable objects (numpy arrays, WallCenterline)
-        for r in all_results:
-            r.pop("mesh_data", None)  # numpy arrays
-            if "level2" in r:
-                r["level2"].pop("centerline", None)  # WallCenterline object
-
-        with open(args.output, "w", encoding="utf-8") as f:
-            json.dump(all_results, f, indent=2, ensure_ascii=False, default=_default)
-        print(f"\nReport written to: {args.output}")
+    _emit_outputs(args, ifc_file, model, elements, all_results, ruleset)
 
 
 def _scan_model(model):
