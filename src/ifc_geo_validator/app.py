@@ -167,8 +167,19 @@ st.markdown(
           border-radius: 8px;
           padding: 12px 16px;
       }
-      /* Iframes (viewer component) blend into the warm-bg */
-      iframe { border-radius: 8px; }
+      /* Iframes (viewer component) sit flush in the page, rounded */
+      iframe { border-radius: 8px; box-shadow: 0 4px 14px rgba(0,0,0,0.08); }
+      /* Let the viewer iframe dominate: reduce page margins when it's visible */
+      .main .block-container {
+          padding-top: 2rem !important;
+          padding-bottom: 2rem !important;
+          max-width: 100% !important;
+      }
+      /* Hide Streamlit's built-in menu/footer so the viewer + sidebar feel
+         like the whole app (close to the IFC-Editor panel experience). */
+      #MainMenu { visibility: hidden; }
+      footer { visibility: hidden; }
+      .stDeployButton { display: none; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -589,9 +600,15 @@ if uploaded_file:
         if l6_result and l6_result.get("terrain_mesh"):
             terrain_for_viewer = l6_result["terrain_mesh"]
 
-        render_mesh_viewer(viewer_elements, height=650,
-                           terrain_mesh=terrain_for_viewer,
-                           lang=get_language())
+        render_mesh_viewer(
+            viewer_elements,
+            height=850,
+            terrain_mesh=terrain_for_viewer,
+            lang=get_language(),
+            ifc_filename=uploaded_file.name,
+            ruleset_name=ruleset["metadata"]["name"] if ruleset else "",
+            tool_version=get_version(),
+        )
     except Exception as e:
         st.error(f"{t('err_viewer_failed')}: {e}")
 

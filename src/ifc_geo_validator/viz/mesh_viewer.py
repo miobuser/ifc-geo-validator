@@ -50,9 +50,12 @@ CATEGORY_COLORS = {
 
 def render_mesh_viewer(
     elements: list,
-    height: int = 650,
+    height: int = 900,
     terrain_mesh: dict | None = None,
     lang: str | None = None,
+    ifc_filename: str = "",
+    ruleset_name: str = "",
+    tool_version: str = "",
 ) -> None:
     """Render pre-extracted meshes with rich Three.js viewer.
 
@@ -228,11 +231,35 @@ def render_mesh_viewer(
         "unknown_role": _t("unknown"),
     }
 
+    # Aggregate summary for the header status bar (PASS/FAIL hero)
+    total_checks = 0
+    total_passed = 0
+    total_errors = 0
+    for el in elements:
+        l4 = el.get("level4") or {}
+        s = l4.get("summary") or {}
+        total_checks += s.get("total", 0)
+        total_passed += s.get("passed", 0)
+        total_errors += s.get("errors", 0)
+    verdict = "—"
+    if total_checks > 0:
+        verdict = "PASS" if total_errors == 0 else "FAIL"
+
     data_json = json.dumps({
         "elements": payload,
         "terrain": terrain_payload,
         "category_colors": CATEGORY_COLORS,
         "labels": labels,
+        "meta": {
+            "ifc_filename": ifc_filename,
+            "ruleset_name": ruleset_name,
+            "tool_version": tool_version,
+            "total_elements": len(payload),
+            "total_checks": total_checks,
+            "total_passed": total_passed,
+            "total_errors": total_errors,
+            "verdict": verdict,
+        },
     }, ensure_ascii=True)
     # Neutralise every sequence that could prematurely terminate the
     # enclosing <script type="module"> tag or start an HTML comment.
@@ -312,6 +339,7 @@ _VIEWER_HTML = r"""
   }
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
+  * { box-sizing: border-box; }
   html, body {
     margin: 0; padding: 0; overflow: hidden;
     background: var(--bg-primary); color: var(--text-primary);
@@ -319,20 +347,152 @@ _VIEWER_HTML = r"""
     font-size: 13px;
     width: 100%; height: __HEIGHT__px;
   }
-  /* Canvas renders the 3D scene against a subtle warm-grey gradient so
-     the Three.js scene reads as embedded, not dropped in. */
-  #c { display: block; width: 100%; height: __HEIGHT__px;
+
+  /* Canvas fills its grid cell. The CSS gradient shows through because
+     the renderer is set to alpha:true with transparent clear colour. */
+  #c { display: block; width: 100%; height: 100%;
        background: linear-gradient(180deg, #EDECE8 0%, #F8F7F5 100%); }
 
-  /* Top toolbar — white card with the B+S red as the active accent */
+  /* ═══════════════════════════════════════════════════════════════
+     APP SHELL — IFC-Editor-style grid layout
+     ═══════════════════════════════════════════════════════════════
+     ┌───────────────────────────────────────────────────────────┐
+     │ HEADER (red top border · logo · tool name · status badge) │
+     ├───────────┬─────────────────────────────────────┬─────────┤
+     │ LEFT      │                                     │ RIGHT   │
+     │ PANEL     │      TOOLBAR                        │ PANEL   │
+     │ elements  │      ─────────                      │ props   │
+     │ + stats   │       3D VIEWER CANVAS              │ L3 L4   │
+     │           │                                     │ fix-hint│
+     │           │      LEGEND / INFO                  │         │
+     ├───────────┴─────────────────────────────────────┴─────────┤
+     │ FOOTER (red · B+S AG · Weltpoststrasse · Telefon)          │
+     └───────────────────────────────────────────────────────────┘ */
+  .app-shell {
+    position: absolute; inset: 0;
+    display: grid;
+    grid-template-columns: 260px 1fr 320px;
+    grid-template-rows: 56px 1fr 32px;
+    grid-template-areas:
+      "header header  header"
+      "left   main    right"
+      "footer footer  footer";
+    background: var(--bg-primary);
+  }
+
+  /* ═══ Header ═══ */
+  #app-header {
+    grid-area: header;
+    background: var(--bg-secondary);
+    border-top: 3px solid var(--bs-red);
+    border-bottom: 1px solid var(--border-light);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 20px; gap: 16px; z-index: 10;
+    box-shadow: var(--shadow-sm);
+  }
+  .header-brand {
+    display: flex; align-items: center; gap: 14px;
+  }
+  .header-tool {
+    font-size: 16px; font-weight: 700; color: var(--text-primary);
+    letter-spacing: -0.2px; line-height: 1;
+  }
+  .header-sub {
+    font-size: 11px; color: var(--text-muted); line-height: 1;
+    margin-top: 4px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .header-center { flex: 1; display: flex; justify-content: center; }
+  .header-verdict {
+    font-weight: 600; font-size: 13px;
+    padding: 6px 14px; border-radius: 999px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .header-verdict.PASS { background: rgba(45,134,83,0.1); color: var(--success);
+                         border: 1px solid rgba(45,134,83,0.3); }
+  .header-verdict.FAIL { background: var(--bs-red-pale); color: var(--bs-red);
+                         border: 1px solid var(--bs-red-glow); }
+  .header-verdict .big { font-family: 'JetBrains Mono', monospace; font-weight: 500; }
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  .header-logo { flex-shrink: 0; line-height: 0; }
+  .header-logo svg { height: 34px; width: auto; display: block; }
+
+  /* ═══ Footer ═══ */
+  #app-footer {
+    grid-area: footer;
+    background: var(--bs-red); color: rgba(255,255,255,0.9);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 20px; font-size: 11px;
+    letter-spacing: 0.15px; gap: 20px;
+  }
+  #app-footer .footer-disclaimer { opacity: 0.85; overflow: hidden;
+                                   text-overflow: ellipsis; white-space: nowrap; }
+  #app-footer .footer-address { flex-shrink: 0; white-space: nowrap; }
+
+  /* ═══ Left Panel ═══ */
+  #left-panel {
+    grid-area: left;
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border-light);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .panel-section {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .panel-section:last-child { border-bottom: none; }
+  .panel-title {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--text-muted); font-weight: 600;
+    margin-bottom: 8px; display: flex; justify-content: space-between;
+    align-items: center;
+  }
+  .panel-title .count {
+    font-size: 10px; font-family: 'JetBrains Mono', monospace;
+    background: var(--border-light); padding: 2px 8px; border-radius: 10px;
+    color: var(--text-secondary);
+  }
+  .stats-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  }
+  .stat-card {
+    background: var(--bg-primary); border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm); padding: 8px 10px;
+  }
+  .stat-card .stat-label {
+    font-size: 10px; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .stat-card .stat-value {
+    font-family: 'JetBrains Mono', monospace; font-weight: 500;
+    font-size: 16px; color: var(--text-primary); margin-top: 2px;
+  }
+  .stat-card.accent { background: var(--bs-red-pale); border-color: var(--bs-red-glow); }
+  .stat-card.accent .stat-value { color: var(--bs-red); }
+
+  #el-rows-wrap {
+    flex: 1; overflow-y: auto; padding: 4px 8px 12px;
+  }
+
+  /* ═══ Main Area ═══ */
+  #main-area {
+    grid-area: main;
+    position: relative;
+    display: flex; flex-direction: column;
+    background: var(--bg-primary);
+    overflow: hidden;
+  }
+
+  /* Toolbar — was "position: absolute" before; now part of the grid */
   #toolbar {
-    position: absolute; top: 0; left: 0; right: 0; min-height: 66px;
+    position: relative;
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border-light);
-    box-shadow: var(--shadow-sm);
     display: flex; align-items: stretch; padding: 8px 14px;
-    gap: 6px; z-index: 50; user-select: none;
+    gap: 6px; user-select: none;
     overflow-x: auto; overflow-y: hidden;
+    flex-shrink: 0;
+    box-shadow: var(--shadow-sm);
   }
   #toolbar::-webkit-scrollbar { height: 4px; }
   #toolbar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
@@ -375,36 +535,12 @@ _VIEWER_HTML = r"""
     display: flex; align-items: center;
   }
   button.panel-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); border-color: var(--border); }
-  /* Left element list — white card, subtle shadow, matches Streamlit metric cards */
-  #element-list {
-    position: absolute; top: 78px; left: 10px; width: 240px;
-    max-height: calc(100% - 88px); overflow-y: auto;
-    background: var(--bg-secondary); border: 1px solid var(--border-light);
-    border-radius: var(--radius-md); padding: 0; z-index: 30; font-size: 12px;
-    transition: transform 0.2s ease, opacity 0.2s ease;
-    box-shadow: var(--shadow-md);
-  }
-  #element-list.collapsed { transform: translateX(calc(-100% - 16px)); opacity: 0; }
-  .panel-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 10px 12px; border-bottom: 1px solid var(--border-light);
-    background: var(--bg-primary);
-    border-top-left-radius: var(--radius-md); border-top-right-radius: var(--radius-md);
-  }
-  .panel-header h4 {
-    margin: 0; font-size: 10px; text-transform: uppercase;
-    color: var(--text-muted); letter-spacing: 1px; font-weight: 600;
-  }
-  .panel-header .count {
-    font-size: 10px; color: var(--text-secondary); font-weight: 500;
-    background: var(--border-light); padding: 2px 8px; border-radius: 10px;
-    font-family: 'JetBrains Mono', monospace;
-  }
-  .panel-body { padding: 8px; }
+
+  /* Element list rows inside the left panel */
   .el-row {
     padding: 7px 9px; cursor: pointer; border-radius: var(--radius-sm);
     display: flex; align-items: center; gap: 8px;
-    border: 1px solid transparent; margin-bottom: 3px;
+    border: 1px solid transparent; margin-bottom: 2px;
     transition: var(--transition);
     color: var(--text-primary);
   }
@@ -415,41 +551,14 @@ _VIEWER_HTML = r"""
   .el-name { flex: 1; overflow: hidden; text-overflow: ellipsis;
              white-space: nowrap; font-size: 12px; }
 
-  /* Floating collapse toggle for left panel */
-  #left-toggle {
-    position: absolute; top: 78px; left: 10px;
-    width: 30px; height: 30px;
-    background: var(--bg-secondary); border: 1px solid var(--border-light);
-    color: var(--text-secondary); cursor: pointer; border-radius: var(--radius-sm);
-    display: none; align-items: center; justify-content: center; z-index: 31;
-    transition: var(--transition); box-shadow: var(--shadow-sm);
-  }
-  #left-toggle:hover { background: var(--bs-red-pale); color: var(--accent);
-                       border-color: var(--bs-red-glow); }
-  #element-list.collapsed ~ #left-toggle { display: flex; }
-
-  /* Right properties panel */
+  /* Right properties panel — now part of the grid */
   #props-panel {
-    position: absolute; top: 78px; right: 10px; width: 320px;
-    max-height: calc(100% - 88px); overflow-y: auto;
-    background: var(--bg-secondary); border: 1px solid var(--border-light);
-    border-radius: var(--radius-md); padding: 0; z-index: 30; font-size: 12px;
-    transition: transform 0.2s ease, opacity 0.2s ease;
-    box-shadow: var(--shadow-md);
+    grid-area: right;
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border-light);
+    overflow-y: auto;
   }
-  #props-panel.collapsed { transform: translateX(calc(100% + 16px)); opacity: 0; }
-  #right-toggle {
-    position: absolute; top: 78px; right: 10px;
-    width: 30px; height: 30px;
-    background: var(--bg-secondary); border: 1px solid var(--border-light);
-    color: var(--text-secondary); cursor: pointer; border-radius: var(--radius-sm);
-    display: none; align-items: center; justify-content: center; z-index: 31;
-    transition: var(--transition); box-shadow: var(--shadow-sm);
-  }
-  #right-toggle:hover { background: var(--bs-red-pale); color: var(--accent);
-                        border-color: var(--bs-red-glow); }
-  #props-panel.collapsed ~ #right-toggle { display: flex; }
-  #props-panel .panel-body { padding: 12px; }
+  #props-panel .panel-body { padding: 14px 16px; }
   #props-panel h4 {
     margin: 12px 0 6px 0; font-size: 10px; text-transform: uppercase;
     color: var(--text-muted); letter-spacing: 1px;
@@ -529,10 +638,57 @@ _VIEWER_HTML = r"""
 </style>
 </head>
 <body>
-<canvas id="c"></canvas>
+<div class="app-shell">
 
-<!-- Toolbar -->
-<div id="toolbar">
+<!-- ═══ HEADER ═══ -->
+<header id="app-header">
+  <div class="header-brand">
+    <div>
+      <div class="header-tool">IFC Geometry Validator</div>
+      <div class="header-sub" id="hdr-meta">—</div>
+    </div>
+  </div>
+  <div class="header-center">
+    <div class="header-verdict" id="hdr-verdict">
+      <span id="hdr-verdict-icon">—</span>
+      <span class="big" id="hdr-verdict-text">—</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="header-logo">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 490 235" fill="none">
+        <path d="M319.0,168.5L290.0,166.5L268.0,157.5L258.5,150.0L273.0,129.5L290.0,139.5L302.0,142.5L318.0,142.5L325.0,140.5L335.5,131.0L336.5,120.0L330.0,110.5L318.0,105.5L286.0,99.5L276.0,94.5L266.5,85.0L262.5,77.0L260.5,57.0L263.5,46.0L268.5,38.0L281.0,27.5L303.0,20.5L320.0,20.5L335.0,23.5L353.0,31.5L358.5,36.0L344.0,57.5L328.0,48.5L320.0,46.5L304.0,46.5L293.0,51.5L288.5,60.0L289.5,68.0L294.0,73.5L308.0,78.5L329.0,81.5L347.0,89.5L357.5,100.0L363.5,112.0L364.5,131.0L357.5,148.0L342.0,161.5L319.0,168.5Z M100.0,165.5L27.5,165.0L28.0,23.5L102.0,24.5L118.0,31.5L129.5,44.0L133.5,55.0L133.5,69.0L126.5,82.0L117.5,90.0L127.0,95.5L135.5,105.0L140.5,120.0L139.5,133.0L134.5,145.0L125.0,155.5L115.0,161.5L100.0,165.5Z M202.0,137.5L196.5,137.0L196.0,92.5L151.5,92.0L152.0,86.5L195.0,86.5L196.5,85.0L197.0,41.5L202.5,42.0L202.5,85.0L204.0,86.5L247.5,87.0L247.0,92.5L202.5,93.0L202.0,137.5Z M95.5,78.0L99.0,76.5L105.5,68.0L105.5,60.0L99.0,51.5L95.0,49.5L54.5,50.0L55.0,78.5L95.5,78.0Z M98.5,139.0L105.0,136.5L108.5,133.0L112.5,123.0L111.5,116.0L105.0,107.5L99.0,104.5L54.5,105.0L55.0,139.5L98.5,139.0Z" fill="#1C1C1E" fill-rule="evenodd"/>
+        <path d="M465.0,103.5L422.5,103.0L422.5,67.0L421.0,65.5L385.5,65.0L386.0,23.5L465.5,24.0L465.0,103.5Z" fill="#D70036" fill-rule="evenodd"/>
+      </svg>
+    </div>
+  </div>
+</header>
+
+<!-- ═══ LEFT PANEL ═══ -->
+<aside id="left-panel">
+  <div class="panel-section">
+    <div class="panel-title">Übersicht</div>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Elemente</div>
+        <div class="stat-value" id="sb-total">0</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-label">Regeln</div>
+        <div class="stat-value" id="sb-rules">0/0</div>
+      </div>
+    </div>
+  </div>
+  <div class="panel-section" style="flex:1; display:flex; flex-direction:column; padding-bottom:0;">
+    <div class="panel-title"><span id="lbl-elements">Elemente</span><span class="count" id="el-count">0</span></div>
+    <div id="el-rows-wrap"><div id="el-rows"></div></div>
+  </div>
+</aside>
+
+<!-- ═══ MAIN AREA (Toolbar + Canvas) ═══ -->
+<main id="main-area">
+  <!-- Toolbar -->
+  <div id="toolbar">
   <div class="tb-group">
     <div class="tb-group-label">Farbe</div>
     <div class="tb-group-buttons">
@@ -647,42 +803,29 @@ _VIEWER_HTML = r"""
       </button>
     </div>
   </div>
-</div>
+  </div><!-- /toolbar -->
 
-<!-- Element list (left) -->
-<div id="element-list">
-  <div class="panel-header">
-    <h4>Elemente</h4>
-    <div style="display:flex;align-items:center;gap:8px">
-      <span class="count" id="el-count">0</span>
-      <button class="panel-btn" id="collapse-left" title="Einklappen">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-      </button>
-    </div>
+  <!-- 3D Canvas fills the remaining space of the main area -->
+  <div id="canvas-wrap" style="flex:1; position:relative;">
+    <canvas id="c"></canvas>
   </div>
-  <div class="panel-body"><div id="el-rows"></div></div>
-</div>
-<button id="left-toggle" title="Elemente anzeigen">
-  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-</button>
+</main>
 
-<!-- Properties panel (right) -->
-<div id="props-panel">
-  <div class="panel-header">
-    <h4>Eigenschaften</h4>
-    <button class="panel-btn" id="collapse-right" title="Einklappen">
-      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-    </button>
-  </div>
+<!-- ═══ RIGHT PANEL (Properties) ═══ -->
+<aside id="props-panel">
   <div class="panel-body">
     <div id="props-content">
       <div class="empty">Element anklicken zum Inspizieren</div>
     </div>
   </div>
-</div>
-<button id="right-toggle" title="Eigenschaften anzeigen">
-  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-</button>
+</aside>
+
+<!-- ═══ FOOTER ═══ -->
+<footer id="app-footer">
+  <span class="footer-disclaimer">Eigenentwicklung B+S AG · BFH BSc Thesis · Nicht zur Weitergabe bestimmt</span>
+  <span class="footer-address">B+S AG · Weltpoststrasse 5 · CH-3015 Bern · +41 31 356 80 80</span>
+</footer>
+</div><!-- /app-shell -->
 
 <!-- Legend -->
 <div id="legend"></div>
@@ -800,6 +943,38 @@ try {
   }
   hydrateLabels();
 
+  // ── Header / stats hydration ──────────────────────────────────
+  const meta = DATA.meta || {};
+  const hdrMeta = document.getElementById('hdr-meta');
+  if (hdrMeta) {
+    const parts = [];
+    if (meta.ifc_filename) parts.push(meta.ifc_filename);
+    if (meta.ruleset_name) parts.push(meta.ruleset_name);
+    if (meta.tool_version) parts.push('v' + meta.tool_version);
+    hdrMeta.textContent = parts.join('  ·  ') || '—';
+  }
+  const hdrVerdict = document.getElementById('hdr-verdict');
+  const hdrVerdictIcon = document.getElementById('hdr-verdict-icon');
+  const hdrVerdictText = document.getElementById('hdr-verdict-text');
+  if (hdrVerdict && hdrVerdictText) {
+    hdrVerdict.className = 'header-verdict ' + (meta.verdict || '');
+    if (meta.verdict === 'PASS') {
+      hdrVerdictIcon.textContent = '✓';
+      hdrVerdictText.textContent = 'KONFORM · ' + (meta.total_passed || 0) + '/' +
+                                   (meta.total_checks || 0) + ' Regeln bestanden';
+    } else if (meta.verdict === 'FAIL') {
+      hdrVerdictIcon.textContent = '✗';
+      hdrVerdictText.textContent = 'NICHT KONFORM · ' + (meta.total_errors || 0) + ' Fehler';
+    } else {
+      hdrVerdict.style.display = 'none';
+    }
+  }
+  // Left-panel summary tiles
+  const sbTotal = document.getElementById('sb-total');
+  const sbRules = document.getElementById('sb-rules');
+  if (sbTotal) sbTotal.textContent = String(meta.total_elements || 0);
+  if (sbRules) sbRules.textContent = (meta.total_passed || 0) + '/' + (meta.total_checks || 0);
+
   if (!DATA.elements || DATA.elements.length === 0) {
     setStatus(_L('no_mesh', 'Keine Mesh-Daten verfügbar'), true);
     throw new Error('no elements');
@@ -858,8 +1033,17 @@ try {
     renderer.dispose();
   });
 
+  // Canvas dimensions come from the parent cell of the app-shell grid
+  // (canvas-wrap), NOT the full window — the left + right panels eat
+  // ~580 px. Falling back to a sensible minimum handles the brief
+  // moment before layout settles.
   function getWidth() {
-    return Math.max(canvas.clientWidth, window.innerWidth, 800);
+    const wrap = document.getElementById('canvas-wrap');
+    return Math.max(wrap ? wrap.clientWidth : 0, 400);
+  }
+  function getHeight() {
+    const wrap = document.getElementById('canvas-wrap');
+    return Math.max(wrap ? wrap.clientHeight : 0, 300);
   }
 
   const scene = new THREE.Scene();
@@ -870,7 +1054,7 @@ try {
   // Renderer must allow transparency for the CSS background to show.
   // (Set on the renderer itself below.)
 
-  const camera = new THREE.PerspectiveCamera(45, getWidth() / HEIGHT, 0.01, 100000);
+  const camera = new THREE.PerspectiveCamera(45, getWidth() / getHeight(), 0.01, 100000);
   const controls = new OrbitControls(camera, canvas);
   // OrbitControls tuning from IFC-Editor production viewer
   controls.enableDamping = true;
@@ -1555,19 +1739,16 @@ try {
   document.getElementById('sec-flip').onclick = flipActiveSection;
   document.getElementById('sec-clear').onclick = clearAllSections;
 
-  // Panel collapse/expand
-  const leftPanel = document.getElementById('element-list');
-  const rightPanel = document.getElementById('props-panel');
-  document.getElementById('collapse-left').onclick = () => leftPanel.classList.add('collapsed');
-  document.getElementById('left-toggle').onclick = () => leftPanel.classList.remove('collapsed');
-  document.getElementById('collapse-right').onclick = () => rightPanel.classList.add('collapsed');
-  document.getElementById('right-toggle').onclick = () => rightPanel.classList.remove('collapsed');
+  // (Collapse/expand buttons replaced by the fixed grid layout —
+  // the IDE shell has permanent left + right panels like the
+  // IFC-Editor reference.)
 
   // ── Resize ────────────────────────────────────────────────────
   function resize() {
     const w = getWidth();
-    renderer.setSize(w, HEIGHT, false);
-    camera.aspect = w / HEIGHT;
+    const h = getHeight();
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
     camera.updateProjectionMatrix();
   }
   resize();
