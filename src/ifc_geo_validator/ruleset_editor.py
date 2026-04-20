@@ -17,62 +17,7 @@ from pathlib import Path
 
 # ── Available variables with descriptions ──────────────────────────
 
-VARIABLES = {
-    "Geometrie (L1)": {
-        "volume": ("float", "m³", "Volumen (Divergenztheorem)"),
-        "total_area": ("float", "m²", "Gesamtoberfläche"),
-        "mesh_is_watertight": ("bool", "—", "Mesh geschlossen"),
-        "num_triangles": ("int", "—", "Anzahl Dreiecke"),
-        "bbox_dim_max_m": ("float", "m", "Längste BBox-Achse"),
-        "bbox_dim_min_m": ("float", "m", "Kürzeste BBox-Achse"),
-        "bbox_height_m": ("float", "m", "Vertikale BBox-Ausdehnung"),
-        "volume_fill_ratio": ("float", "—", "V/V_bbox (1.0 = massiv)"),
-        "slenderness_ratio": ("float", "—", "Höhe/Dicke"),
-    },
-    "Krone (L3)": {
-        "crown_width_mm": ("float", "mm", "Kronenbreite (Oberfläche)"),
-        "crown_slope_percent": ("float", "%", "Kronenneigung"),
-        "crown_width_cv": ("float", "—", "Profilkonsistenz (CV)"),
-        "measurement_uncertainty_mm": ("float", "mm", "Messunsicherheit (Sagitta)"),
-    },
-    "Wand (L3)": {
-        "min_wall_thickness_mm": ("float", "mm", "Wandstärke senkrecht (min)"),
-        "avg_wall_thickness_mm": ("float", "mm", "Wandstärke senkrecht (avg)"),
-        "wall_height_m": ("float", "m", "Wandhöhe (max)"),
-        "wall_height_min_m": ("float", "m", "Wandhöhe (min entlang Achse)"),
-        "wall_height_avg_m": ("float", "m", "Wandhöhe (avg entlang Achse)"),
-        "wall_length_m": ("float", "m", "Wandlänge (Centerline)"),
-        "front_inclination_ratio": ("float", "n:1", "Neigung Ansichtsfläche"),
-        "front_plumbness_deg": ("float", "°", "Lotabweichung"),
-        "is_curved": ("bool", "—", "Gekrümmte Wand erkannt"),
-        "min_radius_m": ("float", "m", "Min. Krümmungsradius"),
-        "taper_ratio": ("float", "n:1", "Anzug-Verhältnis"),
-        "thickness_at_crown_mm": ("float", "mm", "Dicke am Mauerkopf"),
-        "thickness_at_base_mm": ("float", "mm", "Dicke am Mauerfuss"),
-    },
-    "Neigung (L3)": {
-        "cross_slope_avg_pct": ("float", "%", "Quergefälle (Durchschnitt)"),
-        "cross_slope_max_pct": ("float", "%", "Quergefälle (Maximum)"),
-        "long_slope_avg_pct": ("float", "%", "Längsgefälle (Durchschnitt)"),
-        "long_slope_max_pct": ("float", "%", "Längsgefälle (Maximum)"),
-    },
-    "Fundament (L3)": {
-        "foundation_width_mm": ("float", "mm", "Fundamentbreite"),
-        "foundation_width_ratio": ("float", "—", "Fundamentbreite/Wandhöhe"),
-    },
-    "Flächen (L2)": {
-        "crown_area_m2": ("float", "m²", "Kronenfläche"),
-        "front_area_m2": ("float", "m²", "Ansichtsfläche"),
-        "back_area_m2": ("float", "m²", "Rückfläche"),
-        "front_back_area_ratio": ("float", "—", "Front/Back Verhältnis"),
-    },
-    "Inter-Element (L5-L7)": {
-        "min_distance_to_nearest_mm": ("float", "mm", "Min. Abstand zu Nachbar"),
-        "foundation_embedment_m": ("float", "m", "Einbindetiefe (Oberfläche)"),
-        "crown_height_above_terrain_m": ("float", "m", "Kronenhöhe über Terrain"),
-        "foundation_depth_below_terrain_m": ("float", "m", "Fundament unter Terrain"),
-    },
-}
+from ifc_geo_validator.rules.variables import VARIABLE_CATALOG as VARIABLES
 
 SEVERITY_OPTIONS = ["ERROR", "WARNING", "INFO"]
 OPERATORS = [">=", "<=", ">", "<", "==", "!="]

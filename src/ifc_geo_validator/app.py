@@ -39,37 +39,7 @@ DEFAULT_RULESET = RULESETS_DIR / "astra_fhb_komplett.yaml"
 
 # ── Variable catalog (shared between editor and reference) ──────────
 
-VARIABLE_CATALOG = {
-    "Geometrie (L1)": {
-        "volume": ("float", "m³", "Volumen (Divergenztheorem)"),
-        "total_area": ("float", "m²", "Gesamtoberfläche"),
-        "mesh_is_watertight": ("bool", "—", "Mesh geschlossen"),
-        "bbox_dim_min_m": ("float", "m", "Kürzeste BBox-Achse"),
-        "bbox_height_m": ("float", "m", "Vertikale BBox-Ausdehnung"),
-        "volume_fill_ratio": ("float", "—", "V/V_bbox (1.0 = massiv)"),
-        "slenderness_ratio": ("float", "—", "Höhe/Dicke"),
-    },
-    "Krone": {
-        "crown_width_mm": ("float", "mm", "Kronenbreite (Oberfläche)"),
-        "crown_slope_percent": ("float", "%", "Kronenneigung"),
-        "cross_slope_max_pct": ("float", "%", "Quergefälle (max)"),
-        "long_slope_max_pct": ("float", "%", "Längsgefälle (max)"),
-    },
-    "Wand": {
-        "min_wall_thickness_mm": ("float", "mm", "Wandstärke senkrecht (min)"),
-        "wall_height_m": ("float", "m", "Wandhöhe (max)"),
-        "front_inclination_ratio": ("float", "n:1", "Neigung Ansichtsfläche"),
-        "min_radius_m": ("float", "m", "Min. Krümmungsradius"),
-        "taper_ratio": ("float", "n:1", "Anzug-Verhältnis"),
-        "front_plumbness_deg": ("float", "°", "Lotabweichung"),
-    },
-    "Fundament / Terrain": {
-        "foundation_width_mm": ("float", "mm", "Fundamentbreite"),
-        "foundation_embedment_m": ("float", "m", "Einbindetiefe (Oberfläche)"),
-        "crown_height_above_terrain_m": ("float", "m", "Kronenhöhe über Terrain"),
-        "min_distance_to_nearest_mm": ("float", "mm", "Min. Abstand Nachbar"),
-    },
-}
+from ifc_geo_validator.rules.variables import VARIABLE_CATALOG
 
 
 def _run_variable_reference():
