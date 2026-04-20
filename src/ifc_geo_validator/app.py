@@ -666,8 +666,9 @@ if uploaded_file:
                             }
                             with st.expander("Per-triangle slope data"):
                                 st.dataframe(slope_df, use_container_width=True, hide_index=True)
-            except Exception:
-                pass  # Slope analysis is optional
+            except Exception as exc:
+                # Slope analysis is optional — log rather than hide
+                st.caption(f"ℹ️ Kronen-Gefälle-Analyse übersprungen: {exc}")
 
             # ── L4: Rule checks ──────────────────────────────
             if l4:
@@ -786,8 +787,8 @@ if uploaded_file:
                             st.warning(a["message"])
                         else:
                             st.info(a["message"])
-    except Exception:
-        pass
+    except Exception as exc:
+        st.caption(f"ℹ️ Anomaly-Erkennung übersprungen: {exc}")
 
     # ── Project metadata + HTML report ──────────────────────────
     st.divider()
@@ -813,8 +814,8 @@ if uploaded_file:
                 mime="text/html",
                 use_container_width=True,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            st.warning(f"HTML-Prüfprotokoll konnte nicht erstellt werden: {exc}")
 
     # ── CSV export ───────────────────────────────────────────────
     try:
@@ -860,8 +861,8 @@ if uploaded_file:
                 mime="text/csv",
                 use_container_width=True,
             )
-    except Exception:
-        pass
+    except Exception as exc:
+        st.warning(f"CSV-Export fehlgeschlagen: {exc}")
 
     # ── Download report ──────────────────────────────────────────
     st.divider()

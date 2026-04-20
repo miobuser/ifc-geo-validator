@@ -37,7 +37,18 @@ def auto_configure(model: ifcopenshell.file) -> dict:
     """
     schema = model.schema
 
-    # Discover entity types with geometry
+    # Discover entity types with geometry.
+    #
+    # Intentional design: model.by_type(etype) raises when `etype` is not
+    # defined in the loaded IFC schema (e.g. asking for IFC4.3-only types
+    # on an IFC2x3 file). Probing is the correct strategy for auto-
+    # detection — we don't want the pipeline to fail because one probe
+    # missed. Every except clause in this function is a bounded, scoped
+    # probe; the alternative (a large try/except around the whole scan)
+    # would mask genuine bugs. Keep the blanket Exception catch because
+    # IfcOpenShell raises several concrete subclasses (RuntimeError,
+    # AttributeError, and custom errors) and probing each is just as
+    # noisy.
     structural_types = [
         "IfcWall", "IfcSlab", "IfcColumn", "IfcBeam", "IfcMember",
         "IfcFooting", "IfcPile", "IfcPlate", "IfcRailing",
@@ -52,6 +63,7 @@ def auto_configure(model: ifcopenshell.file) -> dict:
             if with_geom:
                 found_types[etype] = len(with_geom)
         except Exception:
+            # Type not available in this IFC schema version — skip.
             pass
 
     # Check for terrain
