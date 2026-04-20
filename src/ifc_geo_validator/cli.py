@@ -27,15 +27,7 @@ def _dim(s): return f"\033[2m{s}\033[0m" if _COLOR else s
 def _bold(s): return f"\033[1m{s}\033[0m" if _COLOR else s
 
 
-def _get_version() -> str:
-    """Read version from pyproject.toml (avoids hardcoding)."""
-    pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
-    if pyproject.exists():
-        for line in pyproject.read_text(encoding="utf-8").splitlines():
-            if line.strip().startswith("version"):
-                # version = "0.1.0"  →  0.1.0
-                return line.split("=", 1)[1].strip().strip('"').strip("'")
-    return "unknown"
+from ifc_geo_validator import get_version as _get_version
 
 
 def main():
@@ -1046,15 +1038,13 @@ def main():
 
     # Write JSON report if requested
     if args.output:
-        # Handle non-serialisable types (numpy, inf, WallCenterline)
+        from ifc_geo_validator.report.json_report import json_default
+
         def _default(obj):
+            # CLI extends the shared default with WallCenterline support
             if hasattr(obj, "to_dict"):
-                return obj.to_dict()  # WallCenterline → dict
-            if hasattr(obj, "item"):
-                return obj.item()  # numpy scalar
-            if isinstance(obj, float) and math.isinf(obj):
-                return "Infinity"
-            raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+                return obj.to_dict()
+            return json_default(obj)
 
         # Remove non-serializable objects (numpy arrays, WallCenterline)
         for r in all_results:

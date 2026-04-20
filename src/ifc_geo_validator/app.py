@@ -191,15 +191,8 @@ elif t("variable_reference") in page:
 
 st.sidebar.title("IFC Geometry Validator")
 st.sidebar.caption("Dateien werden nicht gespeichert. Verarbeitung nur im Arbeitsspeicher.")
-def _get_version() -> str:
-    pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
-    if pyproject.exists():
-        for line in pyproject.read_text(encoding="utf-8").splitlines():
-            if line.strip().startswith("version"):
-                return line.split("=", 1)[1].strip().strip('"').strip("'")
-    return "unknown"
-
-st.sidebar.caption(f"v{_get_version()} — BSc Thesis BFH")
+from ifc_geo_validator import get_version
+st.sidebar.caption(f"v{get_version()} — BSc Thesis BFH")
 
 uploaded_file = st.sidebar.file_uploader(
     "Upload IFC file",
@@ -873,14 +866,12 @@ if uploaded_file:
     # ── Download report ──────────────────────────────────────────
     st.divider()
 
+    from ifc_geo_validator.report.json_report import json_default
+
     def _json_default(obj):
         if hasattr(obj, "to_dict"):
             return obj.to_dict()  # WallCenterline → dict
-        if hasattr(obj, "item"):
-            return obj.item()  # numpy scalar
-        if isinstance(obj, float) and math.isinf(obj):
-            return "Infinity"
-        raise TypeError(f"Not JSON serializable: {type(obj)}")
+        return json_default(obj)
 
     # Remove non-serializable objects from report (numpy arrays, WallCenterline)
     for elem in report.get("elements", []):

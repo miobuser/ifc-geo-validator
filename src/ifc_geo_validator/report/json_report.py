@@ -182,6 +182,17 @@ def _safe_ratio(value):
 
 def _json_default(obj):
     """Handle non-serialisable types."""
+    return json_default(obj)
+
+
+def json_default(obj):
+    """JSON serialisation fallback for numpy scalars and special floats.
+
+    Exported so that cli.py, app.py, and any other caller share the
+    same conversion rules and do not drift. Raises TypeError for
+    genuinely non-serialisable types so json.dumps surfaces the
+    failure instead of silently dropping data.
+    """
     if hasattr(obj, "item"):
         return obj.item()  # numpy scalar
     if isinstance(obj, float) and math.isinf(obj):
