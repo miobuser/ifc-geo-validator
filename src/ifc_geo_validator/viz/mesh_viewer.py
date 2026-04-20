@@ -275,196 +275,257 @@ _VIEWER_HTML = r"""
 <head>
 <style>
   :root {
-    /* B+S Corporate Style — exact tokens from IFC-Editor */
-    --bg-primary: #1a1a1a;
-    --bg-secondary: #222222;
-    --bg-tertiary: #2a2a2a;
-    --text-primary: #e0e0e0;
-    --text-secondary: #909090;
-    --accent: #CB0231;
-    --accent-hover: #e0033a;
-    --accent-light: rgba(203, 2, 49, 0.15);
-    --border: #404040;
-    --success: #4ec9b0;
-    --warning: #dcdcaa;
-    --error: #f14c4c;
-    --highlight: #CB0231;
-    --radius-sm: 2px; --radius-md: 4px; --radius-lg: 6px;
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-    --shadow-md: 0 4px 8px rgba(0,0,0,0.4);
-    --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+    /* ═══ B+S AG Corporate Identity (LayoutBSAG template) ═══ */
+    --bs-red: #D70036;
+    --bs-red-dark: #B0002D;
+    --bs-red-pale: rgba(215,0,54,0.06);
+    --bs-red-glow: rgba(215,0,54,0.12);
+
+    /* Light surface stack — matches the Streamlit app background */
+    --bg-primary: #F8F7F5;        /* warm off-white canvas */
+    --bg-secondary: #FFFFFF;      /* panel / card */
+    --bg-tertiary: #F2F2F7;       /* hovered row */
+    --text-primary: #1C1C1E;
+    --text-secondary: #636366;
+    --text-muted: #8E8E93;
+
+    /* Borders and depth */
+    --border: #D1D1D6;
+    --border-light: #E5E5EA;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+    --shadow-md: 0 4px 14px rgba(0,0,0,0.08);
+    --shadow-lg: 0 8px 30px rgba(0,0,0,0.10);
+
+    /* Status — keep readable on light bg */
+    --success: #2D8653;
+    --warning: #CC8400;
+    --error:   #D70036;   /* same red as accent — FAIL reads as B+S red */
+
+    /* Accent alias (keeps older CSS below working during transition) */
+    --accent: var(--bs-red);
+    --accent-hover: var(--bs-red-dark);
+    --accent-light: var(--bs-red-pale);
+
+    --radius-sm: 4px; --radius-md: 8px; --radius-lg: 12px;
     --duration-fast: 0.15s; --duration-base: 0.2s;
     --transition: all 0.15s ease;
   }
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
   html, body {
     margin: 0; padding: 0; overflow: hidden;
     background: var(--bg-primary); color: var(--text-primary);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
-    font-size: 12px;
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 13px;
     width: 100%; height: __HEIGHT__px;
   }
-  #c { display: block; width: 100%; height: __HEIGHT__px; }
+  /* Canvas renders the 3D scene against a subtle warm-grey gradient so
+     the Three.js scene reads as embedded, not dropped in. */
+  #c { display: block; width: 100%; height: __HEIGHT__px;
+       background: linear-gradient(180deg, #EDECE8 0%, #F8F7F5 100%); }
 
-  /* Top toolbar — grouped containers with labels above buttons */
+  /* Top toolbar — white card with the B+S red as the active accent */
   #toolbar {
-    position: absolute; top: 0; left: 0; right: 0; min-height: 64px;
-    background: linear-gradient(180deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
-    border-bottom: 1px solid var(--border);
-    display: flex; align-items: stretch; padding: 6px 12px;
-    gap: 4px; z-index: 50; user-select: none;
+    position: absolute; top: 0; left: 0; right: 0; min-height: 66px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-light);
+    box-shadow: var(--shadow-sm);
+    display: flex; align-items: stretch; padding: 8px 14px;
+    gap: 6px; z-index: 50; user-select: none;
     overflow-x: auto; overflow-y: hidden;
   }
   #toolbar::-webkit-scrollbar { height: 4px; }
   #toolbar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
   .tb-group {
     display: flex; flex-direction: column; align-items: center;
-    padding: 4px 8px; gap: 2px;
-    background: var(--bg-secondary); border: 1px solid var(--border);
-    border-radius: 6px; flex-shrink: 0;
+    padding: 3px 8px; gap: 2px;
+    background: var(--bs-red-pale);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md); flex-shrink: 0;
   }
   .tb-group-label {
-    font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px;
-    color: var(--text-secondary); font-weight: 600;
+    font-size: 9px; text-transform: uppercase; letter-spacing: 0.8px;
+    color: var(--text-muted); font-weight: 600;
   }
-  .tb-group-buttons { display: flex; gap: 2px; align-items: center; }
+  .tb-group-buttons { display: flex; gap: 3px; align-items: center; }
   button.tb {
     display: flex; flex-direction: column; align-items: center; gap: 2px;
-    padding: 6px 10px;
-    background: transparent; color: var(--text-primary);
-    border: 1px solid transparent; border-radius: 4px;
+    padding: 5px 10px;
+    background: transparent; color: var(--text-secondary);
+    border: 1px solid transparent; border-radius: var(--radius-sm);
     cursor: pointer; font-size: 10px; font-weight: 500;
-    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.15s ease;
     min-width: 48px;
   }
-  button.tb svg { width: 18px; height: 18px; flex-shrink: 0; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  button.tb:hover { background: var(--bg-tertiary); border-color: var(--border); }
-  button.tb.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.tb svg { width: 18px; height: 18px; flex-shrink: 0;
+                  stroke: currentColor; fill: none;
+                  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  button.tb:hover { background: var(--bg-secondary);
+                    border-color: var(--border); color: var(--text-primary); }
+  button.tb.active { background: var(--accent); color: #fff; border-color: var(--accent);
+                     box-shadow: 0 1px 4px var(--bs-red-glow); }
   button.tb.active:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
-  button.tb:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.tb:disabled { opacity: 0.35; cursor: not-allowed; }
 
   button.panel-btn {
-    background: transparent; color: var(--text-secondary);
+    background: transparent; color: var(--text-muted);
     border: 1px solid transparent; border-radius: 3px; cursor: pointer;
     padding: 3px 5px; transition: var(--transition);
     display: flex; align-items: center;
   }
   button.panel-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); border-color: var(--border); }
-  /* Left element list */
+  /* Left element list — white card, subtle shadow, matches Streamlit metric cards */
   #element-list {
-    position: absolute; top: 76px; left: 8px; width: 230px;
-    max-height: calc(100% - 76px); overflow-y: auto;
-    background: rgba(34,34,34,0.94); border: 1px solid var(--border);
-    border-radius: 6px; padding: 0; z-index: 30; font-size: 11px;
+    position: absolute; top: 78px; left: 10px; width: 240px;
+    max-height: calc(100% - 88px); overflow-y: auto;
+    background: var(--bg-secondary); border: 1px solid var(--border-light);
+    border-radius: var(--radius-md); padding: 0; z-index: 30; font-size: 12px;
     transition: transform 0.2s ease, opacity 0.2s ease;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    box-shadow: var(--shadow-md);
   }
   #element-list.collapsed { transform: translateX(calc(-100% - 16px)); opacity: 0; }
   .panel-header {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 8px 10px; border-bottom: 1px solid var(--border);
-    background: rgba(0,0,0,0.15); border-top-left-radius: 6px; border-top-right-radius: 6px;
+    padding: 10px 12px; border-bottom: 1px solid var(--border-light);
+    background: var(--bg-primary);
+    border-top-left-radius: var(--radius-md); border-top-right-radius: var(--radius-md);
   }
   .panel-header h4 {
     margin: 0; font-size: 10px; text-transform: uppercase;
-    color: var(--text-secondary); letter-spacing: 0.6px; font-weight: 600;
+    color: var(--text-muted); letter-spacing: 1px; font-weight: 600;
   }
   .panel-header .count {
-    font-size: 10px; color: var(--text-secondary);
-    background: var(--bg-tertiary); padding: 1px 6px; border-radius: 8px;
+    font-size: 10px; color: var(--text-secondary); font-weight: 500;
+    background: var(--border-light); padding: 2px 8px; border-radius: 10px;
+    font-family: 'JetBrains Mono', monospace;
   }
-  .panel-body { padding: 6px; }
+  .panel-body { padding: 8px; }
   .el-row {
-    padding: 6px 8px; cursor: pointer; border-radius: 3px;
+    padding: 7px 9px; cursor: pointer; border-radius: var(--radius-sm);
     display: flex; align-items: center; gap: 8px;
-    border: 1px solid transparent; margin-bottom: 2px;
+    border: 1px solid transparent; margin-bottom: 3px;
     transition: var(--transition);
+    color: var(--text-primary);
   }
-  .el-row:hover { background: var(--bg-tertiary); }
+  .el-row:hover { background: var(--bs-red-pale); border-color: var(--bs-red-glow); }
   .el-row.selected { background: var(--accent); color: #fff; border-color: var(--accent); }
-  .el-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-  .el-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .el-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.08); }
+  .el-name { flex: 1; overflow: hidden; text-overflow: ellipsis;
+             white-space: nowrap; font-size: 12px; }
 
   /* Floating collapse toggle for left panel */
   #left-toggle {
-    position: absolute; top: 76px; left: 8px;
-    width: 28px; height: 28px;
-    background: rgba(34,34,34,0.94); border: 1px solid var(--border);
-    color: var(--text-secondary); cursor: pointer; border-radius: 6px;
+    position: absolute; top: 78px; left: 10px;
+    width: 30px; height: 30px;
+    background: var(--bg-secondary); border: 1px solid var(--border-light);
+    color: var(--text-secondary); cursor: pointer; border-radius: var(--radius-sm);
     display: none; align-items: center; justify-content: center; z-index: 31;
-    transition: var(--transition);
+    transition: var(--transition); box-shadow: var(--shadow-sm);
   }
-  #left-toggle:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+  #left-toggle:hover { background: var(--bs-red-pale); color: var(--accent);
+                       border-color: var(--bs-red-glow); }
   #element-list.collapsed ~ #left-toggle { display: flex; }
 
   /* Right properties panel */
   #props-panel {
-    position: absolute; top: 76px; right: 8px; width: 300px;
-    max-height: calc(100% - 76px); overflow-y: auto;
-    background: rgba(34,34,34,0.94); border: 1px solid var(--border);
-    border-radius: 6px; padding: 0; z-index: 30; font-size: 11px;
+    position: absolute; top: 78px; right: 10px; width: 320px;
+    max-height: calc(100% - 88px); overflow-y: auto;
+    background: var(--bg-secondary); border: 1px solid var(--border-light);
+    border-radius: var(--radius-md); padding: 0; z-index: 30; font-size: 12px;
     transition: transform 0.2s ease, opacity 0.2s ease;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    box-shadow: var(--shadow-md);
   }
   #props-panel.collapsed { transform: translateX(calc(100% + 16px)); opacity: 0; }
   #right-toggle {
-    position: absolute; top: 76px; right: 8px;
-    width: 28px; height: 28px;
-    background: rgba(34,34,34,0.94); border: 1px solid var(--border);
-    color: var(--text-secondary); cursor: pointer; border-radius: 6px;
+    position: absolute; top: 78px; right: 10px;
+    width: 30px; height: 30px;
+    background: var(--bg-secondary); border: 1px solid var(--border-light);
+    color: var(--text-secondary); cursor: pointer; border-radius: var(--radius-sm);
     display: none; align-items: center; justify-content: center; z-index: 31;
-    transition: var(--transition);
+    transition: var(--transition); box-shadow: var(--shadow-sm);
   }
-  #right-toggle:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+  #right-toggle:hover { background: var(--bs-red-pale); color: var(--accent);
+                        border-color: var(--bs-red-glow); }
   #props-panel.collapsed ~ #right-toggle { display: flex; }
-  #props-panel .panel-body { padding: 10px; }
+  #props-panel .panel-body { padding: 12px; }
   #props-panel h4 {
-    margin: 0 0 8px 0; font-size: 11px; text-transform: uppercase;
-    color: #909090; letter-spacing: 0.5px; border-bottom: 1px solid #404040;
-    padding-bottom: 4px;
+    margin: 12px 0 6px 0; font-size: 10px; text-transform: uppercase;
+    color: var(--text-muted); letter-spacing: 1px;
+    border-bottom: 1px solid var(--border-light);
+    padding-bottom: 4px; font-weight: 600;
   }
-  #props-panel h3 { margin: 0 0 4px 0; font-size: 13px; color: #e0e0e0; }
-  .prop-row { display: flex; justify-content: space-between; padding: 2px 0; }
-  .prop-key { color: #909090; }
-  .prop-val { color: #e0e0e0; font-family: monospace; }
+  #props-panel h4:first-child { margin-top: 0; }
+  #props-panel h3 {
+    margin: 0 0 6px 0; font-size: 14px; color: var(--text-primary);
+    font-weight: 600; letter-spacing: -0.1px;
+  }
+  .prop-row { display: flex; justify-content: space-between; padding: 3px 0;
+              border-bottom: 1px solid var(--border-light); }
+  .prop-row:last-child { border-bottom: none; }
+  .prop-key { color: var(--text-secondary); font-size: 12px; }
+  .prop-val { color: var(--text-primary); font-family: 'JetBrains Mono', monospace;
+              font-size: 12px; font-weight: 500; }
   .check-row {
-    padding: 4px 6px; margin: 2px 0; border-radius: 2px;
-    border-left: 3px solid #909090; background: #1f1f1f;
+    padding: 6px 10px; margin: 3px 0; border-radius: var(--radius-sm);
+    border-left: 3px solid var(--text-muted);
+    background: var(--bg-primary);
   }
-  .check-row.PASS { border-left-color: #4CAF50; }
-  .check-row.FAIL { border-left-color: #F44336; }
-  .check-row.SKIP { border-left-color: #909090; }
-  .check-name { font-size: 11px; color: #e0e0e0; }
-  .check-detail { font-size: 10px; color: #909090; margin-top: 2px; font-family: monospace; }
+  .check-row.PASS { border-left-color: var(--success);
+                    background: rgba(45,134,83,0.04); }
+  .check-row.FAIL { border-left-color: var(--error);
+                    background: var(--bs-red-pale); }
+  .check-row.SKIP { border-left-color: var(--text-muted); }
+  .check-name { font-size: 11px; color: var(--text-primary); font-weight: 500; }
+  .check-detail { font-size: 10px; color: var(--text-secondary); margin-top: 2px;
+                  font-family: 'JetBrains Mono', monospace; }
 
   /* Bottom legend */
   #legend {
-    position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
-    background: rgba(34,34,34,0.92); border: 1px solid #404040; border-radius: 4px;
-    padding: 6px 12px; font-size: 11px; z-index: 30;
-    display: flex; gap: 14px; align-items: center;
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+    background: var(--bg-secondary); border: 1px solid var(--border-light);
+    border-radius: var(--radius-md); box-shadow: var(--shadow-md);
+    padding: 8px 16px; font-size: 11px; z-index: 30;
+    display: flex; gap: 16px; align-items: center;
+    color: var(--text-secondary);
   }
-  .lg-item { display: flex; align-items: center; gap: 5px; }
-  .lg-swatch { width: 12px; height: 12px; border-radius: 2px; }
+  .lg-item { display: flex; align-items: center; gap: 6px; }
+  .lg-swatch { width: 12px; height: 12px; border-radius: 3px;
+               box-shadow: 0 0 0 1px rgba(0,0,0,0.06); }
 
-  /* Status overlay */
+  /* Status overlay (loading / error) */
   #status {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-    color: #e0e0e0; font-size: 14px; text-align: center; z-index: 100;
-    background: rgba(0,0,0,0.85); padding: 14px 22px; border-radius: 6px;
-    max-width: 80%;
+    color: var(--text-secondary); font-size: 13px; text-align: center; z-index: 100;
+    background: var(--bg-secondary); padding: 16px 24px; border-radius: var(--radius-md);
+    max-width: 80%; box-shadow: var(--shadow-lg);
+    border: 1px solid var(--border-light);
+    font-family: 'DM Sans', sans-serif;
   }
-  #err { color: #ff6b6b; }
+  #err { color: var(--error); }
 
   /* Hover tooltip */
   #tooltip {
     position: absolute; pointer-events: none; z-index: 60;
-    background: rgba(0,0,0,0.9); color: #e0e0e0; padding: 4px 8px;
-    border-radius: 3px; font-size: 11px; display: none;
-    border: 1px solid #404040;
+    background: var(--text-primary); color: var(--bg-secondary);
+    padding: 5px 10px; border-radius: var(--radius-sm); font-size: 11px;
+    display: none; box-shadow: var(--shadow-md);
+    font-family: 'DM Sans', sans-serif;
   }
 
   /* Empty panel state */
-  .empty { color: #707070; font-style: italic; padding: 6px 0; }
+  .empty { color: var(--text-muted); font-style: italic; padding: 8px 0;
+           font-size: 12px; }
+
+  /* Info hint strip */
+  #info {
+    position: absolute; bottom: 12px; right: 12px; z-index: 30;
+    background: rgba(255,255,255,0.9); backdrop-filter: blur(6px);
+    border: 1px solid var(--border-light); border-radius: var(--radius-sm);
+    padding: 4px 10px; font-size: 10px; color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
 </style>
 </head>
 <body>
@@ -745,11 +806,14 @@ try {
   }
 
   // ── Color schemes ──────────────────────────────────────────────
+  // Status colours harmonised with B+S palette: FAIL uses the same red
+  // as every other "bad" signal in the corporate theme. PASS/WARN pick
+  // muted tones that read well on the light warm-bg background.
   const STATUS_COLORS = {
-    "PASS": 0x4CAF50,
-    "FAIL": 0xF44336,
-    "WARN": 0xFF9800,
-    "—":    0x90A4AE,
+    "PASS": 0x2D8653,   // var(--success)
+    "FAIL": 0xD70036,   // var(--bs-red) — consistent FAIL signal
+    "WARN": 0xCC8400,   // var(--warning)
+    "—":    0xAEAEB2,   // var(--bs-gray-400)
   };
   const ROLE_COLORS = {
     "wall_stem":    0x2196F3,
@@ -765,7 +829,11 @@ try {
 
   // ── Three.js setup ─────────────────────────────────────────────
   const canvas = document.getElementById('c');
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  // alpha: true + setClearColor(0, 0) keeps the canvas transparent so
+  // the CSS gradient painted on #c shows through. Gives the viewer a
+  // light, integrated look instead of a hard-dark scene box.
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setClearColor(0x000000, 0);
   // Cap pixel ratio at 2 — 4K/retina displays otherwise report 3+,
   // tripling fragment shader work for no perceptible quality gain.
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -795,7 +863,12 @@ try {
   }
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x1a1a1a);
+  // Scene background matches the warm off-white canvas gradient so the
+  // renderer blends seamlessly with the Streamlit page. `null` lets the
+  // CSS-painted canvas gradient show through.
+  scene.background = null;
+  // Renderer must allow transparency for the CSS background to show.
+  // (Set on the renderer itself below.)
 
   const camera = new THREE.PerspectiveCamera(45, getWidth() / HEIGHT, 0.01, 100000);
   const controls = new OrbitControls(camera, canvas);
@@ -823,7 +896,8 @@ try {
   scene.add(fillBelow);
 
   // Grid
-  const grid = new THREE.GridHelper(100, 50, 0x404040, 0x2a2a2a);
+  // Light-theme grid: subtle mid-grey on warm bg, doesn't compete with the mesh
+  const grid = new THREE.GridHelper(100, 50, 0xBFBEB9, 0xD8D6D0);
   grid.rotation.x = Math.PI / 2;
   scene.add(grid);
 
@@ -1026,7 +1100,7 @@ try {
     const safeName = esc(em.name);
     const safeRole = esc(em.role || _L('unknown_role', 'unbekannt'));
     const safeStatus = esc(em.status);
-    const statusColor = STATUS_COLORS[em.status] ? '#' + STATUS_COLORS[em.status].toString(16).padStart(6, '0') : '#fff';
+    const statusColor = STATUS_COLORS[em.status] ? '#' + STATUS_COLORS[em.status].toString(16).padStart(6, '0') : '#636366';
     const lblRole = esc(_L('role_label', 'Rolle'));
     const lblStatus = esc(_L('status_label', 'Status'));
     const lblMeasurements = esc(_L('measurements', 'Messwerte'));
@@ -1036,7 +1110,7 @@ try {
     const lblNoRules = esc(_L('no_rules', 'Keine Regeln evaluiert'));
 
     let html = '<h3>#' + em.id + ' ' + safeName + '</h3>';
-    html += '<div style="margin-bottom:8px;color:#909090">' + lblRole + ': ' + safeRole +
+    html += '<div style="margin-bottom:10px;color:var(--text-secondary);font-size:11px">' + lblRole + ': ' + safeRole +
             ' | ' + lblStatus + ': <strong style="color:' + statusColor + '">' +
             safeStatus + '</strong></div>';
 
@@ -1058,7 +1132,7 @@ try {
                   ' | ' + lblExpected + ': ' + esc(c.expected) + '</div>';
         }
         if (c.message) {
-          html += '<div class="check-detail" style="color:#bbb">' + esc(c.message) + '</div>';
+          html += '<div class="check-detail" style="color:var(--text-primary)">' + esc(c.message) + '</div>';
         }
         html += '</div>';
       }
@@ -1404,8 +1478,9 @@ try {
   let measureLabel = null;
   const measureLabelDiv = document.createElement('div');
   measureLabelDiv.style.cssText = 'position:absolute;pointer-events:none;z-index:65;' +
-    'background:var(--accent);color:#fff;padding:4px 8px;border-radius:4px;' +
-    'font-size:11px;font-family:monospace;display:none;box-shadow:0 2px 6px rgba(0,0,0,0.4);';
+    'background:var(--accent);color:#fff;padding:5px 10px;border-radius:4px;' +
+    'font-size:11px;font-family:"JetBrains Mono",monospace;font-weight:500;' +
+    'display:none;box-shadow:0 4px 14px rgba(215,0,54,0.3);';
   document.body.appendChild(measureLabelDiv);
 
   function clearMeasurement() {

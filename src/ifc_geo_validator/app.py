@@ -135,6 +135,45 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# B+S AG Corporate Branding — inject DM Sans font, red top-border,
+# and harmonise the Streamlit chrome with the LayoutBSAG template
+# so the mesh_viewer iframe reads as part of the page, not a guest.
+st.markdown(
+    """
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+      html, body, [class*="css"], .stApp, .stMarkdown, .stButton button,
+      .stTextInput input, .stSelectbox, .stMultiSelect {
+          font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif !important;
+      }
+      code, pre, .stCode, [data-testid="stCaption"] {
+          font-family: 'JetBrains Mono', monospace;
+      }
+      /* 3-px red top border signals "this is a B+S tool" */
+      .stApp > header { border-top: 3px solid #D70036 !important; }
+      /* Tighten the accent-red usage across buttons, radios, sliders */
+      .stButton button[kind="primary"] {
+          background-color: #D70036 !important;
+          border-color: #D70036 !important;
+      }
+      .stButton button[kind="primary"]:hover {
+          background-color: #B0002D !important;
+          border-color: #B0002D !important;
+      }
+      /* Soft card borders match --bs-border-light */
+      [data-testid="stMetric"] {
+          background: #FFFFFF;
+          border: 1px solid #E5E5EA;
+          border-radius: 8px;
+          padding: 12px 16px;
+      }
+      /* Iframes (viewer component) blend into the warm-bg */
+      iframe { border-radius: 8px; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 
 # ── Language selector ────────────────────────────────────────────────
 

@@ -9,12 +9,13 @@ enableCORS = false
 # deployment (env var STREAMLIT_SERVER_MAX_UPLOAD_SIZE).
 maxUploadSize = 500
 
+# B+S corporate light theme (matches LayoutBSAG template)
 [theme]
-primaryColor = "#CB0231"           # B+S corporate red (matches viewer accent)
-backgroundColor = "#0e1117"
-secondaryBackgroundColor = "#1a1a2e"
-textColor = "#e0e0e0"
-font = "sans serif"
+primaryColor = "#D70036"              # B+S red
+backgroundColor = "#F8F7F5"           # warm off-white
+secondaryBackgroundColor = "#FFFFFF"  # cards / sidebar
+textColor = "#1C1C1E"                 # near-black
+font = "sans serif"                   # DM Sans loaded via custom CSS in app
 
 [browser]
 gatherUsageStats = false
