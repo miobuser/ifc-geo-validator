@@ -72,6 +72,14 @@ document identifier is given in place of an author name.
   Academic Press. — Axis-aligned bounding box Euclidean distance in
   `validation/level5._min_bbox_distance_xy`.
 
+## Classification and pattern recognition
+
+- **Kittler, J., Hatef, M., Duin, R. P. W., & Matas, J.** (1998). *On
+  combining classifiers.* IEEE Transactions on Pattern Analysis and
+  Machine Intelligence, 20(3), 226–239. — Feature-level fusion with
+  fixed weights underpins the five-factor classification confidence
+  in `validation/level2._compute_confidence`.
+
 ## Statistics and robust estimation
 
 - **Jolliffe, I. T.** (2002). *Principal Component Analysis* (2nd ed.).

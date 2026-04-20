@@ -2,25 +2,29 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system dependencies for IfcOpenShell
+# System dependencies for IfcOpenShell/OpenCASCADE (libgl1) and
+# glib for numpy/shapely shared libs. wget is used by the healthcheck.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1 libglib2.0-0 && \
+    libgl1 libglib2.0-0 wget && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy and install Python dependencies
-COPY pyproject.toml README.md ./
+# Copy project metadata first for better Docker layer caching
+COPY pyproject.toml README.md requirements.txt ./
 COPY src/ src/
-RUN pip install --no-cache-dir ".[viewer,bcf]"
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir ".[bcf]"
 
-# Copy remaining files
-COPY tests/ tests/
-COPY viewer/ viewer/
+# Remaining runtime assets
+COPY streamlit_app.py ./
+COPY .streamlit/ .streamlit/
 
-# Expose port
-EXPOSE 8080
+# Streamlit default port (matches docker-compose.yml and Streamlit Cloud)
+EXPOSE 8501
 
-# Health check
-HEALTHCHECK CMD curl --fail http://localhost:8080/ || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8501/_stcore/health || exit 1
 
-# Run FastAPI viewer server
-CMD ["uvicorn", "viewer.app_server:app", "--host", "0.0.0.0", "--port", "8080"]
+# Run the Streamlit entry point — same as the Streamlit Cloud deployment
+CMD ["streamlit", "run", "streamlit_app.py", \
+     "--server.address=0.0.0.0", "--server.port=8501", \
+     "--browser.gatherUsageStats=false"]
