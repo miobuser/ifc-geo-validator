@@ -378,12 +378,22 @@ def _compute_crown_width_sliced(vertices, faces, crown_groups, centerline, eps=1
     std_w = float(widths_arr.std())
     cv = std_w / mean_w if mean_w > eps else 0.0
 
+    # Robust minimum via 10th-percentile quantile instead of raw min.
+    # Rationale: the per-slice width array is dominated by the narrowest
+    # tessellation slice at curved-wall endpoints where triangulation
+    # produces a sliver of near-zero local frame coverage. Using the
+    # 10th percentile rejects these bottom-decile slivers while still
+    # flagging genuinely narrow sections (Tukey 1977 lower hinge family).
+    # Callers needing the absolute worst case read width_min_mm.
+    p10 = float(np.percentile(widths_arr, 10))
     return {
-        "width_mm": min(widths_mm),
-        "width_min_mm": min(widths_mm),
-        "width_max_mm": max(widths_mm),
+        "width_mm": p10,
+        "width_min_mm": float(widths_arr.min()),
+        "width_p10_mm": p10,
+        "width_median_mm": float(np.median(widths_arr)),
+        "width_max_mm": float(widths_arr.max()),
         "width_cv": round(cv, 6),
-        "method": "slice_local_frame",
+        "method": "slice_local_frame_p10",
     }
 
 
@@ -465,12 +475,18 @@ def _compute_foundation_width_sliced(vertices, faces, foundation_groups, centerl
     std_w = float(widths_arr.std())
     cv = std_w / mean_w if mean_w > eps else 0.0
 
+    # Same robust quantile approach as crown width — see that function
+    # for the derivation. Foundation widths are more prone to sliver
+    # artifacts because foundations often extend past the wall footprint.
+    p10 = float(np.percentile(widths_arr, 10))
     return {
-        "width_mm": min(widths_mm),
-        "width_min_mm": min(widths_mm),
-        "width_max_mm": max(widths_mm),
+        "width_mm": p10,
+        "width_min_mm": float(widths_arr.min()),
+        "width_p10_mm": p10,
+        "width_median_mm": float(np.median(widths_arr)),
+        "width_max_mm": float(widths_arr.max()),
         "width_cv": round(cv, 6),
-        "method": "slice_local_frame",
+        "method": "slice_local_frame_p10",
     }
 
 

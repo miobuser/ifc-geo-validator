@@ -480,19 +480,29 @@ def _build_face_adjacency(faces):
     sorted_keys = edge_keys[order]
     sorted_faces = face_ids[order]
 
-    # Find consecutive pairs with same edge key
-    same = sorted_keys[:-1] == sorted_keys[1:]
-    pair_idx = np.where(same)[0]
-
+    # Group faces by shared edge key. For manifold meshes every edge
+    # has exactly two faces and yields a single pair. For non-manifold
+    # edges (CSG artifacts, T-junctions where ≥3 faces share an edge)
+    # we emit all O(k²) pairs within the group, so Union-Find still
+    # connects the entire edge-cluster. Previously we only recorded
+    # the first consecutive pair via the `used` set, which orphaned
+    # the 3rd+ face and broke clustering on Boolean operands.
     pairs = []
-    used = set()
-    for idx in pair_idx:
-        fi = int(sorted_faces[idx])
-        fj = int(sorted_faces[idx + 1])
-        if fi != fj and idx not in used:
-            pairs.append((fi, fj))
-            used.add(idx)
-            used.add(idx + 1)
+    n = len(sorted_keys)
+    i = 0
+    while i < n:
+        j = i
+        while j < n and sorted_keys[j] == sorted_keys[i]:
+            j += 1
+        # Faces sharing edge_keys[i] are sorted_faces[i:j]
+        group = sorted_faces[i:j]
+        if len(group) >= 2:
+            # Deduplicate and emit all unordered pairs
+            uniq = list({int(f) for f in group})
+            for a in range(len(uniq)):
+                for b in range(a + 1, len(uniq)):
+                    pairs.append((uniq[a], uniq[b]))
+        i = j
 
     return pairs
 
