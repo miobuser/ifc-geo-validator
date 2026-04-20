@@ -57,7 +57,7 @@ CROWN_NARROWER_THAN_THICKNESS_FACTOR = 0.5
 
 
 def detect_anomalies(mesh_data: dict, level2_result: dict,
-                     level3_result: dict) -> list[dict]:
+                     level3_result: dict, config: dict | None = None) -> list[dict]:
     """Run all anomaly detectors and return a list of findings.
 
     Each finding is a dict with:
@@ -66,16 +66,31 @@ def detect_anomalies(mesh_data: dict, level2_result: dict,
         message:  str — human-readable description
         details:  dict — additional data (position, values, etc.)
 
+    Args:
+        mesh_data: extracted mesh dict.
+        level2_result: classifier output.
+        level3_result: measurements output.
+        config: optional overrides for the module-level thresholds.
+            Keys read (all with module-constant fallback):
+                front_back_ratio_flag
+                aspect_ratio_slender_flag
+                crown_narrower_than_thickness_factor
+
     Returns empty list if no anomalies detected.
     """
-    anomalies = []
+    cfg = config or {}
+    fb_ratio = cfg.get("front_back_ratio_flag", FRONT_BACK_RATIO_FLAG)
+    ar_slender = cfg.get("aspect_ratio_slender_flag", ASPECT_RATIO_SLENDER_FLAG)
+    crown_factor = cfg.get("crown_narrower_than_thickness_factor",
+                           CROWN_NARROWER_THAN_THICKNESS_FACTOR)
 
+    anomalies = []
     anomalies.extend(_check_missing_faces(level2_result))
-    anomalies.extend(_check_classification_quality(level2_result))
-    anomalies.extend(_check_aspect_ratio_anomaly(mesh_data, level3_result))
+    anomalies.extend(_check_classification_quality(level2_result, fb_ratio))
+    anomalies.extend(_check_aspect_ratio_anomaly(mesh_data, level3_result,
+                                                 ar_slender, crown_factor))
     anomalies.extend(_check_profile_steps(mesh_data, level2_result))
     anomalies.extend(_check_normal_consistency(mesh_data))
-
     return anomalies
 
 
@@ -100,7 +115,7 @@ def _check_missing_faces(l2: dict) -> list[dict]:
     return anomalies
 
 
-def _check_classification_quality(l2: dict) -> list[dict]:
+def _check_classification_quality(l2: dict, fb_ratio_flag: float = FRONT_BACK_RATIO_FLAG) -> list[dict]:
     """Check if classification produced reasonable results."""
     anomalies = []
     summary = l2.get("summary", {})
@@ -124,7 +139,7 @@ def _check_classification_quality(l2: dict) -> list[dict]:
     back = summary.get("back", {}).get("total_area", 0)
     if front > 0 and back > 0:
         ratio = max(front, back) / min(front, back)
-        if ratio > FRONT_BACK_RATIO_FLAG:
+        if ratio > fb_ratio_flag:
             anomalies.append({
                 "type": "asymmetric_front_back",
                 "severity": "info",
@@ -137,7 +152,11 @@ def _check_classification_quality(l2: dict) -> list[dict]:
     return anomalies
 
 
-def _check_aspect_ratio_anomaly(mesh_data: dict, l3: dict) -> list[dict]:
+def _check_aspect_ratio_anomaly(
+    mesh_data: dict, l3: dict,
+    slender_flag: float = ASPECT_RATIO_SLENDER_FLAG,
+    crown_factor: float = CROWN_NARROWER_THAN_THICKNESS_FACTOR,
+) -> list[dict]:
     """Detect unusual aspect ratios."""
     anomalies = []
     vertices = mesh_data["vertices"]
@@ -145,7 +164,7 @@ def _check_aspect_ratio_anomaly(mesh_data: dict, l3: dict) -> list[dict]:
     dims = sorted(bbox, reverse=True)
 
     # Very thin element (aspect ratio > threshold)
-    if dims[2] > 0 and dims[0] / dims[2] > ASPECT_RATIO_SLENDER_FLAG:
+    if dims[2] > 0 and dims[0] / dims[2] > slender_flag:
         anomalies.append({
             "type": "extreme_aspect_ratio",
             "severity": "warning",
@@ -158,7 +177,7 @@ def _check_aspect_ratio_anomaly(mesh_data: dict, l3: dict) -> list[dict]:
     # Crown narrower than thickness (unusual for retaining walls)
     cw = l3.get("crown_width_mm", 0)
     th = l3.get("min_wall_thickness_mm", 0)
-    if cw > 0 and th > 0 and cw < th * CROWN_NARROWER_THAN_THICKNESS_FACTOR:
+    if cw > 0 and th > 0 and cw < th * crown_factor:
         anomalies.append({
             "type": "crown_narrower_than_thickness",
             "severity": "info",

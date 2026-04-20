@@ -272,11 +272,17 @@ def _emit_outputs(args, ifc_file, model, elements, all_results, ruleset) -> None
 
 
 def _apply_project_config(args, entity_types):
-    """Merge .igv.yaml project config into parsed args. Returns entity_types."""
-    from ifc_geo_validator.core.project_config import find_config, load_config
+    """Merge .igv.yaml project config into parsed args.
+
+    Returns (entity_types, config_dict). The config dict is the fully
+    merged DEFAULT_CONFIG ∪ on-disk overrides; callers use it for the
+    numerical-tolerance sections (classifier, pair_candidacy,
+    robust_stats, anomaly) that are not representable as CLI flags.
+    """
+    from ifc_geo_validator.core.project_config import find_config, load_config, DEFAULT_CONFIG
     config_path = find_config()
     if not config_path:
-        return entity_types
+        return entity_types, dict(DEFAULT_CONFIG)
     config = load_config(config_path)
     print(f"Config: {config_path}")
     # CLI flags take precedence; config fills in defaults only
@@ -293,7 +299,26 @@ def _apply_project_config(args, entity_types):
         args.auto = True
     if config.get("distances") and not args.distances:
         args.distances = True
-    return entity_types
+    return entity_types, config
+
+
+def _resolve_classifier_thresholds(ruleset, project_config):
+    """Merge classifier thresholds from ruleset and project config.
+
+    Priority order (higher wins):
+      1. ruleset.classification_thresholds (ruleset is canonical per
+         validation run — typically ASTRA-specific tuning)
+      2. project_config.classifier (project-wide override)
+      3. face_classifier.DEFAULT_THRESHOLDS (in-code defaults)
+
+    Returns the dict to pass to validate_level2 or None if no overrides.
+    """
+    merged = {}
+    if project_config and "classifier" in project_config:
+        merged.update(project_config["classifier"])
+    if ruleset and ruleset.get("classification_thresholds"):
+        merged.update(ruleset["classification_thresholds"])
+    return merged if merged else None
 
 
 def main():
@@ -312,7 +337,7 @@ def main():
         print("Edit this file to configure your project settings.")
         return
 
-    entity_types = _apply_project_config(args, entity_types)
+    entity_types, project_config = _apply_project_config(args, entity_types)
 
     # Resolve input files (support directories and globs)
     import glob as globmod
@@ -490,8 +515,8 @@ def main():
 
             # ── Level 2 ──
             if 2 in levels:
-                # Use classification thresholds from ruleset if available
-                cl_thresh = ruleset.get("classification_thresholds") if ruleset else None
+                # Classifier thresholds: ruleset > project config > defaults
+                cl_thresh = _resolve_classifier_thresholds(ruleset, project_config)
                 l2 = validate_level2(mesh_data, thresholds=cl_thresh)
                 elem_result["level2"] = l2
 
@@ -556,7 +581,9 @@ def main():
             # ── Anomaly detection ─────────────────────────────────
             if l2 is not None and l3 is not None:
                 from ifc_geo_validator.core.anomaly_detection import detect_anomalies
-                anomalies = detect_anomalies(mesh_data, l2, l3)
+                anomalies = detect_anomalies(
+                    mesh_data, l2, l3, config=project_config.get("anomaly"),
+                )
                 if anomalies:
                     print(f"\n  Anomalies ({len(anomalies)}):")
                     for a in anomalies:
